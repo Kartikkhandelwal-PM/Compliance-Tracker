@@ -5225,90 +5225,76 @@ a.cprofile__ch:hover {
 }
 
 /* ============================================================================
-   FILTER PANEL
+   FILTER PILLS
    ========================================================================== */
 
-.fwrap { position: relative; display: flex; }
-.btn--onfilter {
-  border-color: var(--accent-line);
+.fpill { position: relative; display: flex; }
+.fpill__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  height: 32px;
+  max-width: 250px;
+  padding: 0 var(--s2) 0 var(--s3);
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+  border-radius: var(--radius);
+  font-size: var(--t-13);
+  font-weight: 500;
+  color: var(--ink-2);
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.fpill__btn:hover { border-color: var(--rule-strong); color: var(--ink); }
+.fpill__btn.is-open { border-color: var(--rule-strong); background: var(--sunk); }
+/* Set filters carry the chrome accent, so what is narrowing the view is
+   readable without opening anything. */
+.fpill__btn.is-active {
   background: var(--accent-soft);
+  border-color: var(--accent-line);
   color: var(--accent);
   font-weight: 600;
 }
-.fwrap__n {
-  font-size: var(--t-11);
-  font-weight: 700;
-  background: var(--accent);
-  color: #fff;
-  border-radius: 20px;
-  padding: 0 6px;
-  min-width: 17px;
-  text-align: center;
+.fpill__f { opacity: 0.72; font-weight: 500; }
+.fpill__caret { color: var(--ink-4); flex: none; transition: transform 0.16s ease; }
+.fpill__caret.is-up { transform: rotate(180deg); }
+.fpill__x {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex: none;
+  color: var(--accent);
+  transition: background 0.12s ease;
 }
-.fpanel {
+.fpill__x:hover { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+
+.fmenu {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 6px);
   left: 0;
   z-index: 61;
-  width: 320px;
-  max-height: min(72vh, 620px);
-  display: flex;
-  flex-direction: column;
+  min-width: 230px;
+  max-width: 300px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: var(--s2);
   background: var(--sheet);
   border: 1px solid var(--rule-strong);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-3);
-  overflow: hidden;
-  animation: popdown 0.16s cubic-bezier(0.2, 0, 0.2, 1);
+  animation: popdown 0.14s cubic-bezier(0.2, 0, 0.2, 1);
 }
-.fpanel__head {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  padding: var(--s3) var(--s4);
-  border-bottom: 1px solid var(--rule);
-  background: var(--sunk);
-  font-size: var(--t-11);
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-3);
+/* The search box stays put while the list under it scrolls. */
+.fmenu__q {
+  position: sticky;
+  top: calc(var(--s2) * -1);
+  z-index: 1;
+  margin-bottom: var(--s2);
+  background: var(--sheet);
 }
-.fpanel__clear {
-  border: none;
-  background: none;
-  font-size: var(--t-11);
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--link);
-}
-.fpanel__clear:hover { text-decoration: underline; text-underline-offset: 3px; }
-.fpanel__body {
-  padding: var(--s4);
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--s4);
-}
-.fpanel__foot {
-  padding: var(--s2) var(--s4);
-  border-top: 1px solid var(--rule);
-  background: var(--sunk);
-  display: flex;
-  justify-content: flex-end;
-}
-
-.frow { display: flex; flex-direction: column; gap: var(--s2); }
-.frow__k {
-  font-size: var(--t-11);
-  font-weight: 650;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-.fpick { display: flex; flex-direction: column; gap: 1px; }
-.fpick__o {
+.fmenu__o {
   display: flex;
   align-items: center;
   gap: var(--s2);
@@ -5321,21 +5307,49 @@ a.cprofile__ch:hover {
   color: var(--ink-2);
   text-align: left;
 }
-.fpick__o:hover { background: var(--hover); color: var(--ink); }
-.fpick__o.is-on {
-  background: var(--accent-soft);
-  color: var(--accent);
+.fmenu__o:hover { background: var(--hover); color: var(--ink); }
+.fmenu__o.is-on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.fmenu__sub { margin-left: auto; font-size: var(--t-11); color: var(--ink-4); }
+.fmenu__o.is-on .fmenu__sub { color: var(--accent); opacity: 0.75; }
+.fmenu__tick { margin-left: auto; flex: none; }
+.fmenu__sub + .fmenu__tick { margin-left: var(--s2); }
+.fmenu__empty {
+  padding: var(--s4);
+  font-size: var(--t-12);
+  color: var(--ink-3);
+  text-align: center;
+}
+
+/* A checkbox, because multi-select accumulates — a tick alone reads as
+   "one of these". */
+.fcheck {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1.5px solid var(--rule-strong);
+  background: var(--sheet);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.fcheck.is-on { background: var(--accent); border-color: var(--accent); }
+
+.fclear {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 var(--s2);
+  border: none;
+  background: none;
+  border-radius: var(--radius);
+  font-size: var(--t-12);
   font-weight: 600;
+  color: var(--ink-3);
 }
-.fpick__sub {
-  margin-left: auto;
-  font-size: var(--t-11);
-  color: var(--ink-4);
-  font-family: var(--f-sans);
-}
-.fpick__o.is-on .fpick__sub { color: var(--accent); opacity: 0.75; }
-.fpick__tick { margin-left: auto; flex: none; }
-.fpick__o.is-on .fpick__sub + .fpick__tick { margin-left: var(--s2); }
+.fclear:hover { background: var(--hover); color: var(--ink); }
 
 /* Client mark in a search result, and the owner mark at its right edge. */
 .cmditem__owner { margin-left: var(--s2); flex: none; opacity: 0.9; }
@@ -5406,27 +5420,78 @@ a.cprofile__ch:hover {
   background: transparent;
 }
 
-/* ---- Tracker, full screen ------------------------------------------------ */
-.trkwrap.is-expanded {
+
+
+/* ============================================================================
+   TRACKER, FULL SCREEN
+   ----------------------------------------------------------------------------
+   `.trkbox` is the module; `.trkwrap` inside it is the scrollport. Keeping them
+   separate is what makes this work: the first attempt made the SCROLLPORT the
+   full-screen element and gave it padding-top for a close button, which moved
+   the sticky origin and forced both header rows to collapse onto each other —
+   the month band and the column band ended up drawn over the data.
+
+   Sticky offsets are untouched here. The bar is a sibling above the scrollport,
+   so `top: 0` and `top: 27px` still mean what they meant before.
+   ========================================================================== */
+
+.trkbox {
+  position: relative;
+}
+/* Floats on the grid's own top-right corner: it acts on this module, so it
+   belongs to it rather than to the page header. */
+.trkexp {
+  position: absolute;
+  top: var(--s2);
+  right: var(--s2);
+  z-index: 8;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+  color: var(--ink-3);
+  box-shadow: var(--shadow-1);
+  opacity: 0;
+  transition: opacity 0.14s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.trkbox:hover .trkexp,
+.trkexp:focus-visible {
+  opacity: 1;
+}
+.trkexp:hover {
+  color: var(--accent);
+  border-color: var(--accent-line);
+}
+
+.trkbox.is-expanded {
   position: fixed;
   inset: 0;
   z-index: 120;
+  background: var(--paper);
+  display: flex;
+  flex-direction: column;
+  animation: fade 0.16s ease;
+}
+.trkbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s4);
+  border-bottom: 1px solid var(--rule);
+  background: var(--sheet);
+  font-size: var(--t-13);
+}
+.trkbar b { font-weight: 650; }
+.trkbar .num { color: var(--ink-3); font-size: var(--t-12); }
+.trkbox.is-expanded .trkwrap {
+  flex: 1;
   max-height: none;
-  height: 100vh;
   border: none;
   border-radius: 0;
   box-shadow: none;
-  background: var(--sheet);
-  padding-top: 46px;
-  animation: fade 0.16s ease;
 }
-.trkwrap__close {
-  position: fixed;
-  top: var(--s2);
-  right: var(--s4);
-  z-index: 121;
-  box-shadow: var(--shadow-2);
-}
-.trkwrap.is-expanded .trk thead th {
-  top: 0;
-}
+

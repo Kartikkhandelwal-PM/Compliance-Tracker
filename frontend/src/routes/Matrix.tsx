@@ -30,7 +30,7 @@ import { HEADS, headClass } from "../domain/catalog.ts";
 import { MONTHS, TODAY, addDays, fmtShort, inrShort, monthLabelLong, parts } from "../domain/dates.ts";
 import { Empty, PageHead } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
-import { Filters, FilterPick, FilterRow } from "../ui/Filters.tsx";
+import { ClearFilters, FilterPill, FilterPillMulti } from "../ui/Filters.tsx";
 import { ObligationDrawer } from "../ui/ObligationDrawer.tsx";
 
 type SortKey = "open" | "late" | "fees" | "name";
@@ -61,7 +61,9 @@ export function MatrixPage() {
   const nav = useNavigate();
 
   const [head, setHead] = useState("all");
-  const [owner, setOwner] = useState("all");
+  /* Empty = every owner. Levelling work means comparing desks, so this is
+     a set rather than a single pick. */
+  const [owners, setOwners] = useState<string[]>([]);
   const [status, setStatus] = useState<StatusFilter>("all");
   const [win, setWin] = useState<Window>("quarter");
   const [group, setGroup] = useState<GroupBy>("month");
@@ -139,7 +141,7 @@ export function MatrixPage() {
     for (const o of obligations) {
       const ci = colIndex.get(o.runId);
       if (ci === undefined) continue;
-      if (owner !== "all" && o.assigneeId !== owner) continue;
+      if (owners.length > 0 && !owners.includes(o.assigneeId)) continue;
       let row = map.get(o.clientId);
       if (!row) {
         row = {
@@ -177,7 +179,7 @@ export function MatrixPage() {
     else list.sort((a, b) => CLIENT_BY_ID[a.clientId].name.localeCompare(CLIENT_BY_ID[b.clientId].name));
 
     return list;
-  }, [obligations, colIndex, columns.length, owner, q, sort, status]);
+  }, [obligations, colIndex, columns.length, owners, q, sort, status]);
 
   const exportCsv = () => {
     const headerRow = ["Client", "PAN", "GSTIN", "Owner", ...columns.map((c) => `${c.form} ${c.period} (due ${c.due})`)];
@@ -211,22 +213,9 @@ export function MatrixPage() {
           </>
         }
         aside={
-          <>
-            {/* The grid is 640 rows × 52 columns inside a 68vh box, so most of
-                it is always off-screen. Expanding it to the viewport is the
-                one control that materially changes how much you can read. */}
-            <button
-              type="button"
-              className="btn btn--sm"
-              onClick={() => setExpanded(true)}
-              aria-label="Expand the grid to full screen"
-            >
-              <Icon name="expand" size={14} /> Expand
-            </button>
-            <button type="button" className="btn btn--sm" onClick={exportCsv}>
-              <Icon name="download" size={14} /> Export
-            </button>
-          </>
+          <button type="button" className="btn btn--sm" onClick={exportCsv}>
+            <Icon name="download" size={14} /> Export
+          </button>
         }
       />
 
@@ -236,73 +225,69 @@ export function MatrixPage() {
           <Icon name="search" size={15} />
           <input value={q} onChange={(e) => { setQ(e.target.value); setLimit(ROWS); }} placeholder="Name, PAN or GSTIN" />
         </div>
-        {/* Seven controls in one row is more chrome than content, and it wrapped
-            to two lines below desktop. Everything that narrows the book now
-            lives behind one button carrying a count; search and sort stay out
-            here because they are used constantly and neither narrows anything. */}
-        <Filters
-          count={(head !== "all" ? 1 : 0) + (owner !== "all" ? 1 : 0) + (status !== "all" ? 1 : 0)}
-          onClear={() => { setHead("all"); setOwner("all"); setStatus("all"); setLimit(ROWS); }}
-        >
-          <FilterRow label="Period">
-            <FilterPick<Window>
-              value={win}
-              onChange={(v) => setWin(v)}
-              options={[
-                { value: "month", label: "This month" },
-                { value: "quarter", label: "Next 3 months" },
-                { value: "year", label: "Full year" },
-              ]}
-            />
-          </FilterRow>
-
-          <FilterRow label="Compliance head">
-            <FilterPick<string>
-              value={head}
-              onChange={(v) => setHead(v)}
-              options={[{ value: "all", label: "All heads" }, ...HEADS.map((h) => ({ value: h, label: h }))]}
-            />
-          </FilterRow>
-
-          {/* A native <option> cannot carry an avatar, and staff are recognised
-              by their mark everywhere else in this product. */}
-          <FilterRow label="Owner">
-            <FilterPick<string>
-              value={owner}
-              onChange={(v) => { setOwner(v); setLimit(ROWS); }}
-              options={[
-                { value: "all", label: "Anyone" },
-                { value: "none", label: "Unassigned", avatar: "—" },
-                ...STAFF.map((st) => ({ value: st.id, label: st.name, avatar: st.initials, sub: st.role })),
-              ]}
-            />
-          </FilterRow>
-
-          <FilterRow label="Status">
-            <FilterPick<StatusFilter>
-              value={status}
-              onChange={(v) => { setStatus(v); setLimit(ROWS); }}
-              options={[
-                { value: "all", label: "Any status" },
-                { value: "late", label: "Has something late" },
-                { value: "open", label: "Has something open" },
-                { value: "filed", label: "Fully filed" },
-              ]}
-            />
-          </FilterRow>
-
-          <FilterRow label="Group columns by">
-            <FilterPick<GroupBy>
-              value={group}
-              onChange={(v) => setGroup(v)}
-              options={[
-                { value: "month", label: "Month" },
-                { value: "head", label: "Compliance head" },
-                { value: "none", label: "No grouping" },
-              ]}
-            />
-          </FilterRow>
-        </Filters>
+        {/* One pill per field. On a grid of 640 clients the whole question is
+            WHICH slice you are looking at, so the active narrowing stays
+            legible without opening anything, and clearing one is a single
+            click. Search and sort stay plain — neither narrows the book. */}
+        <FilterPill<Window>
+          field="Period"
+          value={win}
+          none={"quarter" as Window}
+          onChange={setWin}
+          options={[
+            { value: "month", label: "This month" },
+            { value: "quarter", label: "Next 3 months" },
+            { value: "year", label: "Full year" },
+          ]}
+        />
+        <FilterPill<string>
+          field="Head"
+          value={head}
+          none="all"
+          onChange={setHead}
+          options={[{ value: "all", label: "All heads" }, ...HEADS.map((h) => ({ value: h, label: h }))]}
+        />
+        <FilterPillMulti
+          field="Owner"
+          values={owners}
+          onChange={(v) => { setOwners(v); setLimit(ROWS); }}
+          searchPlaceholder="Search staff"
+          options={[
+            { value: "none", label: "Unassigned", avatar: "—" },
+            ...STAFF.map((st) => ({ value: st.id, label: st.name, avatar: st.initials, sub: st.role })),
+          ]}
+        />
+        <FilterPill<StatusFilter>
+          field="Status"
+          value={status}
+          none={"all" as StatusFilter}
+          onChange={(v) => { setStatus(v); setLimit(ROWS); }}
+          options={[
+            { value: "all", label: "Any status" },
+            { value: "late", label: "Has something late" },
+            { value: "open", label: "Has something open" },
+            { value: "filed", label: "Fully filed" },
+          ]}
+        />
+        <FilterPill<GroupBy>
+          field="Group"
+          value={group}
+          none={"month" as GroupBy}
+          onChange={setGroup}
+          options={[
+            { value: "month", label: "By month" },
+            { value: "head", label: "By head" },
+            { value: "none", label: "No grouping" },
+          ]}
+        />
+        <ClearFilters
+          count={(head !== "all" ? 1 : 0) + (owners.length > 0 ? 1 : 0) + (status !== "all" ? 1 : 0)
+            + (win !== "quarter" ? 1 : 0) + (group !== "month" ? 1 : 0)}
+          onClear={() => {
+            setHead("all"); setOwners([]); setStatus("all");
+            setWin("quarter"); setGroup("month"); setLimit(ROWS);
+          }}
+        />
         <span className="u-spacer" />
         <select className="plain" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort rows">
           <option value="late">Most late</option>
@@ -320,17 +305,31 @@ export function MatrixPage() {
         </div>
       ) : (
         <>
-          <div className={`trkwrap${expanded ? " is-expanded" : ""}`}>
+          {/* Expand sits on the grid's own top-right corner — it acts on this
+              module, so it belongs to it rather than to the page header. */}
+          <div className={`trkbox${expanded ? " is-expanded" : ""}`}>
             {expanded ? (
+              <div className="trkbar">
+                <b>Compliance tracker</b>
+                <span className="num">{visible.length} of {rows.length.toLocaleString("en-IN")} clients × {columns.length} compliances</span>
+                <span className="u-spacer" />
+                <button type="button" className="btn btn--sm" onClick={() => setExpanded(false)}>
+                  <Icon name="collapse" size={13} /> Exit full screen
+                  <span className="kbd">esc</span>
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                className="trkwrap__close btn btn--sm"
-                onClick={() => setExpanded(false)}
+                className="trkexp"
+                onClick={() => setExpanded(true)}
+                title="Expand to full screen"
+                aria-label="Expand the grid to full screen"
               >
-                <Icon name="collapse" size={13} /> Exit full screen
-                <span className="kbd">esc</span>
+                <Icon name="expand" size={14} />
               </button>
-            ) : null}
+            )}
+          <div className="trkwrap">
             <table className="trk">
               <thead>
                 {spans.length > 0 ? (
@@ -401,6 +400,7 @@ export function MatrixPage() {
                 })}
               </tbody>
             </table>
+          </div>
           </div>
 
           <div className="trkfoot">
