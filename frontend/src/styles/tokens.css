@@ -1,0 +1,272 @@
+/* ============================================================================
+   COMPLIANCE TRACKER — DESIGN TOKENS  ·  "AURORA"
+   ----------------------------------------------------------------------------
+   White ground, cool-neutral ink, one teal accent for chrome.
+
+   The governing idea is unchanged from v2 — COLOUR MEANS COMPLIANCE STATE —
+   but Aurora lets that colour enter as a soft *wash* behind a card as well as
+   a tag: rose where money is leaving, mint where it is settled, amber where
+   something lands soon, blue where it is merely pending. A wash is always the
+   state it describes; it is never decoration, and chrome never takes a wash.
+
+   Teal is the sole non-state hue. It marks the active nav item, links and the
+   brand, and nothing else — so it can never be confused for a status.
+
+   Three typographic voices:
+     serif  — page + section titles only (editorial, statutory)
+     sans   — all interface text and controls
+     mono   — every figure: money, dates, counts, PAN/GSTIN, form numbers
+   ========================================================================== */
+
+:root {
+  /* ---- Type ------------------------------------------------------------- */
+  --f-serif: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --f-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
+
+  --t-11: 11px;
+  --t-12: 12px;
+  --t-13: 13px;
+  --t-14: 14px;
+  --t-16: 16px;
+  --t-20: 20px;
+  --t-26: 26px;
+  --t-34: 34px;
+  --t-46: 46px;
+
+  /* ---- Space (4px base) -------------------------------------------------- */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s8: 32px;
+  --s10: 40px;
+  --s12: 48px;
+  --s16: 64px;
+
+  /* Aurora is generous: cards are 18px, controls 10px. */
+  --radius: 10px;
+  --radius-sm: 6px;
+  --radius-lg: 18px;
+
+  --rail-w: 236px;
+  --rail-w-collapsed: 60px;
+
+  /* The top bar's height, named because two sticky offsets depend on it: the
+     filter bar parks under it, and section headers park under the filter bar. */
+  --topline-h: 61px;
+
+  /* ---- Ground & ink — LIGHT --------------------------------------------- */
+  --paper: #fbfcfd; /* app ground: a cool white, one step off the cards */
+  --sheet: #ffffff; /* every card */
+  --sunk: #f1f4f8; /* wells, table heads, inputs, chips */
+  --sunk-2: #e4e9f0;
+
+  --rule: #e8ecf1; /* hairline */
+  --rule-strong: #cfd6e0;
+
+  --ink: #101418;
+  --ink-2: #4e5763;
+  --ink-3: #7d8794;
+  --ink-4: #a3abb6;
+
+  --ink-invert: #ffffff;
+
+  /* Soft, layered, low-contrast — Aurora lifts cards rather than outlining. */
+  --shadow-1: 0 1px 2px rgba(16, 20, 24, 0.04), 0 1px 3px rgba(16, 20, 24, 0.03);
+  --shadow-2: 0 4px 16px rgba(16, 20, 24, 0.07), 0 1px 3px rgba(16, 20, 24, 0.04);
+  --shadow-3: 0 20px 50px rgba(16, 20, 24, 0.16), 0 2px 8px rgba(16, 20, 24, 0.06);
+
+  /* ---- CHROME ACCENT — teal, and only teal ------------------------------ */
+  --accent: #0b6e63;
+  --accent-2: #0e8a7c;
+  --accent-soft: #eef6f4;
+  --accent-line: #cfe6e1;
+
+  /* ---- STATE COLOUR — the only colour that carries meaning --------------- */
+  /* filed: settled, resolved, no longer your problem */
+  --st-filed-fg: #1d6a4d;
+  --st-filed-bg: #e2f4ea;
+  --st-filed-line: #bfe4cf;
+  --st-filed-solid: #23875c;
+
+  /* pending: on track, deliberately low-salience — not a problem yet */
+  --st-pending-fg: #2a5f9e;
+  --st-pending-bg: #e7f0fb;
+  --st-pending-line: #c8dcf5;
+  --st-pending-solid: #2a78d6;
+
+  /* overdue: money is leaving the building */
+  --st-overdue-fg: #b8402c;
+  --st-overdue-bg: #fdeae4;
+  --st-overdue-line: #f6cabd;
+  --st-overdue-solid: #c94a33;
+
+  /* not applicable: present but silent */
+  --st-na-fg: #7d8794;
+  --st-na-bg: #f1f4f8;
+  --st-na-line: #e2e7ee;
+  --st-na-solid: #a3abb6;
+
+  /* ---- URGENCY RAMP — orthogonal to status ------------------------------ */
+  /* Status says "where does this stand". Urgency says "how soon". These are
+     the text-safe steps; the *-solid set below is for bars and fills, where
+     contrast against white matters less than saturation. */
+  --urg-calm: #7d8794;
+  --urg-soon: #9a6410;
+  --urg-near: #a85e14;
+  --urg-now: #b04a16;
+  --urg-past: #b8402c;
+
+  --urg-calm-solid: #b9c3ce;
+  --urg-soon-solid: #d69a24;
+  --urg-near-solid: #d97b22;
+  --urg-now-solid: #cf6a18;
+  --urg-past-solid: #b8402c;
+
+  --urg-soon-bg: #fdf1d9;
+  --urg-near-bg: #fdeadb;
+  --urg-now-bg: #fde6da;
+
+  /* Gradient fills for the runway / pulse bars. A bar is a mark, so it may be
+     saturated in a way text never is. */
+  --grad-past: linear-gradient(180deg, #d8674e, #b8402c);
+  --grad-now: linear-gradient(180deg, #e88a3c, #cf6a18);
+  --grad-near: linear-gradient(180deg, #eda94e, #d97b22);
+  --grad-soon: linear-gradient(180deg, #eec063, #d69a24);
+  --grad-calm: linear-gradient(180deg, #d3dae3, #b9c3ce);
+
+  /* ---- The four state washes -------------------------------------------- */
+  /* Used as a radial bloom from a card's top-right corner. */
+  --wash-risk: #fdeae4;
+  --wash-warn: #fdf2dc;
+  --wash-good: #e4f5ec;
+  --wash-cool: #e9f1fc;
+  --wash-none: #f3f6f9;
+
+  /* ---- Compliance heads — categorical identity --------------------------- */
+  /* Fixed hue order validated against scripts/validate_palette.js (dataviz
+     skill): IT(blue) · TDS(aqua) · ROC(orange) · GST(violet) · LLP(magenta)
+     clear the adjacent CVD + normal-vision floors in THIS order — reordering
+     these five requires re-validating. "Other" stays a deliberate de-emphasis
+     grey (it is the residual bucket, not a real category to separate). */
+  --head-it: #2a78d6;
+  --head-tds: #1baf7a;
+  --head-roc: #eb6834;
+  --head-gst: #4a3aa7;
+  --head-llp: #e87ba4;
+  --head-other: #6d7280;
+
+  /* ---- Interactive ------------------------------------------------------ */
+  --focus: #0e8a7c;
+  --focus-ring: 0 0 0 2px var(--paper), 0 0 0 4px rgba(14, 138, 124, 0.5);
+  --link: #0b6e63;
+
+  --btn-ink: #101418;
+  --btn-ink-hover: #262d36;
+  --hover: rgba(16, 20, 24, 0.04);
+  --active: rgba(16, 20, 24, 0.075);
+  --selected: rgba(11, 110, 99, 0.07);
+}
+
+/* ============================ DARK ======================================= */
+/* Aurora after dark: a cool near-black ground, the same teal pushed brighter,
+   and the washes re-cut as low-opacity tints rather than pale pastels. Not an
+   inversion — each state keeps the relative salience it has in light. */
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --paper: #0e1013;
+  --sheet: #171a1f;
+  --sunk: #1e222a;
+  --sunk-2: #272c35;
+
+  --rule: #262a31;
+  --rule-strong: #3a4049;
+
+  --ink: #f2f4f7;
+  --ink-2: #a8b0bc;
+  --ink-3: #79818e;
+  --ink-4: #5a626e;
+
+  --ink-invert: #0e1013;
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-3: 0 20px 50px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.06);
+
+  --accent: #4ec9b8;
+  --accent-2: #6bd9c9;
+  --accent-soft: #10292a;
+  --accent-line: #1d4a47;
+
+  --st-filed-fg: #6fce9c;
+  --st-filed-bg: #10251b;
+  --st-filed-line: #1d4230;
+  --st-filed-solid: #34a06c;
+
+  --st-pending-fg: #8ab8ea;
+  --st-pending-bg: #121d2b;
+  --st-pending-line: #1f3349;
+  --st-pending-solid: #3f83d4;
+
+  --st-overdue-fg: #f0907c;
+  --st-overdue-bg: #2a1310;
+  --st-overdue-line: #4a221b;
+  --st-overdue-solid: #cf5340;
+
+  --st-na-fg: #79818e;
+  --st-na-bg: #1c2027;
+  --st-na-line: #2b3039;
+  --st-na-solid: #5a626e;
+
+  --urg-calm: #79818e;
+  --urg-soon: #dda63c;
+  --urg-near: #e2803c;
+  --urg-now: #e56b45;
+  --urg-past: #f0907c;
+
+  --urg-calm-solid: #4a515c;
+  --urg-soon-solid: #c48d20;
+  --urg-near-solid: #c96f1e;
+  --urg-now-solid: #c05a18;
+  --urg-past-solid: #c44834;
+
+  --urg-soon-bg: #271e10;
+  --urg-near-bg: #29190f;
+  --urg-now-bg: #2a1510;
+
+  --grad-past: linear-gradient(180deg, #d8674e, #a8351f);
+  --grad-now: linear-gradient(180deg, #e0863c, #b85c14);
+  --grad-near: linear-gradient(180deg, #d99a44, #b8681c);
+  --grad-soon: linear-gradient(180deg, #d4ad55, #b8841c);
+  --grad-calm: linear-gradient(180deg, #4d545f, #3a4049);
+
+  --wash-risk: #2a1310;
+  --wash-warn: #271e10;
+  --wash-good: #10251b;
+  --wash-cool: #121d2b;
+  --wash-none: #1c2027;
+
+  --head-it: #3987e5;
+  --head-tds: #199e70;
+  --head-roc: #d95926;
+  --head-gst: #9085e9;
+  --head-llp: #d55181;
+  --head-other: #979daa;
+
+  --focus: #4ec9b8;
+  --focus-ring: 0 0 0 2px var(--paper), 0 0 0 4px rgba(78, 201, 184, 0.5);
+  --link: #4ec9b8;
+
+  --btn-ink: #f2f4f7;
+  --btn-ink-hover: #ffffff;
+  --hover: rgba(255, 255, 255, 0.05);
+  --active: rgba(255, 255, 255, 0.09);
+  --selected: rgba(78, 201, 184, 0.12);
+}

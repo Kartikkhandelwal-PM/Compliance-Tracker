@@ -1,0 +1,18 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+.vite/
+
+# Local tooling settings, not project code.
+.claude/
+
+# Internal scope and requirement documents. This repository is PUBLIC, so the
+# planning material is kept out of it by default — no client PII was found in
+# them, but they are internal business documents rather than product code.
+# Delete these five lines if you want them published alongside the app.
+Files/
+Rough Sample/
+Requirement.txt
+Requirement Summary.txt
+Compliance Tracker - Phase 1 Scope.md
