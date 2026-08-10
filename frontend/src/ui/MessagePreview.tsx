@@ -12,21 +12,14 @@
 
 import type { OutboxEntry } from "../domain/types.ts";
 import { CLIENT_BY_ID, staffOf } from "../domain/book.ts";
-import { fmtLong } from "../domain/dates.ts";
-import { SENDER } from "../domain/messages.ts";
+import { dateOf, fmtAgo, fmtLong, fmtTime } from "../domain/dates.ts";
+import { resendEntries } from "../domain/engine.ts";
+import { getSender } from "../domain/messages.ts";
+import { useApp, useEngine } from "./app-state.tsx";
 import { Drawer } from "./Drawer.tsx";
 import { BrandIcon, Icon } from "./Icon.tsx";
 import { Logo } from "./Logo.tsx";
 import { initialsOf } from "./bits.tsx";
-
-/** A plausible send time; the seed only carries a date. */
-function clockFor(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
-  const hour = 9 + (h % 10);
-  const min = h % 60;
-  return `${String(hour).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
-}
 
 /**
  * WhatsApp's own receipt grammar, which every client already reads fluently:
@@ -54,11 +47,20 @@ function Receipt({ status }: { status: OutboxEntry["status"] }) {
 export function MessagePreview({
   entry, onClose,
 }: { entry: OutboxEntry | null; onClose: () => void }) {
+  const { toast, me } = useApp();
+  /* Read live rather than imported as a constant — Settings edits the sender's
+     display name, number and addresses, and this panel is where a partner
+     checks what that actually looks like to a client. */
+  const sender = useEngine(getSender);
   if (!entry) return null;
   const e = entry;
   const client = CLIENT_BY_ID[e.clientId];
   const owner = staffOf(client?.assigneeId ?? "none");
-  const time = clockFor(e.id);
+  /* The real send time, off the entry. This used to be a hash of the row id
+     dressed up as a clock, because the log only carried a date — so the same
+     message showed a different "time" than the row it came from, and two
+     chases on one day were indistinguishable. */
+  const time = fmtTime(e.sentAt);
   const isWa = e.channel === "WhatsApp";
 
   const statusTag = e.status === "Failed" ? "tag--overdue"
@@ -70,17 +72,32 @@ export function MessagePreview({
       open
       onClose={onClose}
       title={<>{isWa ? "WhatsApp" : "Email"} to {client?.name ?? e.clientId}</>}
-      subtitle={<>{e.stage} · sent {fmtLong(e.sentAt)} at {time}</>}
+      subtitle={
+        <>
+          {e.stage} · {fmtLong(dateOf(e.sentAt))} at {time} · {fmtAgo(e.sentAt)}
+          {e.attempt > 1 ? <> · attempt {e.attempt}</> : null}
+        </>
+      }
       footer={
         <>
           <button type="button" className="btn btn--primary" onClick={onClose}>
             <Icon name="check" size={15} /> Close
           </button>
-          {e.status === "Failed" ? (
-            <button type="button" className="btn">
-              <Icon name="send" size={15} /> Retry send
-            </button>
-          ) : null}
+          {/* Live, not decorative. This was a dead button — the one action the
+              panel most obviously needed, wired to nothing. */}
+          <button
+            type="button"
+            className={e.status === "Failed" ? "btn btn--danger" : "btn"}
+            onClick={() => {
+              const n = resendEntries([e.id], me.id);
+              toast(n > 0
+                ? `${e.status === "Failed" ? "Retrying" : "Re-sent"} to ${client?.name ?? "client"}`
+                : "That filing has since closed — nothing sent");
+              onClose();
+            }}
+          >
+            <Icon name="send" size={15} /> {e.status === "Failed" ? "Retry send" : "Send again"}
+          </button>
           <span className="u-spacer" />
           <span className={`tag ${statusTag}`}><i className="tag__dot" />{e.status}</span>
         </>
@@ -97,26 +114,41 @@ export function MessagePreview({
           <div className="wasend">
             <span className="wasend__mark"><Logo size={18} id="wasend" /></span>
             <span>
-              Sending as <b>{SENDER.name}</b>
+              Sending as <b>{sender.name}</b>
               <span className="wasend__badge" title="WhatsApp Business, verified">
                 <Icon name="check" size={8} />
               </span>
-              {" "}· {SENDER.handle} · on behalf of {owner.name === "Unassigned" ? SENDER.by : owner.name}
+              {" "}· {sender.handle} · on behalf of {owner.name === "Unassigned" ? sender.by : owner.name}
             </span>
           </div>
 
+          {/* The chat header carries what WhatsApp's does — back, the contact's
+              avatar and name, and the call/video/menu actions. Without the
+              action icons the bar read as a caption above a quotation rather
+              than as the top of a conversation. */}
           <div className="wapane__bar">
-            <Icon name="chevronLeft" size={16} className="wapane__back" />
+            <Icon name="chevronLeft" size={18} className="wapane__back" />
             <span className="waav">{initialsOf(client?.name ?? "??")}</span>
             <div className="wapane__who">
               <b>{client?.name ?? e.clientId}</b>
               <span className="num">{client?.phone ?? ""}</span>
             </div>
             <span className="u-spacer" />
-            <BrandIcon name="whatsapp" size={16} />
+            <span className="wapane__acts">
+              <Icon name="video" size={17} />
+              <Icon name="phone" size={16} />
+              <Icon name="dots" size={17} />
+            </span>
           </div>
+
           <div className="wapane__thread">
-            <div className="wadate">{fmtLong(e.sentAt)}</div>
+            {/* Every real WhatsApp thread opens with this. It is the single
+                most recognisable thing on the screen. */}
+            <div className="wae2e">
+              <Icon name="lock" size={9} />
+              Messages are end-to-end encrypted. Only people in this chat can read them.
+            </div>
+            <div className="wadate">{fmtLong(dateOf(e.sentAt))}</div>
             <div className="wabubble">
               {e.body.split("\n").map((ln, i) =>
                 ln ? <p key={i}>{ln}</p> : <span key={i} className="wabubble__gap" />)}
@@ -132,8 +164,19 @@ export function MessagePreview({
                   ? "Delivered to the handset, not opened yet"
                   : e.status === "Failed"
                     ? "Never delivered. The number may be wrong or WhatsApp is not registered on it."
-                    : "Held until quiet hours end at 09:00"}
+                    : "Held until the sending window opens"}
             </div>
+          </div>
+
+          {/* Inert, and deliberately so — this is a record of a sent message,
+              not a place to type. But a thread that simply stops where the
+              last bubble ends does not look like a phone. */}
+          <div className="wacompose" aria-hidden="true">
+            <Icon name="smile" size={18} />
+            <span className="wacompose__box">Message</span>
+            <Icon name="attach" size={18} />
+            <Icon name="camera" size={18} />
+            <span className="wacompose__mic"><Icon name="mic" size={16} /></span>
           </div>
         </div>
       ) : (
@@ -143,10 +186,10 @@ export function MessagePreview({
             <span className="mailpane__subject">{e.subject}</span>
           </div>
           <dl className="mailpane__meta">
-            <div><dt>From</dt><dd>{SENDER.name} &lt;compliance@kdksoftware.com&gt;</dd></div>
+            <div><dt>From</dt><dd>{sender.name} &lt;{sender.fromEmail}&gt;</dd></div>
             <div><dt>To</dt><dd>{client?.email ?? ""}</dd></div>
             <div><dt>Cc</dt><dd>{owner.name === "Unassigned" ? "no owner assigned" : `${owner.name}, KDK`}</dd></div>
-            <div><dt>Sent</dt><dd className="num">{fmtLong(e.sentAt)} · {time}</dd></div>
+            <div><dt>Sent</dt><dd className="num">{fmtLong(dateOf(e.sentAt))} · {time}</dd></div>
           </dl>
           <div className="mailpane__body">
             {e.body.split("\n").map((ln, i) => (ln ? <p key={i}>{ln}</p> : null))}
@@ -159,7 +202,15 @@ export function MessagePreview({
         <dl className="obfacts obfacts--two">
           <div><dt>Channel</dt><dd>{e.channel}</dd></div>
           <div><dt>Trigger</dt><dd>{e.stage}</dd></div>
+          <div><dt>Compliance</dt><dd>{e.form}</dd></div>
           <div><dt>Owner</dt><dd>{owner.name}</dd></div>
+          {/* "The system chased them" and "Priya chased them" are different
+              answers to the same client question, so the log records which. */}
+          <div>
+            <dt>Sent by</dt>
+            <dd>{e.origin === "Automatic" ? "The cadence, unattended" : staffOf(e.sentBy ?? "none").name}</dd>
+          </div>
+          <div><dt>Attempt</dt><dd className="num">{e.attempt}</dd></div>
         </dl>
       </div>
     </Drawer>

@@ -23,10 +23,10 @@
    grid, the month tabs and the day panel always agree with each other.
    ========================================================================== */
 
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { useObligations } from "../ui/app-state.tsx";
-import { buildRuns } from "../domain/engine.ts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { useEngine, useObligations } from "../ui/app-state.tsx";
+import { buildRuns, untrackedCodes } from "../domain/engine.ts";
 import type { FilingRun } from "../domain/types.ts";
 import { DEF_BY_CODE, FY_START, HEADS, fyLabel, headClass, occurrencesForFY } from "../domain/catalog.ts";
 import { STAFF } from "../domain/book.ts";
@@ -61,6 +61,7 @@ interface DayCell {
 
 export function CalendarPage() {
   const obligations = useObligations();
+  const untracked = useEngine(untrackedCodes);
   const t = parts(TODAY);
 
   const [fy, setFy] = useState(FY_START);
@@ -70,14 +71,33 @@ export function CalendarPage() {
     const i = list.findIndex(([y, m]) => y === t.y && m === t.m);
     return i >= 0 ? i : 0;
   });
-  const [picked, setPicked] = useState<string | null>(null);
+  const [params] = useSearchParams();
+  /* Arriving from "1,240 filings are due today" has to open that day, not drop
+     the reader on the month with the answer somewhere inside it. */
+  const [picked, setPicked] = useState<string | null>(() => params.get("date"));
   /* The day panel sits below a six-week grid, so picking a date changed
      something a full screen away and people did not know to look. */
   const dayRef = useRevealOnPick<HTMLDivElement>(picked, 60);
   const [view, setView] = useState<View>("grid");
+  const tlineRef = useRef<HTMLOListElement>(null);
 
-  const [head, setHead] = useState("all");
-  const [owner, setOwner] = useState("all");
+
+
+  const [head, setHead] = useState(() => params.get("head") ?? "all");
+  const [owner, setOwner] = useState(() => params.get("owner") ?? "all");
+
+  /* Follow the URL when it changes under an already-open page, and move the
+     month to wherever the linked date actually is. */
+  useEffect(() => {
+    const d = params.get("date");
+    if (!d) return;
+    setPicked(d);
+    const { y, m } = parts(d);
+    const i = fyMonthList(FY_START).findIndex(([yy, mm]) => yy === y && mm === m);
+    if (i >= 0) setMonthIdx(i);
+    const h = params.get("head");
+    if (h) setHead(h);
+  }, [params]);
   /* Was a lone toggle chip sitting among two dropdowns — the same mismatch
      the Clients page had. As a select it also gains the half of the question a
      toggle could never ask: show me only the days that are clean. */
@@ -122,10 +142,15 @@ export function CalendarPage() {
       return runs;
     }
     if (dayState === "arrears") return [];
+    /* An unseeded year is drawn from the statutory calendar rather than from
+       the book, so it has to apply the firm's catalogue settings itself —
+       a compliance switched off in Settings is not on this firm's calendar in
+       any year. */
     return occurrencesForFY(fy)
       .map((occ): FilingRun | null => {
         const def = DEF_BY_CODE[occ.defCode];
         if (!def) return null;
+        if (untracked.has(occ.defCode)) return null;
         if (head !== "all" && def.head !== head) return null;
         return {
           runId: occ.runId,
@@ -138,7 +163,7 @@ export function CalendarPage() {
         };
       })
       .filter((r): r is FilingRun => r !== null);
-  }, [seeded, runs, dayState, fy, head]);
+  }, [seeded, runs, dayState, fy, head, untracked]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, DayCell>();
@@ -202,6 +227,35 @@ export function CalendarPage() {
     const from = addDays(TODAY, -30);
     return groups.filter((g) => g.date >= from);
   }, [byDate]);
+
+  /**
+   * Reveal timeline rows as they are scrolled to.
+   *
+   * Observed against `main.work`, the app's scroll container — the window never
+   * scrolls, so a viewport-rooted observer would never fire. Rows are marked
+   * once and left marked: re-hiding on scroll-up turns a list into a flicker.
+   */
+  useEffect(() => {
+    if (view !== "timeline") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const list = tlineRef.current;
+    if (!list) return;
+    const root = list.closest("main.work") as HTMLElement | null;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) {
+            e.target.classList.add("is-in");
+            io.unobserve(e.target);
+          }
+        }
+      },
+      { root, rootMargin: "0px 0px -40px 0px", threshold: 0.01 },
+    );
+    for (const row of list.querySelectorAll(".tlgroup")) io.observe(row);
+    return () => io.disconnect();
+  }, [view, timeline]);
+
 
   /** The single heaviest date this month — the one to staff for. */
   const busiest = useMemo(() => {
@@ -494,7 +548,7 @@ export function CalendarPage() {
            which is how you actually plan across the 31 Jul / 30 Sep / 31 Oct
            walls that a month view keeps cutting in half. */
         <div className="sheet">
-          <ol className="tline">
+          <ol className="tline" ref={tlineRef}>
             {timeline.map((group) => (
               <li key={group.date} className={`tlgroup${group.date === TODAY ? " is-today" : ""}${group.overdue > 0 ? " has-risk" : ""}`}>
                 <div className="tlgroup__date">
@@ -603,32 +657,61 @@ export function CalendarPage() {
       {/* Hover detail. Fixed-positioned so it is never clipped by a cell. */}
       {tip ? (
         <div className="caltip" style={{ left: tip.x, top: tip.y }} role="tooltip">
-          <div className="caltip__form">
-            <i className={`calpill__spine ${headClass(tip.run.def.head)}`} style={{ minHeight: 13 }} />
-            {tip.run.def.form}
+          <div className="caltip__head">
+            {/* No head spine here. `.calpill__spine` takes its width from the
+                calendar chip it belongs to, so in this card it collapsed to 0px
+                while the flex gap still reserved 8px — an empty indent in front
+                of the name. The head is named in the sub-line below anyway. */}
+            <div className="caltip__form">{tip.run.def.form}</div>
+            <div className="caltip__sub">
+              {tip.run.periodLabel} · {tip.run.def.head} · {tip.run.def.frequency}
+            </div>
           </div>
-          <div className="caltip__sub">
-            {tip.run.periodLabel} · {tip.run.def.head} · {tip.run.def.frequency}
+
+          <div className="caltip__due">
+            <Icon name="calendar" size={12} />
+            <span className="num">{fmtLong(tip.date)}</span>
           </div>
-          <div className="caltip__due num">Due {fmtLong(tip.date)}</div>
+
           {seeded ? (
             <>
+              {/* Figures as labelled columns. As one run-on line they read as
+                  prose — "359 applies to 282 filed 0 pending" — and the number
+                  that matters was the hardest to find. */}
               <div className="caltip__rows">
-                <span><b className="num">{tip.run.total}</b> applies to</span>
-                <span><b className="num">{tip.run.filed}</b> filed</span>
-                <span><b className="num">{tip.run.pending}</b> pending</span>
+                <span className="caltip__stat">
+                  <b>{tip.run.total.toLocaleString("en-IN")}</b><span>clients</span>
+                </span>
+                <span className="caltip__stat">
+                  <b>{tip.run.filed.toLocaleString("en-IN")}</b><span>filed</span>
+                </span>
+                <span className="caltip__stat">
+                  <b>{tip.run.pending.toLocaleString("en-IN")}</b><span>pending</span>
+                </span>
                 {tip.run.overdue > 0 ? (
-                  <span style={{ color: "var(--st-overdue-fg)" }}><b className="num">{tip.run.overdue}</b> overdue</span>
+                  <span className="caltip__stat is-late">
+                    <b>{tip.run.overdue.toLocaleString("en-IN")}</b><span>overdue</span>
+                  </span>
                 ) : null}
               </div>
               {tip.run.exposure > 0 ? (
-                <div className="caltip__fees num">{inrShort(tip.run.exposure)} late fees accrued</div>
+                <div className="caltip__fees">
+                  <Icon name="alert" size={12} />
+                  {inrShort(tip.run.exposure)} late fees accrued
+                </div>
               ) : null}
             </>
           ) : (
-            <div className="caltip__rows"><span>No client book for this year</span></div>
+            <div className="caltip__rows">
+              <span className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+                No client book for this year
+              </span>
+            </div>
           )}
-          <div className="caltip__cta">Click to open this compliance →</div>
+
+          <div className="caltip__go">
+            Open this compliance <Icon name="arrowRight" size={12} />
+          </div>
         </div>
       ) : null}
     </div>

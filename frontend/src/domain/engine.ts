@@ -9,14 +9,18 @@
    ========================================================================== */
 
 import type {
-  Client, FilingRun, FilingStatus, Obligation, OutboxEntry,
-  ReminderStage, StatusBasis,
+  Channel, Client, ComplianceOverride, DeliveryStatus, FilingRun, FilingStatus,
+  FirmProfile, Head, NotificationSettings, Obligation, OutboxEntry,
+  ReminderSettings, ReminderStage, ScheduleStep, ScheduledSend, SenderProfile,
+  StatusBasis,
 } from "./types.ts";
 import { CLIENTS, CLIENT_BY_ID, staffOf } from "./book.ts";
 import { DEF_BY_CODE, OCCURRENCES } from "./catalog.ts";
 import { applicableCompliances, estimateExposure } from "./rules.ts";
-import { TODAY, addDays, diffDays } from "./dates.ts";
-import { compose } from "./messages.ts";
+import {
+  TODAY, addDays, dateOf, diffDays, inQuietHours, nextSendableAt, stamp,
+} from "./dates.ts";
+import { compose, getSender, setSender } from "./messages.ts";
 
 /* Stable 0–1 hash so simulated history never shifts between renders. */
 function h(s: string): number {
@@ -99,7 +103,13 @@ function build(): Obligation[] {
           if (filesEarly) {
             status = "Filed";
             basis = h(id + "|b") < 0.55 ? "Filed via KDK" : "Portal verified";
-            filedOn = addDays(occ.dueDate, -Math.floor(h(id + "|f") * daysToGo) - 1);
+            /* Counted back from TODAY, not forward from the due date.
+               Deriving it from the due date put the filing date in the FUTURE
+               — "GSTR-3B for July, filed on 14 August" when today is the 6th —
+               so the dashboard's "filed this month" was counting 147 filings
+               that had not happened yet. Something already marked Filed must
+               have been filed on or before today. */
+            filedOn = addDays(TODAY, -Math.floor(h(id + "|f") * 6));
           } else {
             status = "Pending";
             basis = "Due date not passed";
@@ -113,7 +123,11 @@ function build(): Obligation[] {
             status = "Filed";
             const b = h(id + "|b");
             basis = b < 0.4 ? "Portal verified" : b < 0.82 ? "Filed via KDK" : "Manually marked";
-            filedOn = addDays(occ.dueDate, Math.floor(h(id + "|f") * 6) - 4);
+            /* Scattered either side of the due date, then clamped: where the
+               due date is today or yesterday the +1 end of that window lands
+               in the future, and a filing cannot be dated after today. */
+            const guess = addDays(occ.dueDate, Math.floor(h(id + "|f") * 6) - 4);
+            filedOn = guess > TODAY ? TODAY : guess;
           } else {
             status = "Overdue";
             basis = "Due date passed";
@@ -170,8 +184,30 @@ export function subscribe(fn: () => void): () => void {
 export function getVersion(): number {
   return version;
 }
+/**
+ * The book, minus anything the firm has switched off.
+ *
+ * The filter belongs HERE and not at each call site. Every screen in the
+ * product reads the book through this one function, so a compliance the firm
+ * does not handle disappears from all of them at once — tracker, calendar,
+ * dashboard, client profiles, exports. The first cut of the settings screen
+ * only consulted the flag when deciding who to chase, so switching GSTR-1 off
+ * silently stopped its reminders while leaving it on every other screen: the
+ * worst of both, and exactly the kind of half-applied setting that makes
+ * people stop trusting the switches.
+ */
 export function allObligations(): Obligation[] {
-  return OBLIGATIONS;
+  if (OVERRIDES.size === 0) return OBLIGATIONS;
+  return OBLIGATIONS.filter((o) => complianceSetting(o.defCode).tracked);
+}
+
+/** Untracked compliance codes — for the screens that read the catalogue
+ *  directly (the calendar's date list, the compliance index) rather than
+ *  through the book. */
+export function untrackedCodes(): Set<string> {
+  const out = new Set<string>();
+  for (const [code, cfg] of OVERRIDES) if (!cfg.tracked) out.add(code);
+  return out;
 }
 
 let outbox: OutboxEntry[] = [];
@@ -244,66 +280,632 @@ export function reassign(ids: string[], staffId: string) {
   emit();
 }
 
-/** Queue reminders. Honours the quiet-hours guard from the reminder logic
- *  sheet: sends outside 09:00–20:00 are held, not dropped. */
+/* ==========================================================================
+   REMINDER ENGINE
+   --------------------------------------------------------------------------
+   Reminders used to be manual only: someone selected rows and pressed send.
+   That does not survive contact with a real book — nobody opens the app on
+   the 13th to chase the 20th, so the chase happens when someone remembers,
+   which is usually after the due date.
+
+   The cadence below is a LADDER OF OFFSETS hung off the statutory due date,
+   not a calendar. One ladder therefore drives every compliance in the
+   catalogue against every client it applies to: "three days before, on
+   WhatsApp" is a rule, "3 Aug for GSTR-3B July" is its consequence.
+
+   Two things the ladder is deliberately NOT allowed to do:
+
+     • It never fires on a resolved obligation. A step is evaluated at send
+       time against live status, so a client who filed on the 12th is not
+       chased on the 13th. This is the single most damaging thing a reminder
+       system can get wrong — it destroys trust in every other message.
+     • It never sends outside 09:00–20:00. Out-of-window sends are HELD and
+       released at 09:00, not dropped: a statutory notice at 6am reads as
+       spam and gets the business number blocked.
+   ========================================================================== */
+
+/** The prototype's fixed "now". Real deployments read the clock; here it is
+ *  pinned so the same book renders identically on every load. Late afternoon,
+ *  so that the morning's automatic sends are already history and the evening's
+ *  are still ahead — which is the state the screens are designed against. */
+export const NOW = stamp(TODAY, 17, 30);
+
+const DEFAULT_SCHEDULE: ScheduleStep[] = [
+  {
+    id: "t7",
+    offset: -7,
+    stage: "T-7 sent",
+    label: "First reminder",
+    intent: "First heads-up, with time to collect documents.",
+    channels: ["WhatsApp", "Email"],
+    sendAt: 10,
+    enabled: true,
+  },
+  {
+    id: "t3",
+    offset: -3,
+    stage: "T-3 sent",
+    label: "Follow-up",
+    intent: "Last easy reminder before the deadline.",
+    channels: ["WhatsApp"],
+    sendAt: 11,
+    enabled: true,
+  },
+  {
+    id: "t0",
+    offset: 0,
+    stage: "Due-date sent",
+    label: "Due today",
+    intent: "Due today. Sent in the morning.",
+    channels: ["WhatsApp", "Email"],
+    sendAt: 9,
+    enabled: true,
+  },
+  {
+    id: "p1",
+    offset: 1,
+    stage: "Overdue escalation",
+    label: "Missed",
+    intent: "Missed. Shows the late fee so far.",
+    channels: ["WhatsApp", "Email"],
+    sendAt: 10,
+    enabled: true,
+  },
+  {
+    id: "p7",
+    offset: 7,
+    stage: "Overdue escalation",
+    label: "Escalation",
+    intent: "A week late. The client's owner is copied in.",
+    channels: ["Email"],
+    sendAt: 11,
+    enabled: true,
+    ccOwner: true,
+  },
+  {
+    id: "p30",
+    offset: 30,
+    stage: "Overdue escalation",
+    label: "Final notice",
+    intent: "A month late. Off by default.",
+    channels: ["Email"],
+    sendAt: 11,
+    enabled: false,
+    ccOwner: true,
+  },
+];
+
+let SCHEDULE: ScheduleStep[] = DEFAULT_SCHEDULE.map((s) => ({ ...s }));
+
+let SETTINGS: ReminderSettings = {
+  autoSend: true,
+  quietHours: true,
+  quietStart: 9,
+  quietEnd: 20,
+  skipWeekends: true,
+  digest: true,
+};
+
+/* --- Organisation ---------------------------------------------------------
+   The firm's own identity, and the account its messages come from. Both are
+   configuration rather than code: the sender block is reproduced at the foot
+   of every reminder, so editing it here changes what every client reads. */
+
+let FIRM: FirmProfile = {
+  name: "KDK Software",
+  frn: "012345C",
+  membershipNo: "402198",
+  pan: "AABCK1234M",
+  gstin: "08AABCK1234M1Z5",
+  addressLine: "2nd Floor, Shanti Tower, Ajmer Road",
+  city: "Jaipur",
+  state: "Rajasthan",
+  pincode: "302006",
+  phone: "+91 141 400 1234",
+  email: "compliance@kdksoftware.com",
+  website: "kdksoftware.com",
+};
+
+export function getFirm(): FirmProfile {
+  return FIRM;
+}
+
+export function updateFirm(patch: Partial<FirmProfile>) {
+  FIRM = { ...FIRM, ...patch };
+  /* The firm name is the "on behalf of" in every signature. */
+  if (patch.name) setSender({ by: patch.name });
+  emit();
+}
+
+/** The sender, surfaced through the engine so one `emit()` re-renders every
+ *  screen that quotes it — the previews above all. */
+export function getSenderProfile(): SenderProfile {
+  const s = getSender();
+  return {
+    waName: s.name,
+    waNumber: s.handle,
+    waVerified: s.verified,
+    fromEmail: s.fromEmail,
+    replyTo: s.replyTo,
+  };
+}
+
+export function updateSenderProfile(patch: Partial<SenderProfile>) {
+  setSender({
+    ...(patch.waName !== undefined ? { name: patch.waName } : {}),
+    ...(patch.waNumber !== undefined ? { handle: patch.waNumber } : {}),
+    ...(patch.waVerified !== undefined ? { verified: patch.waVerified } : {}),
+    ...(patch.fromEmail !== undefined ? { fromEmail: patch.fromEmail } : {}),
+    ...(patch.replyTo !== undefined ? { replyTo: patch.replyTo } : {}),
+  });
+  emit();
+}
+
+/* --- Compliance catalogue overrides ---------------------------------------
+   A firm that does not run payroll has no business tracking PF and ESI, and
+   whether a filing is the client's own act decides whether they are ever
+   chased about it. Both were fixed in the catalogue; both are now the firm's
+   to set, and both feed straight back into who gets a reminder. */
+
+const OVERRIDES = new Map<string, ComplianceOverride>();
+
+export function complianceSetting(code: string): ComplianceOverride {
+  const def = DEF_BY_CODE[code];
+  return OVERRIDES.get(code) ?? { tracked: true, clientFacing: def?.clientFacing ?? false };
+}
+
+export function updateCompliance(code: string, patch: Partial<ComplianceOverride>) {
+  OVERRIDES.set(code, { ...complianceSetting(code), ...patch });
+  emit();
+}
+
+export function resetCompliances() {
+  OVERRIDES.clear();
+  emit();
+}
+
+/** How many compliances the firm has switched off, for the settings summary. */
+export function untrackedCount(): number {
+  let n = 0;
+  for (const [, v] of OVERRIDES) if (!v.tracked) n++;
+  return n;
+}
+
+/* --- Bell notifications ---------------------------------------------------
+   Which alerts the app is allowed to raise. Every one is a real condition,
+   but which of them a given practice wants shouted at it differs. */
+
+let NOTIFS: NotificationSettings = {
+  gap: true,
+  dueToday: true,
+  unowned: true,
+  failed: true,
+};
+
+export function getNotificationSettings(): NotificationSettings {
+  return NOTIFS;
+}
+
+export function updateNotificationSettings(patch: NotificationSettings) {
+  NOTIFS = { ...NOTIFS, ...patch };
+  emit();
+}
+
+/* --- Default owner for new work ------------------------------------------- */
+
+let DEFAULT_ASSIGNEE = "none";
+
+export function getDefaultAssignee(): string {
+  return DEFAULT_ASSIGNEE;
+}
+
+export function setDefaultAssignee(id: string) {
+  DEFAULT_ASSIGNEE = id;
+  emit();
+}
+
+/** Batches already materialised, keyed `runId|stepId`, so a scheduler tick is
+ *  idempotent and history is never re-sent. */
+const fired = new Set<string>();
+/** Batches a person has suppressed, same key. */
+const skipped = new Set<string>();
+
+export function getSchedule(): ScheduleStep[] {
+  return SCHEDULE;
+}
+
+export function updateStep(id: string, patch: Partial<ScheduleStep>) {
+  SCHEDULE = SCHEDULE.map((s) => (s.id === id ? { ...s, ...patch } : s));
+  emit();
+}
+
+/** Toggling a channel off on its last remaining step would leave a step that
+ *  fires and sends nothing, so the step switches off with it. */
+export function toggleStepChannel(id: string, ch: Channel) {
+  SCHEDULE = SCHEDULE.map((s) => {
+    if (s.id !== id) return s;
+    const channels = s.channels.includes(ch)
+      ? s.channels.filter((c) => c !== ch)
+      : [...s.channels, ch];
+    return { ...s, channels, enabled: channels.length === 0 ? false : s.enabled };
+  });
+  emit();
+}
+
+export function resetSchedule() {
+  SCHEDULE = DEFAULT_SCHEDULE.map((s) => ({ ...s }));
+  emit();
+}
+
+export function getReminderSettings(): ReminderSettings {
+  return SETTINGS;
+}
+
+export function updateReminderSettings(patch: Partial<ReminderSettings>) {
+  SETTINGS = { ...SETTINGS, ...patch };
+  emit();
+}
+
 /** Message text for an obligation, in the shape OutboxEntry stores it. */
 function composeFor(o: Obligation): { preview: string; body: string; subject: string } {
   const c = compose(o, CLIENT_BY_ID[o.clientId], staffOf(o.assigneeId));
   return { preview: c.line, body: c.body, subject: c.subject };
 }
 
-export function sendReminders(ids: string[], channels: ("WhatsApp" | "Email")[], hour = 11) {
-  const quiet = hour < 9 || hour >= 20;
-  const set = new Set(ids);
-  const entries: OutboxEntry[] = [];
+/** Obligations still in scope for a chase: unresolved, on a compliance the
+ *  firm still tracks, and one the client is the one who files. The last two
+ *  are the firm's settings, not the catalogue's defaults. */
+function chaseable(o: Obligation): boolean {
+  if (o.status !== "Pending" && o.status !== "Overdue") return false;
+  const cfg = complianceSetting(o.defCode);
+  return cfg.tracked && cfg.clientFacing;
+}
+
+interface RunBucket {
+  runId: string;
+  defCode: string;
+  head: Head;
+  form: string;
+  periodLabel: string;
+  dueDate: string;
+  obligationIds: string[];
+  whatsapp: number;
+}
+
+/** One pass over the book, bucketed by filing run. Everything the scheduler
+ *  needs is derived from this — never from a per-client scan, which at 10,000
+ *  clients would be re-walked on every render. */
+function bucketRuns(): RunBucket[] {
+  const map = new Map<string, RunBucket>();
   for (const o of OBLIGATIONS) {
-    if (!set.has(o.id)) continue;
-    const client = CLIENT_BY_ID[o.clientId];
-    for (const ch of channels) {
-      if (ch === "WhatsApp" && !client.whatsapp) continue;
-      entries.push({
-        id: `${o.id}|${ch}|${outbox.length + entries.length}`,
-        clientId: o.clientId,
-        obligationId: o.id,
-        channel: ch,
-        stage: o.status === "Overdue" ? "Overdue escalation" : "T-7 sent",
-        sentAt: TODAY,
-        status: quiet ? "Queued (quiet hours)" : "Delivered",
-        ...composeFor(o),
+    if (!chaseable(o)) continue;
+    let b = map.get(o.runId);
+    if (!b) {
+      const def = DEF_BY_CODE[o.defCode];
+      b = {
+        runId: o.runId,
+        defCode: o.defCode,
+        head: def.head,
+        form: def.form,
+        periodLabel: o.periodLabel,
+        dueDate: o.dueDate,
+        obligationIds: [],
+        whatsapp: 0,
+      };
+      map.set(o.runId, b);
+    }
+    b.obligationIds.push(o.id);
+    if (CLIENT_BY_ID[o.clientId]?.whatsapp) b.whatsapp++;
+  }
+  return [...map.values()];
+}
+
+/** Every send the ladder implies inside `[from, to]`, newest first.
+ *  Aggregated per run × step: one row is "GSTR-3B July, follow-up, 418
+ *  clients", never 418 rows. */
+function computeSends(fromTs: string, toTs: string): ScheduledSend[] {
+  const out: ScheduledSend[] = [];
+  for (const b of bucketRuns()) {
+    for (const step of SCHEDULE) {
+      if (!step.enabled || step.channels.length === 0) continue;
+      const raw = stamp(addDays(b.dueDate, step.offset), step.sendAt);
+      /* A weekend step at or before the due date moves EARLIER, never later —
+         a warning delivered after its own deadline is worse than no warning.
+         Steps after the due date move later, since they cannot be sent before
+         the date they report as missed. */
+      const fireAt = SETTINGS.quietHours
+        ? nextSendableAt(
+            raw, SETTINGS.quietStart, SETTINGS.quietEnd, SETTINGS.skipWeekends,
+            step.offset <= 0 ? "earlier" : "later",
+          )
+        : raw;
+      if (fireAt < fromTs || fireAt > toTs) continue;
+      const key = `${b.runId}|${step.id}`;
+      if (fired.has(key)) continue;
+      out.push({
+        key,
+        runId: b.runId,
+        defCode: b.defCode,
+        head: b.head,
+        form: b.form,
+        periodLabel: b.periodLabel,
+        dueDate: b.dueDate,
+        step,
+        fireAt,
+        clientCount: b.obligationIds.length,
+        whatsappCount: b.whatsapp,
+        obligationIds: b.obligationIds,
+        skipped: skipped.has(key),
       });
     }
   }
-  outbox = [...entries, ...outbox];
+  out.sort((a, z) => a.fireAt.localeCompare(z.fireAt));
+  return out;
+}
+
+/** What is queued to go out, from now to the horizon. */
+export function scheduledSends(horizonDays = 45): ScheduledSend[] {
+  return computeSends(NOW, stamp(addDays(TODAY, horizonDays), 23, 59));
+}
+
+/** Steps whose moment has passed but which have not been materialised — what a
+ *  scheduler tick would send if it ran right now. */
+export function dueSends(): ScheduledSend[] {
+  return computeSends("0000", NOW).filter((s) => !s.skipped);
+}
+
+export function skipScheduled(key: string, on = true) {
+  if (on) skipped.add(key);
+  else skipped.delete(key);
   emit();
+}
+
+/* --- Materialising a send ------------------------------------------------- */
+
+/** Simulated delivery outcome. Real deployments read this back from the
+ *  WhatsApp Business and mail-transport webhooks; the shape is the same. */
+function outcome(seed: string, at: string): DeliveryStatus {
+  if (SETTINGS.quietHours && inQuietHours(at, SETTINGS.quietStart, SETTINGS.quietEnd)) {
+    return "Queued (quiet hours)";
+  }
+  const r = h(seed);
+  if (r < 0.05) return "Failed";
+  if (r < 0.52) return "Read";
+  return "Delivered";
+}
+
+let serial = 0;
+
+function entryFor(
+  o: Obligation,
+  ch: Channel,
+  stage: ReminderStage,
+  at: string,
+  origin: OutboxEntry["origin"],
+  extra: Partial<OutboxEntry> = {},
+): OutboxEntry {
+  const def = DEF_BY_CODE[o.defCode];
+  return {
+    id: `ob-${serial++}`,
+    clientId: o.clientId,
+    obligationId: o.id,
+    channel: ch,
+    stage,
+    sentAt: at,
+    status: outcome(`${o.id}|${ch}|${at}`, at),
+    origin,
+    attempt: 1,
+    defCode: o.defCode,
+    head: def.head,
+    form: def.form,
+    ...composeFor(o),
+    ...extra,
+  };
+}
+
+function materialise(send: ScheduledSend, at: string, origin: OutboxEntry["origin"], by?: string) {
+  const byId = new Map(OBLIGATIONS.map((o) => [o.id, o]));
+  const entries: OutboxEntry[] = [];
+  for (const id of send.obligationIds) {
+    const o = byId.get(id);
+    /* Re-checked at send time, not at schedule time: anything filed since the
+       batch was computed drops out here. */
+    if (!o || !chaseable(o)) continue;
+    const client = CLIENT_BY_ID[o.clientId];
+    if (!client) continue;
+    for (const ch of send.step.channels) {
+      if (ch === "WhatsApp" && !client.whatsapp) continue;
+      entries.push(entryFor(o, ch, send.step.stage, at, origin, by ? { sentBy: by } : {}));
+    }
+  }
+  if (entries.length > 0) outbox = [...entries, ...outbox];
+  fired.add(send.key);
+  return entries.length;
+}
+
+/** A scheduler tick. Materialises every batch whose moment has passed.
+ *  Idempotent — a batch is fired once and remembered. */
+export function runScheduler(): number {
+  if (!SETTINGS.autoSend) return 0;
+  let n = 0;
+  for (const send of dueSends()) n += materialise(send, send.fireAt, "Automatic");
+  if (n > 0) emit();
+  return n;
+}
+
+/** Send a queued batch ahead of its moment. */
+export function sendScheduledNow(key: string, by: string): number {
+  const send = computeSends("0000", stamp(addDays(TODAY, 400), 23, 59)).find((s) => s.key === key);
+  if (!send) return 0;
+  const n = materialise(send, NOW, "Manual", by);
+  emit();
+  return n;
+}
+
+/* --- Manual sends --------------------------------------------------------- */
+
+/** Chase a specific set of obligations now. The button behind every "Send
+ *  reminder" in the product. */
+export function sendReminders(
+  ids: string[],
+  channels: Channel[],
+  by = "s1",
+  at = NOW,
+): number {
+  const set = new Set(ids);
+  const entries: OutboxEntry[] = [];
+  for (const o of OBLIGATIONS) {
+    if (!set.has(o.id) || !chaseable(o)) continue;
+    const client = CLIENT_BY_ID[o.clientId];
+    if (!client) continue;
+    for (const ch of channels) {
+      if (ch === "WhatsApp" && !client.whatsapp) continue;
+      entries.push(entryFor(
+        o, ch,
+        o.status === "Overdue" ? "Overdue escalation" : "T-7 sent",
+        at, "Manual", { sentBy: by },
+      ));
+    }
+  }
+  if (entries.length > 0) {
+    outbox = [...entries, ...outbox];
+    emit();
+  }
+  return entries.length;
+}
+
+/** Send the same message again, on the same channel, recorded as a repeat
+ *  rather than as a fresh first notice. */
+export function resendEntries(entryIds: string[], by = "s1"): number {
+  const wanted = new Set(entryIds);
+  const byId = new Map(OBLIGATIONS.map((o) => [o.id, o]));
+  const entries: OutboxEntry[] = [];
+  for (const e of outbox) {
+    if (!wanted.has(e.id)) continue;
+    const o = byId.get(e.obligationId);
+    if (!o || !chaseable(o)) continue;
+    entries.push(entryFor(o, e.channel, e.stage, NOW, "Manual", {
+      sentBy: by,
+      resendOf: e.id,
+      attempt: e.attempt + 1,
+    }));
+  }
+  if (entries.length > 0) {
+    outbox = [...entries, ...outbox];
+    emit();
+  }
+  return entries.length;
+}
+
+/** Every failed message, tried again. The one bulk action this log needs:
+ *  a failure means the client was never actually told. */
+export function retryFailed(by = "s1"): number {
+  return resendEntries(outbox.filter((e) => e.status === "Failed").map((e) => e.id), by);
+}
+
+/** Release everything held for quiet hours, now. */
+export function releaseQueued(): number {
+  let n = 0;
+  outbox = outbox.map((e) => {
+    if (!e.status.startsWith("Queued")) return e;
+    n++;
+    return { ...e, status: outcome(`${e.id}|rel`, NOW), sentAt: NOW };
+  });
+  if (n > 0) emit();
+  return n;
 }
 
 export function getOutbox(): OutboxEntry[] {
   return outbox;
 }
 
-/* Seed a plausible send history so the outbox is not empty on first open. */
-(function seedOutbox() {
-  const recent = OBLIGATIONS.filter(
-    (o) => (o.status === "Overdue" || o.status === "Pending") &&
-      DEF_BY_CODE[o.defCode].clientFacing &&
-      diffDays(TODAY, o.dueDate) < 8,
-  ).slice(0, 260);
+/* --------------------------------------------------------------------------
+   SEEDED HISTORY
+   --------------------------------------------------------------------------
+   Walked back through the same ladder that drives the future, so the log and
+   the schedule tell one consistent story: a message in the log is one the
+   cadence explains, at an hour the cadence would have chosen.
 
-  outbox = recent.map((o, i) => {
-    const client = CLIENT_BY_ID[o.clientId];
-    const r = h(o.id + "|ob");
-    const ch: "WhatsApp" | "Email" = client.whatsapp && r < 0.62 ? "WhatsApp" : "Email";
-    return {
-      id: `seed-${i}`,
-      clientId: o.clientId,
-      obligationId: o.id,
-      channel: ch,
-      stage: o.status === "Overdue" ? "Overdue escalation" : o.reminderStage,
-      sentAt: addDays(TODAY, -Math.floor(r * 6)),
-      status: r < 0.06 ? "Failed" : r < 0.13 ? "Queued (quiet hours)" : r < 0.55 ? "Read" : "Delivered",
-      ...composeFor(o),
-    };
+   Bounded on purpose. Every past step against every unfiled obligation would
+   be six figures of rows — a realistic number for a real firm and a useless
+   one for a prototype, since nothing on screen reads past the first few
+   hundred. The seed takes the most recent slice and stops.
+   ------------------------------------------------------------------------- */
+(function seedOutbox() {
+  const past = computeSends("0000", NOW)
+    .sort((a, z) => z.fireAt.localeCompare(a.fireAt));
+
+  /* EVERY past batch is marked settled, not just the ones written out below.
+     Otherwise the first scheduler tick would treat a year of history as
+     newly due and dump thousands of backdated messages into the log — the
+     system's worst possible first impression, and in production an actual
+     mail-out. History is closed; only the future is pending. */
+  for (const send of past) fired.add(send.key);
+
+  const entries: OutboxEntry[] = [];
+  const byId = new Map(OBLIGATIONS.map((o) => [o.id, o]));
+
+  /* The most recent batch PER COMPLIANCE, rather than the most recent batches
+     outright. Taken outright, the log is whatever happened to fall in the last
+     fortnight — which in this book is GST and Income Tax and nothing else, so
+     a head filter has two values to offer and the screen misrepresents the
+     spread of a real practice's correspondence. One per compliance gives the
+     log the shape the book actually has. */
+  const perCompliance = new Map<string, typeof past>();
+  for (const s of past) {
+    const list = perCompliance.get(s.defCode);
+    if (list) list.push(s);
+    else perCompliance.set(s.defCode, [s]);
+  }
+  const spread = [...perCompliance.values()]
+    .flatMap((list) => list.slice(0, 2))
+    .sort((a, z) => z.fireAt.localeCompare(a.fireAt))
+    .slice(0, 30);
+
+  for (const send of spread) {
+    /* A slice per batch rather than the whole run: the point is a plausible
+       spread of clients, channels and outcomes, not a full mail-merge. */
+    for (const id of send.obligationIds.slice(0, 13)) {
+      const o = byId.get(id);
+      if (!o) continue;
+      const client = CLIENT_BY_ID[o.clientId];
+      if (!client) continue;
+      const r = h(`${id}|${send.step.id}`);
+      /* Real sends scatter across the minutes after a batch starts rather
+         than all landing on the same second. */
+      const at = stamp(dateOf(send.fireAt), send.step.sendAt, Math.floor(r * 58));
+      for (const ch of send.step.channels) {
+        if (ch === "WhatsApp" && !client.whatsapp) continue;
+        entries.push(entryFor(o, ch, send.step.stage, at, "Automatic"));
+      }
+    }
+  }
+
+  /* A handful of hand-sent chases on top, so the log shows both origins and
+     the "sent by" column has something to say.
+     Every fifth one goes out at 21:00-odd — a real thing staff do at the end
+     of a bad day, and the only way an entry can land in the quiet-hours hold:
+     the scheduler itself never picks an hour outside the window, so without
+     these the held state would exist in the code and nowhere on screen. */
+  const manual = OBLIGATIONS.filter(
+    (o) => o.status === "Overdue" && DEF_BY_CODE[o.defCode].clientFacing,
+  ).slice(0, 22);
+  manual.forEach((o, i) => {
+    const r = h(`${o.id}|manual`);
+    const late = i % 5 === 0;
+    const hour = late ? 21 : 12 + Math.floor(r * 5);
+    /* Never stamp a send after `NOW`. A 21:00 entry dated today would be a
+       message the log claims to have already sent four hours from now, which
+       the relative column renders, correctly and absurdly, as "in 4h". Any
+       hour past the current one belongs to a previous day. */
+    const daysBack = Math.floor(r * 4) + (hour > 17 ? 1 : 0);
+    const at = stamp(addDays(TODAY, -daysBack), hour, Math.floor(r * 59));
+    entries.push(entryFor(o, "Email", "Overdue escalation", at, "Manual", {
+      sentBy: ["s1", "s2", "s3"][Math.floor(r * 3)],
+    }));
   });
+
+  outbox = entries.sort((a, z) => z.sentAt.localeCompare(a.sentAt));
 })();
 
 /* ==========================================================================
@@ -349,6 +951,67 @@ export interface FirmSummary {
   filedThisMonth: number;
   pendingTotal: number;
   unassigned: number;
+}
+
+/* ==========================================================================
+   COMPLETED FILINGS, BY MONTH
+   --------------------------------------------------------------------------
+   Aggregated per filing run — one row is "GSTR-3B July, 88 clients", never 88
+   rows. The dashboard's "filed this month" figure is a count of obligations,
+   so opening it has to break down along the same axis the work is organised
+   by, not spill a client list nobody can read at 10,000.
+   ========================================================================== */
+
+export interface FiledGroup {
+  runId: string;
+  defCode: string;
+  form: string;
+  head: Head;
+  periodLabel: string;
+  dueDate: string;
+  count: number;
+  clientIds: string[];
+  /** Latest filing date in the group, for ordering by recency. */
+  lastFiledOn: string;
+}
+
+/** `month` is a `yyyy-mm` key. */
+export function filedInMonth(month: string): FiledGroup[] {
+  const map = new Map<string, FiledGroup>();
+  for (const o of allObligations()) {
+    if (o.status !== "Filed" || !o.filedOn) continue;
+    if (o.filedOn.slice(0, 7) !== month) continue;
+    let g = map.get(o.runId);
+    if (!g) {
+      g = {
+        runId: o.runId,
+        defCode: o.defCode,
+        form: o.form,
+        head: o.head,
+        periodLabel: o.periodLabel,
+        dueDate: o.dueDate,
+        count: 0,
+        clientIds: [],
+        lastFiledOn: o.filedOn,
+      };
+      map.set(o.runId, g);
+    }
+    g.count++;
+    g.clientIds.push(o.clientId);
+    if (o.filedOn > g.lastFiledOn) g.lastFiledOn = o.filedOn;
+  }
+  /* Most work first — that is what "what did we get through" means. */
+  return [...map.values()].sort((a, b) => b.count - a.count || a.form.localeCompare(b.form));
+}
+
+/** Months that actually have completed filings, newest first — so the drawer's
+ *  month stepper can only land somewhere with something to show. */
+export function monthsWithFilings(): string[] {
+  const set = new Set<string>();
+  for (const o of allObligations()) {
+    if (o.status === "Filed" && o.filedOn) set.add(o.filedOn.slice(0, 7));
+  }
+  return [...set].sort().reverse();
 }
 
 export function summarise(obs: Obligation[]): FirmSummary {

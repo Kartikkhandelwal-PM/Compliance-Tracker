@@ -91,6 +91,13 @@ export function Runway({
         </span>
       </div>
 
+      {/* Wrapped together so the day strip and its axis scroll in lockstep on
+          a phone, where 30+ days can no longer each be squeezed thin enough
+          to keep a two-line date label legible. Desktop has no need of the
+          wrapper's own scrolling — both children stay the flex row they
+          always were, just with a fixed per-day width below the breakpoint
+          instead of an ever-shrinking flex:1 1 0. */}
+      <div className="runway__scroll">
       <div className="runway__strip">
         {loads.map((l) => {
           const past = l.date < TODAY;
@@ -145,6 +152,7 @@ export function Runway({
             </span>
           );
         })}
+      </div>
       </div>
 
       {/* Slide-down detail. The wrapper animates grid-template-rows 0fr → 1fr,

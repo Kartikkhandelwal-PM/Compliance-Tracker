@@ -38,16 +38,43 @@ export interface Composed {
   subject: string;
 }
 
-/** The WhatsApp Business account these are sent from. */
-export const SENDER = {
+/**
+ * The account these are sent from.
+ *
+ * Mutable, and read through `getSender()` rather than imported as a frozen
+ * constant, because Settings edits it: the display name and number a client
+ * sees are firm configuration, not source code. Kept in this module so the
+ * dependency stays one-way — the engine imports messages, never the reverse.
+ */
+export interface Sender {
+  name: string;
+  handle: string;
+  by: string;
+  fromEmail: string;
+  replyTo: string;
+  verified: boolean;
+}
+
+let sender: Sender = {
   name: "CA Connect",
   handle: "+91 79000 12345",
   by: "KDK Software",
-} as const;
+  fromEmail: "compliance@kdksoftware.com",
+  replyTo: "compliance@kdksoftware.com",
+  verified: true,
+};
+
+export function getSender(): Sender {
+  return sender;
+}
+
+export function setSender(patch: Partial<Sender>) {
+  sender = { ...sender, ...patch };
+}
 
 function signature(staff: Staff): string {
   const who = staff.name === "Unassigned" ? "your engagement team" : staff.name;
-  return `Sent by ${SENDER.name} on behalf of ${who}, ${SENDER.by}.`;
+  return `Sent by ${sender.name} on behalf of ${who}, ${sender.by}.`;
 }
 
 export function compose(o: Obligation, client: Client, staff: Staff): Composed {

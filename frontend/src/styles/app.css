@@ -114,6 +114,20 @@ a {
 .u-wrap {
   flex-wrap: wrap;
 }
+/* Read by a screen reader, never drawn. For cells whose whole meaning is
+   carried by a glyph — a channel column of brand marks says nothing at all
+   to anyone not looking at it. */
+.u-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 
 .label {
   font-size: var(--t-11);
@@ -1080,6 +1094,11 @@ a.railbtn {
 .page {
   padding: 0 var(--s6) var(--s16);
   max-width: 1560px;
+  /* Capped, not stretched — but a cap with no centring just moves the dead
+     air to one side. Above 1560px of work surface the page used to hug the
+     left edge and leave a growing blank gutter on the right (obvious at
+     1920×1080); centring it turns that gutter into even, deliberate margin. */
+  margin-inline: auto;
 }
 .page--wide {
   max-width: none;
@@ -2215,7 +2234,13 @@ select.plain:disabled {
   font-weight: 650;
   text-align: center;
   color: var(--ink-2);
-  min-height: 14px;
+  /* A FIXED line box, not a minimum. `min-height: 14px` was shorter than the
+     17px a mono figure actually occupies, so a day carrying a count grew this
+     slot by 3px and pushed its weekday label below the labels of the empty
+     days beside it. Every day now reserves the same height whether it has a
+     number or not, so the labels share one baseline. */
+  height: 17px;
+  line-height: 17px;
 }
 .week__k {
   font-size: 9.5px;
@@ -2684,7 +2709,14 @@ button.stat:hover {
   background: var(--sheet);
   box-shadow: 0 0 0 1px var(--rule) inset;
   display: grid;
+  /* `place-items` centres each item inside its OWN track; it does not centre
+     the tracks. With two children and no explicit rows, grid made two implicit
+     auto rows and `align-content: normal` stretched them to 52.5px + 43.5px —
+     so the value sat centred in the top half, the label in the bottom half,
+     and a 33px void opened between them. `place-content` centres the pair as
+     one block, which is what the hole actually needs. */
   place-items: center;
+  place-content: center;
   text-align: center;
   line-height: 1.1;
 }
@@ -3162,16 +3194,27 @@ button.stat:hover {
   overflow: hidden;
   background: var(--sheet);
 }
+/* WhatsApp's own palette, current generation. The header was #075E54 — the
+   pre-2021 dark teal — and the thread ground #ECE5DD, which together dated the
+   mock by four years and were the main reason it read as an approximation
+   rather than a screenshot. */
 .wapane__bar {
   display: flex;
   align-items: center;
   gap: var(--s3);
-  padding: var(--s3) var(--s4);
-  background: #075E54;
+  padding: 10px var(--s3);
+  background: #008069;
   color: #fff;
 }
 :root[data-theme="dark"] .wapane__bar {
-  background: #0b3d38;
+  background: #202c33;
+}
+.wapane__acts {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  flex: none;
+  opacity: 0.92;
 }
 .wapane__who {
   display: flex;
@@ -3239,40 +3282,78 @@ button.stat:hover {
   font-weight: 700;
 }
 /* WhatsApp's date divider — a thread never starts with a bare bubble. */
+/* White, not the old pale blue, and set in caps like the real divider. */
 .wadate {
   width: fit-content;
   margin: 0 auto var(--s4);
-  padding: 3px var(--s3);
+  padding: 4px var(--s3);
   border-radius: 8px;
-  background: #e1f2fb;
-  color: #4a6572;
-  font-size: 10.5px;
+  background: #ffffff;
+  color: #54656f;
+  font-size: 10px;
   font-weight: 600;
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
 }
 :root[data-theme="dark"] .wadate {
-  background: #1d282f;
-  color: #8aa0ad;
+  background: #182229;
+  color: #8696a0;
 }
 .wapane__who span {
   font-size: var(--t-11);
   opacity: 0.75;
 }
-/* The faint doodle ground WhatsApp uses behind a thread. */
+/* The faint doodle ground WhatsApp uses behind a thread. Two dot grids alone
+   read as graph paper; the added strokes break the regularity enough to pass
+   for the real wallpaper at this size. */
 .wapane__thread {
-  padding: var(--s5) var(--s4);
-  background-color: #ECE5DD;
+  padding: var(--s4) var(--s4) var(--s5);
+  background-color: #efeae2;
   background-image:
-    radial-gradient(circle at 20% 30%, rgba(0, 0, 0, 0.028) 2px, transparent 2px),
-    radial-gradient(circle at 70% 65%, rgba(0, 0, 0, 0.028) 2px, transparent 2px);
-  background-size: 34px 34px, 46px 46px;
+    radial-gradient(circle at 18% 28%, rgba(0, 0, 0, 0.035) 1.6px, transparent 1.7px),
+    radial-gradient(circle at 72% 62%, rgba(0, 0, 0, 0.03) 2px, transparent 2.1px),
+    linear-gradient(58deg, transparent 47%, rgba(0, 0, 0, 0.022) 47%, rgba(0, 0, 0, 0.022) 49%, transparent 49%),
+    linear-gradient(-42deg, transparent 62%, rgba(0, 0, 0, 0.018) 62%, rgba(0, 0, 0, 0.018) 64%, transparent 64%);
+  background-size: 38px 38px, 53px 53px, 67px 67px, 89px 89px;
 }
 :root[data-theme="dark"] .wapane__thread {
-  background-color: #10171a;
+  background-color: #0b141a;
+}
+
+/* The encryption notice every real thread opens with — the most recognisable
+   single element on the screen, and free. */
+.wae2e {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: fit-content;
+  max-width: 88%;
+  margin: 0 auto var(--s3);
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: #ffeecd;
+  color: #6b5b3e;
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+}
+.wae2e svg {
+  flex: none;
+  opacity: 0.8;
+}
+:root[data-theme="dark"] .wae2e {
+  background: #182229;
+  color: #ffd279;
 }
 .wabubble {
   position: relative;
-  max-width: 84%;
+  /* WhatsApp never lets an outgoing bubble reach the far edge — the gutter on
+     the left is what makes it read as *outgoing* at a glance, before any
+     colour is processed. At 84% there was barely a gutter. */
+  max-width: 76%;
   margin-left: auto;
   padding: var(--s3) var(--s4) var(--s5);
   background: #d9fdd3;
@@ -3284,16 +3365,17 @@ button.stat:hover {
   white-space: normal;
 }
 /* The tail. An outgoing bubble in WhatsApp has one; without it the message
-   floats and the thread stops reading as a real chat. */
+   floats and the thread stops reading as a real chat. Curved rather than a
+   bare right triangle — the straight hypotenuse was the tell. */
 .wabubble::after {
   content: "";
   position: absolute;
   top: 0;
   right: -8px;
-  width: 8px;
+  width: 9px;
   height: 13px;
   background: #d9fdd3;
-  clip-path: polygon(0 0, 100% 0, 0 100%);
+  clip-path: path("M0,0 L9,0 C7,5.5 4,10 0,13 Z");
 }
 :root[data-theme="dark"] .wabubble,
 :root[data-theme="dark"] .wabubble::after { background: #005c4b; }
@@ -3349,6 +3431,56 @@ button.stat:hover {
   width: fit-content;
   margin-inline: auto;
   border: 1px solid var(--rule);
+}
+
+/* The composer. Inert — this is a record, not a place to type — but a thread
+   that simply stops where the last bubble ends does not look like a phone. */
+.wacompose {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  background: #f0f2f5;
+  color: #54656f;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+:root[data-theme="dark"] .wacompose {
+  background: #202c33;
+  color: #8696a0;
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+.wacompose svg {
+  flex: none;
+  opacity: 0.85;
+}
+.wacompose__box {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--s3);
+  border-radius: 20px;
+  background: #fff;
+  color: #8696a0;
+  font-size: var(--t-13);
+}
+:root[data-theme="dark"] .wacompose__box {
+  background: #2a3942;
+}
+.wacompose__mic {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  background: #008069;
+  color: #fff;
+}
+:root[data-theme="dark"] .wacompose__mic {
+  background: #00a884;
+  color: #111b21;
 }
 
 .mailpane {
@@ -3845,6 +3977,11 @@ a.calpill.p-overdue:hover {
 }
 
 /* --- Hover detail card --------------------------------------------------- */
+/* ---- Calendar hover card --------------------------------------------------
+   Was a flat stack of six lines in near-identical type, so nothing led and the
+   numbers had to be read as prose ("359 applies to 282 filed 0 pending").
+   Now it is a small card: a titled head band, the figures as a labelled row of
+   columns, and the fee — the one alarming number — on its own tinted footer. */
 .caltip {
   position: fixed;
   z-index: 80;
@@ -3852,44 +3989,123 @@ a.calpill.p-overdue:hover {
   pointer-events: none;
   background: var(--sheet);
   border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-3);
-  padding: var(--s3) var(--s4);
-  min-width: 218px;
-  max-width: 300px;
+  padding: 0;
+  overflow: hidden;
+  /* Sized to its content rather than pinned to a guess. A fixed 320px cap
+     wrapped the longer heads — "Q1 · Apr–Jun 2026 · Other Statutory · Quarterly"
+     — onto three lines while the card sat half empty on the short ones. The
+     viewport term keeps it on screen on a narrow window. */
+  width: max-content;
+  min-width: 248px;
+  max-width: min(440px, calc(100vw - 2 * var(--s4)));
+  animation: caltipin 0.13s cubic-bezier(0.2, 0, 0.2, 1);
+}
+@keyframes caltipin {
+  from { opacity: 0; transform: translate(-50%, calc(-100% + 5px)); }
+}
+/* A pointer, so the card is tied to the chip it describes rather than floating
+   near it. Sits on the bottom edge, centred under the transform origin. */
+.caltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 10px;
+  height: 10px;
+  background: var(--sheet);
+  border-right: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-strong);
+  transform: translateX(-50%) rotate(45deg);
+}
+.caltip__head {
+  padding: var(--s3) var(--s4) var(--s3);
+  background: var(--sunk);
+  border-bottom: 1px solid var(--rule);
 }
 .caltip__form {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
   font-size: var(--t-14);
   font-weight: 650;
   letter-spacing: -0.01em;
   color: var(--ink);
+  /* A long form name wraps rather than forcing the card past its cap. */
+  overflow-wrap: anywhere;
 }
 .caltip__sub {
   font-size: var(--t-11);
   color: var(--ink-3);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .caltip__due {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: var(--t-12);
   color: var(--ink-2);
-  margin-top: var(--s2);
-  padding-top: var(--s2);
-  border-top: 1px solid var(--rule);
+  padding: var(--s2) var(--s4);
+  border-bottom: 1px solid var(--rule);
 }
+.caltip__due svg {
+  color: var(--ink-4);
+  flex: none;
+}
+/* Figures as columns with their labels beneath, so each number is read against
+   its own word instead of run together with the next. */
 .caltip__rows {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px var(--s3);
-  margin-top: var(--s2);
-  font-size: var(--t-12);
-  color: var(--ink-2);
+  gap: var(--s3) var(--s5);
+  padding: var(--s3) var(--s4);
 }
-.caltip__rows b {
+.caltip__stat {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  min-width: 0;
+}
+.caltip__stat b {
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-16);
   font-weight: 650;
+  letter-spacing: -0.02em;
   color: var(--ink);
+}
+.caltip__stat span {
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+  margin-top: 2px;
+}
+.caltip__stat.is-late b { color: var(--st-overdue-fg); }
+.caltip__stat.is-late span { color: var(--st-overdue-fg); opacity: 0.75; }
+/* The fee is the one number here that means money leaving, so it gets the
+   tinted footer rather than a fourth column. */
+.caltip__fees {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--s2) var(--s4);
+  background: var(--st-overdue-bg);
+  border-top: 1px solid var(--st-overdue-line);
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-12);
+  font-weight: 600;
+  color: var(--st-overdue-fg);
+}
+.caltip__go {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--rule);
+  background: var(--sunk);
+  font-size: var(--t-11);
+  font-weight: 600;
+  color: var(--accent);
 }
 .caltip__fees {
   font-size: var(--t-12);
@@ -3915,7 +4131,12 @@ a.calpill.p-overdue:hover {
 .tline {
   list-style: none;
   margin: 0;
-  padding: var(--s2) 0;
+  /* No vertical padding. `var(--s2)` top and bottom let 8px of the white
+     `.sheet` show through above the first row — and because an arrears row
+     paints its own rose wash, that gap read as a white strip clipped across
+     the top of the tile. The rows now meet the card's own edge, which
+     `.sheet`'s overflow:hidden rounds for us. */
+  padding: 0;
   position: relative;
 }
 .tlgroup {
@@ -3927,6 +4148,37 @@ a.calpill.p-overdue:hover {
 }
 .tlgroup + .tlgroup {
   border-top: 1px solid var(--rule);
+}
+
+/* ---- Scroll reveal --------------------------------------------------------
+   A year of due dates is a long list, and arriving at each date as you reach
+   it reads as a thread being drawn rather than a table being paged. The row
+   lifts and its node scales in slightly behind it.
+
+   Safe to hide the initial state in CSS: this is a React SPA, so "no JS" means
+   no page at all rather than a page of invisible rows. Skipped entirely under
+   prefers-reduced-motion — see the global reset near the top of this file,
+   which also neutralises the transition. */
+@media (prefers-reduced-motion: no-preference) {
+  .tline .tlgroup {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.42s cubic-bezier(0.2, 0, 0.2, 1),
+      transform 0.42s cubic-bezier(0.2, 0, 0.2, 1);
+  }
+  .tline .tlgroup.is-in {
+    opacity: 1;
+    transform: none;
+  }
+  /* The node arrives a beat after its row, so the spine reads as continuous
+     rather than as a row of dots appearing at once. */
+  .tline .tlgroup::after {
+    transform: scale(0.4);
+    transition: transform 0.34s cubic-bezier(0.2, 0, 0.2, 1) 0.08s;
+  }
+  .tline .tlgroup.is-in::after {
+    transform: scale(1);
+  }
 }
 .tlgroup.has-risk {
   background:
@@ -4647,6 +4899,563 @@ a.calpill.p-overdue:hover {
   border-left-color: var(--urg-soon);
 }
 
+/* A warn note carries an icon beside its text, so it needs to be a row. */
+.note--warn {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+}
+.note--warn > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--urg-soon);
+}
+
+/* ============================================================================
+   REMINDERS  —  bulk action bar, cadence ladder, scheduled queue
+   ========================================================================== */
+
+/* Appears only when there is something to repair or something selected. A
+   permanently-present toolbar of disabled buttons teaches people to ignore the
+   strip; one that shows up when it can act gets read. */
+.actionbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  margin-bottom: var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sunk);
+}
+.actionbar__n {
+  font-size: var(--t-12);
+  font-weight: 650;
+  color: var(--ink-2);
+  padding-inline: var(--s1);
+}
+.actionbar__div {
+  width: 1px;
+  height: 18px;
+  background: var(--rule-strong);
+  margin-inline: var(--s1);
+}
+
+/* The row checkbox is a button wrapping `.check`, so it needs no chrome of its
+   own — only a hit area big enough to press without aiming. */
+.rowcheck {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  padding: 0;
+  border-radius: var(--radius-sm);
+}
+.rowcheck:hover {
+  background: var(--hover);
+}
+
+/* A skipped batch stays on the list, struck through, rather than vanishing:
+   "why didn't they get chased?" has to stay answerable. */
+.ltable tbody tr.is-skipped {
+  opacity: 0.5;
+}
+.ltable tbody tr.is-skipped td:not(:last-child) {
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-4);
+}
+
+/* ---- Automation header ---------------------------------------------------- */
+
+.autohead {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  padding: var(--s4);
+  margin-bottom: var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--sheet);
+  box-shadow: var(--shadow-1);
+}
+.autohead__sub {
+  margin: 3px 0 0;
+  font-size: var(--t-13);
+  max-width: 62ch;
+}
+
+/* ---- The cadence ladder ---------------------------------------------------
+   One row per step. Read left to right it is a sentence: on/off, how many days
+   from the due date, what it is for, on which channels, at what hour. */
+
+.ladder {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--sheet);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.lstep {
+  display: grid;
+  grid-template-columns: 34px 72px minmax(220px, 1fr) auto 96px auto;
+  align-items: center;
+  gap: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+.lstep:last-child {
+  border-bottom: none;
+}
+/* Switched off, the row stays legible but stops competing — it is still
+   configuration, just not live configuration. */
+.lstep.is-off {
+  background: var(--sunk);
+}
+.lstep.is-off .lstep__off b,
+.lstep.is-off .lstep__id b {
+  color: var(--ink-3);
+}
+
+/* The offset is the step's identity, so it is a figure, not a sentence. */
+.lstep__off {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+  text-align: center;
+}
+.lstep__off b {
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--t-20);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--st-pending-fg);
+}
+/* Past the due date is the only place this ladder is allowed to go red — it
+   is reporting a state (late), which is what colour means everywhere else. */
+.lstep__off.is-late b {
+  color: var(--st-overdue-fg);
+}
+.lstep__off em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--ink-4);
+  margin-top: 1px;
+  white-space: nowrap;
+}
+
+.lstep__id {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+.lstep__id b {
+  font-size: var(--t-14);
+  font-weight: 620;
+}
+.lstep__id > span {
+  font-size: var(--t-12);
+  line-height: 1.4;
+}
+
+.lstep__ch {
+  display: flex;
+  gap: var(--s2);
+}
+.chtoggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+  border-radius: 20px;
+  font-size: var(--t-12);
+  color: var(--ink-3);
+  white-space: nowrap;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.chtoggle:hover {
+  border-color: var(--rule-strong);
+  color: var(--ink-2);
+}
+/* On is carried by ink weight and a filled ground, never by tinting the brand
+   glyph — the WhatsApp and Gmail marks are full-colour and must stay so. */
+.chtoggle.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+  font-weight: 600;
+}
+.chtoggle:not(.is-on) svg {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+
+.lstep__at select {
+  width: 100%;
+}
+
+
+@media (max-width: 1100px) {
+  .lstep {
+    grid-template-columns: 34px 64px minmax(160px, 1fr) auto;
+    row-gap: var(--s2);
+  }
+  .lstep__at,
+  .lstep > .tag {
+    grid-column: 3 / -1;
+    justify-self: start;
+  }
+}
+
+/* ============================================================================
+   FILED-THIS-MONTH DRAWER  —  one row per filing run, expandable
+   ========================================================================== */
+
+.filedlist {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.filedrow {
+  border-bottom: 1px solid var(--rule);
+}
+.filedrow:last-child {
+  border-bottom: none;
+}
+.filedrow__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  padding: var(--s3);
+  border: none;
+  background: none;
+  text-align: left;
+  transition: background 0.12s ease;
+}
+.filedrow__head:hover {
+  background: var(--hover);
+}
+.filedrow.is-open .filedrow__head {
+  background: var(--sunk);
+}
+.filedrow__id {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+.filedrow__id b {
+  font-size: var(--t-13);
+  font-weight: 620;
+}
+.filedrow__id > span {
+  font-size: var(--t-11);
+}
+/* The count is the row's payload, so it reads as a figure. */
+.filedrow__n {
+  font-size: var(--t-16);
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  color: var(--st-filed-fg);
+  flex: none;
+}
+.filedrow__caret {
+  color: var(--ink-4);
+  flex: none;
+  transition: transform 0.16s ease;
+}
+.filedrow__caret.is-up {
+  transform: rotate(180deg);
+}
+.filedrow__body {
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
+}
+.filedcli {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 7px var(--s3) 7px var(--s5);
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--t-12);
+  color: var(--ink-2);
+}
+.filedcli:last-child {
+  border-bottom: none;
+}
+.filedcli:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.filedcli > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.filedcli > span:last-child {
+  font-size: var(--t-11);
+  flex: none;
+}
+.filedrow__more {
+  padding: var(--s2) var(--s3) var(--s2) var(--s5);
+  font-size: var(--t-11);
+  color: var(--ink-4);
+}
+
+/* ============================================================================
+   SETTINGS  —  section list beside a panel
+   ----------------------------------------------------------------------------
+   A vertical list rather than a row of tabs: six destinations in a strip wrap
+   on a laptop, and a settings area only ever grows.
+   ========================================================================== */
+
+.setwrap {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: var(--s5);
+  align-items: start;
+}
+
+.setnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: calc(var(--topline-h) + var(--s4));
+}
+.setnav__i {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--radius);
+  text-align: left;
+  color: var(--ink-2);
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.setnav__i:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+.setnav__i.is-on {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
+.setnav__ico {
+  flex: none;
+  opacity: 0.9;
+}
+.setnav__t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.setnav__t b {
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.setnav__t em {
+  font-style: normal;
+  font-size: var(--t-11);
+  color: var(--ink-4);
+}
+.setnav__i.is-on .setnav__t em {
+  color: var(--accent);
+  opacity: 0.72;
+}
+
+.setpane {
+  min-width: 0;
+}
+.setpane__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+  padding-bottom: var(--s3);
+  margin-bottom: var(--s4);
+  border-bottom: 1px solid var(--rule);
+}
+.setpane__head h2 {
+  font-family: var(--f-serif);
+  font-size: var(--t-20);
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  margin: 0;
+}
+.setcard {
+  margin-bottom: var(--s4);
+}
+.setnote {
+  margin: 0;
+  font-size: var(--t-13);
+  color: var(--ink-3);
+}
+.setnote b {
+  color: var(--ink-2);
+}
+.setlink {
+  font-size: var(--t-12);
+  font-weight: 600;
+  color: var(--link);
+}
+.setlink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---- Form rows ------------------------------------------------------------ */
+
+.sgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: var(--s3) var(--s4);
+}
+.sgrid--tight {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 220px));
+}
+.srow {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.srow--wide {
+  grid-column: 1 / -1;
+}
+.srow__l {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  font-size: var(--t-12);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.srow__l em {
+  font-style: normal;
+  font-weight: 400;
+  font-size: var(--t-11);
+  color: var(--ink-4);
+}
+.sinput {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 var(--s3);
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: var(--t-13);
+  color: var(--ink);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.sinput:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
+}
+.sinput:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
+}
+
+/* ---- A value shown but not editable --------------------------------------
+   Sunk rather than raised, so it reads as a stated fact rather than an empty
+   field someone forgot to fill in. `readOnly` not `disabled` — the text stays
+   selectable, because the reason for showing it at all is so somebody can read
+   the number back or copy it. The fill alone carries "not editable" — a lock
+   glyph on every row added noise without adding meaning. */
+.sinput.is-locked {
+  background: var(--sunk);
+  border-color: var(--rule);
+  color: var(--ink-2);
+  cursor: default;
+}
+.sinput.is-locked:focus,
+.sinput.is-locked:focus-visible {
+  border-color: var(--rule-strong);
+  box-shadow: none;
+}
+/* ---- Toggle rows ---------------------------------------------------------- */
+
+.stoggle {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s3) 0;
+  border-top: 1px solid var(--rule);
+}
+.stoggle:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+.sgrid + .stoggle,
+.sbrand + .sgrid {
+  margin-top: var(--s3);
+}
+.stoggle__b {
+  margin: 3px 0 0;
+  font-size: var(--t-12);
+  line-height: 1.5;
+  color: var(--ink-3);
+  max-width: 68ch;
+}
+
+/* The channel identity block — the brand mark at real size, because that is
+   what a client recognises before they read a word of it. */
+.sbrand {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3);
+  margin-bottom: var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sunk);
+}
+
+/* A compliance switched off stays readable but stops competing. */
+.ltable tbody tr.is-muted td {
+  opacity: 0.5;
+}
+.rowcheck:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+  .setwrap {
+    grid-template-columns: 1fr;
+  }
+  .setnav {
+    position: static;
+    flex-direction: row;
+    overflow-x: auto;
+    padding-bottom: var(--s2);
+  }
+  .setnav__i {
+    flex: none;
+  }
+  .setnav__t em {
+    display: none;
+  }
+}
+
 .grid2 {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -4677,7 +5486,12 @@ a.calpill.p-overdue:hover {
   border-bottom: none;
 }
 
-@media (max-width: 1080px) {
+/* Below 1080px there isn't room for the full 236px rail beside a useful work
+   surface, so it shrinks to icons-only. Below 640px (see the mobile block
+   further down) the rail stops sharing the row with the page at all — it
+   becomes an off-canvas drawer instead — so the icon-only treatment is
+   scoped to the tablet band between the two. */
+@media (max-width: 1080px) and (min-width: 641px) {
   .rail {
     width: var(--rail-w-collapsed);
   }
@@ -4697,6 +5511,8 @@ a.calpill.p-overdue:hover {
     justify-content: center;
     padding-inline: 0;
   }
+}
+@media (max-width: 1080px) {
   .page {
     padding: var(--s6) var(--s4) var(--s12);
   }
@@ -4705,6 +5521,199 @@ a.calpill.p-overdue:hover {
   }
   .run__prog {
     display: none;
+  }
+}
+
+/* Below 560px even the trimmed 1080px grid (roughly 460px of columns before
+   gaps) no longer fits — a phone forces the row itself into a scrollbar
+   rather than a screen. The run becomes a two-line card instead: the column
+   header is a label for a grid that no longer exists, so it goes with it. */
+@media (max-width: 560px) {
+  .runhead {
+    display: none;
+  }
+  .run {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--s3);
+    row-gap: 4px;
+    padding: var(--s3) var(--s3) var(--s3) calc(var(--s3) + 6px);
+    position: relative;
+  }
+  /* Taken out of flex flow so it runs the full height of the card instead of
+     being just one more item on whichever line it lands on. */
+  .run__spine {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    border-radius: 0;
+  }
+  .run__id {
+    flex: 1 1 100%;
+    order: 1;
+  }
+  .run__duecol {
+    order: 2;
+  }
+  .run__opencol {
+    order: 3;
+    margin-left: auto;
+  }
+  .run__money {
+    order: 4;
+    margin-left: auto;
+  }
+  .run__chev {
+    order: 5;
+  }
+}
+
+/* ---- Mobile nav: the rail as an off-canvas drawer -------------------------
+   Below 640px there is no width left to give the rail a permanent column,
+   not even an icon-only one — 60px is a sixth of a 375px phone. It becomes a
+   full-width-labelled drawer that opens over the page instead, behind the
+   hamburger in the top bar. `.navtoggle` and `.railclose` only exist for this
+   range; above it the rail is always in view and neither button means
+   anything. */
+.navtoggle,
+.railclose {
+  display: none;
+}
+.railscrim {
+  display: none;
+}
+@media (max-width: 640px) {
+  .navtoggle {
+    display: grid;
+  }
+  .rail {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 70;
+    width: min(82vw, 296px);
+    transform: translateX(-100%);
+    transition: transform 0.22s cubic-bezier(0.2, 0, 0.2, 1);
+    box-shadow: var(--shadow-3);
+  }
+  .rail.is-mobile-open {
+    transform: translateX(0);
+  }
+  /* The desktop collapse toggle shrinks the rail to icons-only, which is not
+     a state a slide-out drawer needs — it is hidden here, but a rail already
+     left collapsed from a wider viewport is corrected back to the full,
+     labelled drawer rather than opening as a useless 60px sliver. */
+  .railcollapse {
+    display: none;
+  }
+  .rail.is-collapsed {
+    width: min(82vw, 296px);
+  }
+  .rail.is-collapsed .navlink__text,
+  .rail.is-collapsed .navlink__count,
+  .rail.is-collapsed .rail__wordmark,
+  .rail.is-collapsed .exposure,
+  .rail.is-collapsed .railbtn span {
+    display: revert;
+  }
+  .rail.is-collapsed .navlink,
+  .rail.is-collapsed .railbtn {
+    justify-content: flex-start;
+    padding: 0 var(--s3);
+  }
+  .rail__brand {
+    justify-content: space-between;
+  }
+  .railclose {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    flex: none;
+    border: none;
+    background: none;
+    border-radius: var(--radius);
+    color: var(--ink-3);
+  }
+  .railclose:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+  .railscrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    background: rgba(16, 20, 24, 0.4);
+    animation: fadein 0.16s ease;
+  }
+  .page {
+    padding: var(--s5) var(--s4) var(--s10);
+  }
+  .dashkpi {
+    grid-template-columns: 1fr;
+  }
+  .pop,
+  .pop--wide {
+    width: auto;
+    max-width: calc(100vw - 2 * var(--s4));
+  }
+
+  /* ---- Top bar: hamburger + crumb/search fit a phone's width ------------- */
+  .topline {
+    padding: 0 var(--s3);
+    gap: var(--s2);
+  }
+  .crumbs {
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+  }
+  .crumbs a,
+  .crumbs span:not(.crumbs__sep) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 32vw;
+  }
+  /* The ⌘K hint names a keyboard shortcut a touch device does not have. */
+  .searchbtn .kbd {
+    display: none;
+  }
+
+  /* ---- Filing runway: fixed day-width, one shared horizontal scroll ------
+     `.rwday`/`.rwtick` normally take `flex: 1 1 0` so 30-60 days fill
+     whatever width the card has. On a phone that arithmetic runs out —
+     dividing ~350px by 30 days leaves each tick a few pixels wide, so the
+     date and weekday letter it carries collide into unreadable noise. Below
+     this width every day gets a fixed, legible column instead, and the
+     strip scrolls sideways to reach the rest — the same trade the tracker
+     grid already makes for the same reason. */
+  .runway__scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .runway__strip,
+  .runway__axis {
+    width: max-content;
+    min-width: 100%;
+  }
+  .rwday,
+  .rwtick {
+    flex: 0 0 26px;
+  }
+}
+/* A touch target still needs the label at 391–640px, but a 320px phone in
+   the same drawer-nav range has nothing to spare beside the icon. */
+@media (max-width: 400px) {
+  .searchbtn__label {
+    display: none;
+  }
+  .searchbtn {
+    flex: none;
+    width: 34px;
+    padding: 0;
+    justify-content: center;
   }
 }
 
@@ -5319,6 +6328,141 @@ a.cprofile__ch:hover {
   color: var(--ink-3);
   text-align: center;
 }
+/* Section heading inside a menu — what lets one pill carry a two-level field
+   (compliance head → the forms under it) instead of spending two pills on it. */
+.fmenu__group {
+  position: sticky;
+  top: -2px;
+  z-index: 1;
+  padding: var(--s2) var(--s2) 3px;
+  margin-top: 2px;
+  background: var(--sheet);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-4);
+}
+.fmenu__q + .fmenu__group,
+.fmenu__group:first-child {
+  margin-top: 0;
+}
+/* A form sits half a step in from its head, so it reads as belonging to the
+   heading above rather than as a sibling of it. */
+.fmenu__o.is-child {
+  padding-left: var(--s4);
+}
+.fmenu__ico {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+}
+
+/* ---- Date range ---------------------------------------------------------- */
+
+.drange {
+  display: flex;
+  flex-direction: column;
+  min-width: 246px;
+}
+.drange__row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s2);
+  padding: var(--s1) var(--s2) var(--s2);
+}
+.drange__f {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.drange__f > span {
+  font-size: var(--t-11);
+  color: var(--ink-3);
+  font-weight: 600;
+}
+.drange__f input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--rule);
+  background: var(--sheet);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: var(--t-12);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.drange__f input:focus-visible {
+  border-color: var(--focus);
+  box-shadow: none;
+}
+
+/* ---- A search field that reads as one ------------------------------------
+   The plain `.field` is a hairline box on a white page, which at a glance is
+   indistinguishable from the page itself — the search box was on screen the
+   whole time and read as absent. A well, a full-ink glyph and a real width
+   fix that without adding a second visual system. */
+.field--search {
+  width: 300px;
+  max-width: 100%;
+  background: var(--sunk);
+  border-color: var(--rule-strong);
+}
+.field--search > svg:first-child {
+  color: var(--ink-2);
+  flex: none;
+}
+.field--search:focus-within {
+  background: var(--sheet);
+}
+.field__x {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: none;
+  background: none;
+  border-radius: 50%;
+  color: var(--ink-3);
+}
+.field__x:hover {
+  background: var(--sunk-2);
+  color: var(--ink);
+}
+
+/* ---- Row action cell -----------------------------------------------------
+   Centred in its own column. As a plain `.tight` cell the button inherited the
+   row's left alignment and sat hard against the delivery tag beside it. */
+.ltable td.cell-act {
+  padding: 4px var(--s2);
+  text-align: center;
+}
+.rowact {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: var(--radius-sm);
+  /* Quiet, but not invisible. At --ink-4 on a white row the glyph was so faint
+     it read as a rendering artefact rather than a control. */
+  color: var(--ink-3);
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+tr:hover .rowact {
+  color: var(--ink);
+}
+.rowact:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
+  color: var(--accent);
+}
 
 /* A checkbox, because multi-select accumulates — a tick alone reads as
    "one of these". */
@@ -5487,11 +6631,42 @@ a.cprofile__ch:hover {
 }
 .trkbar b { font-weight: 650; }
 .trkbar .num { color: var(--ink-3); font-size: var(--t-12); }
+
+/* Title bar and filter row together form the full-screen chrome, so they
+   scroll as one fixed block above the grid. */
+.trkhead {
+  flex: none;
+  background: var(--sheet);
+  border-bottom: 1px solid var(--rule);
+}
+.trkhead .trkbar {
+  border-bottom: 1px solid var(--rule);
+}
+/* The page's own filter row is sticky under the top bar; in full screen there
+   is no top bar to stick under, so this one is plainly in the flow. */
+.trkfilters {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+}
 .trkbox.is-expanded .trkwrap {
   flex: 1;
   max-height: none;
   border: none;
   border-radius: 0;
   box-shadow: none;
+}
+/* In full screen the footer is the bottom bar — it carries the legend and the
+   "Show more" control, so it must stay in view rather than scroll away with
+   the grid. */
+.trkbox.is-expanded .trkfoot {
+  flex: none;
+  margin: 0;
+  border: none;
+  border-top: 1px solid var(--rule);
+  border-radius: 0;
+  background: var(--sheet);
 }
 

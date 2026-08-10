@@ -170,12 +170,12 @@ export function RunList({
               </span>
             </span>
 
-            <span className="u-col">
+            <span className="u-col run__duecol">
               <span className="run__due">{fmtShort(r.dueDate)}</span>
               <span className="run__cd"><Countdown due={r.dueDate} /></span>
             </span>
 
-            <span className="u-col u-right">
+            <span className="u-col u-right run__opencol">
               <span className="num" style={{ fontSize: "var(--t-14)", fontWeight: 600 }}>{open}</span>
               <span className="u-mute" style={{ fontSize: "var(--t-11)" }}>of {r.total} open</span>
             </span>

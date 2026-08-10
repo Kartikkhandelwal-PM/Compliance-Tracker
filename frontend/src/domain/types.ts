@@ -238,14 +238,35 @@ export interface FilingRun {
   clientIds: string[];
 }
 
+export type Channel = "WhatsApp" | "Email";
+
+export type DeliveryStatus = "Delivered" | "Read" | "Queued (quiet hours)" | "Failed";
+
 export interface OutboxEntry {
   id: string;
   clientId: string;
   obligationId: string;
-  channel: "WhatsApp" | "Email";
+  channel: Channel;
   stage: ReminderStage;
+  /** `yyyy-mm-ddThh:mm`. A date alone cannot separate two sends on the same
+   *  day, nor answer whether the client had working hours left to act. */
   sentAt: string;
-  status: "Delivered" | "Read" | "Queued (quiet hours)" | "Failed";
+  status: DeliveryStatus;
+  /** Did the scheduler send this, or did a person press the button? Every row
+   *  in the log has to be attributable — "the system chased them" and "Priya
+   *  chased them" are different answers to the same client question. */
+  origin: "Automatic" | "Manual";
+  /** Staff id for a manual send; absent when the scheduler sent it. */
+  sentBy?: string;
+  /** Set on a copy created by Resend, pointing at the row it repeats. */
+  resendOf?: string;
+  /** How many times this obligation+channel has now gone out. */
+  attempt: number;
+  /** The compliance def, denormalised so the log can filter by head and form
+   *  without joining back through the obligation on every keystroke. */
+  defCode: string;
+  head: Head;
+  form: string;
   /** One line for the log table. */
   preview: string;
   /** The message exactly as the client received it. */
@@ -253,3 +274,119 @@ export interface OutboxEntry {
   /** Email only. */
   subject: string;
 }
+
+/* ---------------------------------------------------------------------------
+   AUTOMATIC REMINDERS
+   ---------------------------------------------------------------------------
+   The cadence is a ladder of steps hung off the statutory due date. A step is
+   an offset, not a date: "three days before, on WhatsApp" holds for every
+   compliance in the book, so one ladder drives 31 compliances × 640 clients
+   without anyone maintaining a calendar.
+
+   Offsets are signed days relative to the due date — negative before, 0 on the
+   day, positive after. `sendAt` is the wall clock the step fires at, inside
+   the quiet-hours window.
+   ------------------------------------------------------------------------- */
+
+export interface ScheduleStep {
+  id: string;
+  /** Signed days from the due date. -7 = a week before, +1 = day after. */
+  offset: number;
+  /** What the client sees this as, and what the log records. */
+  stage: ReminderStage;
+  label: string;
+  /** Why this step exists — shown once, in the automation editor. */
+  intent: string;
+  channels: Channel[];
+  /** Hour of day, 24h, inside quiet hours. */
+  sendAt: number;
+  enabled: boolean;
+  /** Escalation steps also copy the engagement owner. */
+  ccOwner?: boolean;
+}
+
+/** One future send the ladder implies: a whole filing run × one step.
+ *  Aggregated by run, never by client — a 10,000-client book would otherwise
+ *  put 10,000 rows on a screen nobody can act on. */
+export interface ScheduledSend {
+  key: string;
+  runId: string;
+  defCode: string;
+  head: Head;
+  form: string;
+  periodLabel: string;
+  dueDate: string;
+  step: ScheduleStep;
+  /** When this batch fires. */
+  fireAt: string;
+  /** Clients still unfiled, and so still in scope when it fires. */
+  clientCount: number;
+  /** Of those, how many can take WhatsApp. */
+  whatsappCount: number;
+  obligationIds: string[];
+  /** Suppressed by a person — kept visible, struck through, rather than
+   *  vanishing, so "why didn't they get chased?" stays answerable. */
+  skipped: boolean;
+}
+
+export interface ReminderSettings {
+  /** Master switch. Off means the ladder still computes and displays, but
+   *  nothing leaves the building. */
+  autoSend: boolean;
+  quietHours: boolean;
+  /** The sending window, 24h. Configurable because a practice in one state
+   *  keeps different hours from one in another, and because "09:00–20:00" was
+   *  a constant in the source that the settings screen claimed to govern. */
+  quietStart: number;
+  quietEnd: number;
+  /** Statutory dates do not move for a Sunday, but a chase can wait for
+   *  Monday — nobody assembles working papers on a weekend. */
+  skipWeekends: boolean;
+  /** One combined message where a client has several items in the same window. */
+  digest: boolean;
+}
+
+/* ---------------------------------------------------------------------------
+   ORGANISATION SETTINGS
+   ---------------------------------------------------------------------------
+   Who the firm is, and who its messages come from. This is not decoration:
+   the sender block is reproduced verbatim at the foot of every reminder, and
+   a client who cannot tell whose business account is asking them for money
+   will either ignore it or report it.
+   ------------------------------------------------------------------------- */
+
+export interface FirmProfile {
+  name: string;
+  /** ICAI Firm Registration Number. */
+  frn: string;
+  membershipNo: string;
+  pan: string;
+  gstin: string;
+  addressLine: string;
+  city: string;
+  state: string;
+  pincode: string;
+  phone: string;
+  email: string;
+  website: string;
+}
+
+export interface SenderProfile {
+  /** The WhatsApp Business display name clients see — "CA Connect". */
+  waName: string;
+  waNumber: string;
+  waVerified: boolean;
+  fromEmail: string;
+  replyTo: string;
+}
+
+/** Per-compliance overrides. A firm that does not do payroll should not be
+ *  tracking PF and ESI at all, and whether a filing is the client's own act
+ *  decides whether they are ever chased about it. */
+export interface ComplianceOverride {
+  tracked: boolean;
+  clientFacing: boolean;
+}
+
+/** Which of the bell alerts are raised. Keyed by the notification's own id. */
+export type NotificationSettings = Record<string, boolean>;

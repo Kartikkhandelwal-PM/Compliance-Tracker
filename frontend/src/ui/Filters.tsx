@@ -19,7 +19,8 @@
    staff appeared as plain text.
    ========================================================================== */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { fmtShort } from "../domain/dates.ts";
 import { Icon } from "./Icon.tsx";
 import { Avatar } from "./bits.tsx";
 
@@ -28,8 +29,19 @@ export interface PillOption {
   label: string;
   /** Initials, for options that name a person. */
   avatar?: string;
+  /** A brand or status mark, for options that are recognised by their glyph
+   *  faster than by their name — WhatsApp and Gmail above all. */
+  icon?: ReactNode;
   /** Secondary text, right-aligned — a role, or a count. */
   sub?: string;
+  /** Section this option belongs under. Options carrying a group are rendered
+   *  beneath a sticky heading of that name, which is what lets one pill hold
+   *  a two-level list (compliance head → the forms inside it) instead of
+   *  spending two pills on one question. */
+  group?: string;
+  /** Renders half a step in, so a child reads as belonging to the row above
+   *  rather than as a sibling of it. */
+  indent?: boolean;
 }
 
 /** Shared shell: the button, its active styling, and the menu it opens. */
@@ -98,9 +110,12 @@ function Pill({
   );
 }
 
-/** Pick one. */
+/** Pick one. Options carrying a `group` are rendered under section headings,
+ *  and a list past a dozen entries gets its own search box — both so that a
+ *  single pill can carry a long, two-level field without becoming a scroll
+ *  hunt. */
 export function FilterPill<T extends string>({
-  field, value, options, onChange, none,
+  field, value, options, onChange, none, searchable,
 }: {
   field: string;
   value: T;
@@ -108,8 +123,22 @@ export function FilterPill<T extends string>({
   onChange: (v: T) => void;
   /** The value that means "not filtering" — the pill reads as inactive on it. */
   none: T;
+  /** Force the search box on or off; by default it appears past 12 options. */
+  searchable?: boolean;
 }) {
+  const [q, setQ] = useState("");
   const selected = options.find((o) => o.value === value);
+  const withSearch = searchable ?? options.length > 12;
+
+  const shown = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return options;
+    return options.filter(
+      (o) => o.label.toLowerCase().includes(needle)
+        || (o.group ?? "").toLowerCase().includes(needle),
+    );
+  }, [options, q]);
+
   return (
     <Pill
       field={field}
@@ -117,21 +146,50 @@ export function FilterPill<T extends string>({
       active={value !== none}
       onClear={() => onChange(none)}
     >
-      {(close) => options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="option"
-          aria-selected={o.value === value}
-          className={`fmenu__o${o.value === value ? " is-on" : ""}`}
-          onClick={() => { onChange(o.value as T); close(); }}
-        >
-          {o.avatar ? <Avatar initials={o.avatar} /> : null}
-          <span className="u-truncate">{o.label}</span>
-          {o.sub ? <span className="fmenu__sub">{o.sub}</span> : null}
-          {o.value === value ? <Icon name="check" size={13} className="fmenu__tick" /> : null}
-        </button>
-      ))}
+      {(close) => (
+        <>
+          {withSearch ? (
+            <div className="field fmenu__q">
+              <Icon name="search" size={14} />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={`Search ${field.toLowerCase()}`}
+                aria-label={`Search ${field.toLowerCase()}`}
+                autoFocus
+              />
+            </div>
+          ) : null}
+
+          {shown.map((o, i) => {
+            /* A heading is emitted whenever the group changes, so the same flat
+               list renders as sections without the caller having to nest it. */
+            const head = o.group && o.group !== shown[i - 1]?.group
+              ? <div key={`g-${o.group}`} className="fmenu__group">{o.group}</div>
+              : null;
+            return (
+              <Fragment key={o.value}>
+                {head}
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={o.value === value}
+                  className={`fmenu__o${o.value === value ? " is-on" : ""}${o.indent ? " is-child" : ""}`}
+                  onClick={() => { onChange(o.value as T); close(); }}
+                >
+                  {o.avatar ? <Avatar initials={o.avatar} /> : null}
+                  {o.icon ? <span className="fmenu__ico">{o.icon}</span> : null}
+                  <span className="u-truncate">{o.label}</span>
+                  {o.sub ? <span className="fmenu__sub">{o.sub}</span> : null}
+                  {o.value === value ? <Icon name="check" size={13} className="fmenu__tick" /> : null}
+                </button>
+              </Fragment>
+            );
+          })}
+
+          {shown.length === 0 ? <div className="fmenu__empty">Nothing matches “{q}”.</div> : null}
+        </>
+      )}
     </Pill>
   );
 }
@@ -211,6 +269,75 @@ export function FilterPillMulti({
 
           {shown.length === 0 ? <div className="fmenu__empty">No one matches “{q}”.</div> : null}
         </>
+      )}
+    </Pill>
+  );
+}
+
+/**
+ * A real date range, not a list of guesses.
+ *
+ * The presets ("Last 7 days", "Last 30 days") answer the common question and
+ * nothing else: the moment someone is reconciling a specific week, or checking
+ * what went out either side of a due date, a fixed list of four options cannot
+ * express it and they are back to scrolling. Presets stay — they are one click
+ * for the case that is genuinely common — but they now sit above two real date
+ * fields rather than instead of them.
+ */
+export function DateRangePill({
+  from, to, onChange, presets,
+}: {
+  from: string;
+  to: string;
+  onChange: (from: string, to: string) => void;
+  presets: { label: string; from: string; to: string }[];
+}) {
+  const active = !!(from || to);
+  const summary = from && to
+    ? (from === to ? fmtShort(from) : `${fmtShort(from)} – ${fmtShort(to)}`)
+    : from ? `from ${fmtShort(from)}`
+    : to ? `to ${fmtShort(to)}`
+    : "";
+
+  return (
+    <Pill field="Date" summary={summary} active={active} onClear={() => onChange("", "")}>
+      {(close) => (
+        <div className="drange">
+          {presets.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              className={`fmenu__o${from === p.from && to === p.to ? " is-on" : ""}`}
+              onClick={() => { onChange(p.from, p.to); close(); }}
+            >
+              <span className="u-truncate">{p.label}</span>
+              {from === p.from && to === p.to
+                ? <Icon name="check" size={13} className="fmenu__tick" /> : null}
+            </button>
+          ))}
+
+          <div className="fmenu__group">Or pick a range</div>
+          <div className="drange__row">
+            <label className="drange__f">
+              <span>From</span>
+              <input
+                type="date"
+                value={from}
+                max={to || undefined}
+                onChange={(e) => onChange(e.target.value, to)}
+              />
+            </label>
+            <label className="drange__f">
+              <span>To</span>
+              <input
+                type="date"
+                value={to}
+                min={from || undefined}
+                onChange={(e) => onChange(from, e.target.value)}
+              />
+            </label>
+          </div>
+        </div>
       )}
     </Pill>
   );

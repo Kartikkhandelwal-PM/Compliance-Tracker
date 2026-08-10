@@ -7,7 +7,10 @@ export type IconName =
   | "check" | "close" | "alert" | "filter" | "download" | "moon" | "sun"
   | "collapse" | "expand" | "plus" | "clock" | "send" | "external" | "info"
   | "arrowRight" | "sort" | "user" | "bolt" | "ban" | "history" | "bell"
-  | "tick" | "tickDouble";
+  | "tick" | "tickDouble" | "menu" | "settings" | "fullscreen" | "fullscreenExit"
+  /* Chat furniture — only used to make the WhatsApp preview read as a real
+     thread rather than a quotation of one. */
+  | "phone" | "video" | "dots" | "lock" | "mic" | "attach" | "smile" | "camera";
 
 const P: Record<IconName, string> = {
   today: "M4 5.5h16M4 5.5a1.5 1.5 0 0 1 1.5-1.5h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13ZM8 2.5v3M16 2.5v3M12 10v5M9.5 12.5h5",
@@ -47,6 +50,37 @@ const P: Record<IconName, string> = {
      the colour, not the count, is what says "read". */
   tick: "m3.5 12.5 4.5 4.5 8.5-10",
   tickDouble: "m2 12.5 4.5 4.5 8.5-10M10.5 16.2 12 17.8l7-8.3",
+  /* The rail's off-canvas toggle on narrow screens. */
+  menu: "M3.5 6.5h17M3.5 12h17M3.5 17.5h17",
+
+  /* Settings: sliders, not a gear and not a lightning bolt.
+     A bolt means "automatic" — it is already doing that job on the Auto tag and
+     the scheduler button, so using it for Settings too made one glyph mean two
+     unrelated things. A cog is the other convention, but a cog drawn at this
+     weight needs teeth to read as a cog; simplified to a spoked circle it is
+     indistinguishable from the `sun` theme toggle sitting inches away in the
+     same bar. Sliders collide with nothing here and read unambiguously as
+     "things you set". */
+  settings: "M3.5 7h10.5M18 7h2.5M3.5 12h2.5M10 12h10.5M3.5 17h8.5M16 17h4.5"
+    + "M16 5a2 2 0 1 0 0 4 2 2 0 1 0 0-4ZM8 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4Z"
+    + "M14 15a2 2 0 1 0 0 4 2 2 0 1 0 0-4Z",
+
+  /* Full screen: four corner brackets opening outward, and inward to leave.
+     `expand`/`collapse` are a bordered panel with a divider and a chevron —
+     a SIDEBAR toggle, which is exactly what they are used for on the rail.
+     Reusing them for the grid's full-screen control said "collapse the panel"
+     when it meant "fill the screen". */
+  fullscreen: "M9 4.5H4.5V9M15 4.5h4.5V9M9 19.5H4.5V15M15 19.5h4.5V15",
+  fullscreenExit: "M4.5 9H9V4.5M19.5 9H15V4.5M4.5 15H9v4.5M19.5 15H15v4.5",
+
+  phone: "M6.8 3.5 9 8l-2 1.6a12 12 0 0 0 5.4 5.4L14 13l4.5 2.2v3.6a1.7 1.7 0 0 1-1.9 1.7C9.3 20 4 14.7 3.2 7.4A1.7 1.7 0 0 1 4.9 5.5h1.9Z",
+  video: "M3.5 7.5A1.5 1.5 0 0 1 5 6h8.5A1.5 1.5 0 0 1 15 7.5v9A1.5 1.5 0 0 1 13.5 18H5a1.5 1.5 0 0 1-1.5-1.5v-9ZM15 10.5l5.5-3v9l-5.5-3",
+  dots: "M12 6.5h.01M12 12h.01M12 17.5h.01",
+  lock: "M6.5 10.5h11v9h-11zM9 10.5V7.5a3 3 0 0 1 6 0v3",
+  mic: "M12 3.5a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-5 0V6A2.5 2.5 0 0 1 12 3.5ZM5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3",
+  attach: "M20 11.5 12 19.5a5 5 0 0 1-7-7l8-8a3.4 3.4 0 0 1 4.8 4.8l-8 8a1.8 1.8 0 0 1-2.5-2.5l7.3-7.3",
+  smile: "M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17ZM8.8 9.5h.01M15.2 9.5h.01M8 14a5 5 0 0 0 8 0",
+  camera: "M3.5 8.5A1.5 1.5 0 0 1 5 7h2l1.5-2.5h7L17 7h2a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5v-9ZM12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z",
 };
 
 /* ---------------------------------------------------------------------------

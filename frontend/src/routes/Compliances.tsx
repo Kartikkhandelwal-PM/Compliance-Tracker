@@ -16,7 +16,8 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useObligations } from "../ui/app-state.tsx";
+import { useEngine, useObligations } from "../ui/app-state.tsx";
+import { untrackedCodes } from "../domain/engine.ts";
 import { DEFS, HEADS, headClass } from "../domain/catalog.ts";
 import { inrShort } from "../domain/dates.ts";
 import { Empty, PageHead } from "../ui/bits.tsx";
@@ -26,6 +27,7 @@ type GroupBy = "head" | "frequency" | "none";
 
 export function CompliancesPage() {
   const obligations = useObligations();
+  const untracked = useEngine(untrackedCodes);
   const [q, setQ] = useState("");
   const [head, setHead] = useState("all");
   const [group, setGroup] = useState<GroupBy>("head");
@@ -70,13 +72,17 @@ export function CompliancesPage() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return DEFS.filter((d) => {
+      /* A compliance the firm has switched off in Settings is not part of its
+         catalogue at all — listing it here would offer a detail page for work
+         that generates nothing anywhere else in the product. */
+      if (untracked.has(d.code)) return false;
       if (head !== "all" && d.head !== head) return false;
       if (!needle) return true;
       return d.form.toLowerCase().includes(needle)
         || d.description.toLowerCase().includes(needle)
         || d.code.toLowerCase().includes(needle);
     });
-  }, [q, head]);
+  }, [q, head, untracked]);
 
   /* Contiguous groups for the section headers. */
   const groups = useMemo(() => {

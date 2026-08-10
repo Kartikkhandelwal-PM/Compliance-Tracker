@@ -107,7 +107,7 @@ export function ComplianceDetailPage() {
           </div>
           <div className="cmpabout__f">
             <dt>Filed by</dt>
-            <dd>{def.clientFacing ? "The client, chased by the firm" : "The firm, internally"}</dd>
+            <dd>{def.clientFacing ? "Client files; firm sends reminders" : "Filed by the firm"}</dd>
           </div>
         </div>
         <div className="cmpabout__row cmpabout__row--wide">

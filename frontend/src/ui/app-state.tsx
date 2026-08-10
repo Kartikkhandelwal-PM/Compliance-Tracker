@@ -18,6 +18,22 @@ export function useOutbox() {
   return useMemo(() => getOutbox(), [v]);
 }
 
+/**
+ * Re-derive any engine-backed value when the store changes.
+ *
+ * The reminder cadence, its guards and the scheduled queue are all computed
+ * from the same mutable store as the obligations, and each would otherwise
+ * need its own near-identical hook. `read` is deliberately NOT a dependency:
+ * it is an inline closure at every call site, so depending on it would
+ * recompute on every render and defeat the memo. The store version is the only
+ * thing that can change the answer.
+ */
+export function useEngine<T>(read: () => T): T {
+  const v = useSyncExternalStore(subscribe, getVersion, getVersion);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(read, [v]);
+}
+
 /* ---- Theme + toast ------------------------------------------------------- */
 
 type Theme = "light" | "dark";

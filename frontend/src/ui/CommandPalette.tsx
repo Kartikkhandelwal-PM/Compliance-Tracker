@@ -6,6 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CLIENTS, staffOf } from "../domain/book.ts";
 import { DEFS } from "../domain/catalog.ts";
+import { untrackedCodes } from "../domain/engine.ts";
+import { useEngine } from "./app-state.tsx";
 import { Icon } from "./Icon.tsx";
 import { Avatar, initialsOf } from "./bits.tsx";
 import type { IconName } from "./Icon.tsx";
@@ -34,12 +36,13 @@ const NAV: Item[] = [
   { group: "Go to", label: "Tracker", sub: "every client × every compliance", icon: "matrix", to: "/tracker" },
   { group: "Go to", label: "Clients", sub: "the book", icon: "clients", to: "/clients" },
   { group: "Go to", label: "Reminders", sub: "what clients were told", icon: "outbox", to: "/reminders" },
-  { group: "Go to", label: "Settings", sub: "reminder guards", icon: "bolt", to: "/settings" },
+  { group: "Go to", label: "Settings", sub: "firm configuration", icon: "settings", to: "/settings" },
 ];
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [q, setQ] = useState("");
   const [cursor, setCursor] = useState(0);
+  const untracked = useEngine(untrackedCodes);
   const nav = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -79,6 +82,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
     for (const d of DEFS) {
       if (out.length > 55) break;
+      if (untracked.has(d.code)) continue;
       if (d.form.toLowerCase().includes(needle) || d.code.toLowerCase().includes(needle)) {
         out.push({
           group: "Compliances",
@@ -91,7 +95,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     }
 
     return out;
-  }, [q]);
+  }, [q, untracked]);
 
   useEffect(() => setCursor(0), [q]);
 

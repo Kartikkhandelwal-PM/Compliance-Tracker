@@ -24,6 +24,7 @@ import { TODAY, addDays, dow, fmtLong, fmtShort, inrShort, urgency } from "../do
 import { CountUp, PageHead, Seg, Stat } from "../ui/bits.tsx";
 import { Runway } from "../ui/Runway.tsx";
 import { RunList, type RunSort } from "../ui/RunList.tsx";
+import { FiledDrawer } from "../ui/FiledDrawer.tsx";
 import { Icon } from "../ui/Icon.tsx";
 import { HeadExposureBars, StatusDonut } from "../ui/Charts.tsx";
 
@@ -75,6 +76,7 @@ const QUEUES: {
 export function TodayPage() {
   const all = useObligations();
   const nav = useNavigate();
+  const [filedOpen, setFiledOpen] = useState(false);
   const { me } = useApp();
   const [scope, setScope] = useState<Scope>("firm");
   const [pickedDay, setPickedDay] = useState<string | null>(null);
@@ -254,7 +256,7 @@ export function TodayPage() {
             value={<CountUp n={summary.overdueCount} />}
             tone="overdue"
             icon="alert"
-            onClick={() => nav("/tracker")}
+            onClick={() => nav("/tracker?status=late")}
             sub={`${summary.overdueClients.toLocaleString("en-IN")} clients · ${inrShort(summary.exposure)} late fees`}
             hint="Filings past their statutory due date. The late-fee figure is estimated from each compliance's own penalty rule."
           />
@@ -263,7 +265,7 @@ export function TodayPage() {
             value={<CountUp n={summary.pendingTotal} />}
             tone="cool"
             icon="outbox"
-            onClick={() => nav("/tracker")}
+            onClick={() => nav("/tracker?status=open")}
             sub="pending, not yet due"
           />
           <Stat
@@ -271,8 +273,8 @@ export function TodayPage() {
             value={<CountUp n={summary.filedThisMonth} />}
             tone="filed"
             icon="check"
-            onClick={() => nav("/tracker")}
-            sub="across all heads"
+            onClick={() => setFiledOpen(true)}
+            sub="click for the breakdown"
           />
           <Stat
             label="Unowned"
@@ -369,6 +371,8 @@ export function TodayPage() {
           emptyBody={active.emptyBody}
         />
       </div>
+
+      <FiledDrawer open={filedOpen} onClose={() => setFiledOpen(false)} />
     </div>
   );
 }

@@ -21,8 +21,8 @@
       default; late fees are available as a sort but no longer the headline.
    ========================================================================== */
 
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import type { Obligation } from "../domain/types.ts";
 import { useApp, useObligations } from "../ui/app-state.tsx";
 import { CLIENT_BY_ID, STAFF, staffOf } from "../domain/book.ts";
@@ -60,11 +60,28 @@ export function MatrixPage() {
   const { toast } = useApp();
   const nav = useNavigate();
 
-  const [head, setHead] = useState("all");
+  const [params] = useSearchParams();
+  const [head, setHead] = useState(() => params.get("head") ?? "all");
   /* Empty = every owner. Levelling work means comparing desks, so this is
      a set rather than a single pick. */
-  const [owners, setOwners] = useState<string[]>([]);
-  const [status, setStatus] = useState<StatusFilter>("all");
+  const [owners, setOwners] = useState<string[]>(() => {
+    const o = params.get("owner");
+    return o ? [o] : [];
+  });
+  const [status, setStatus] = useState<StatusFilter>(
+    () => (params.get("status") as StatusFilter) ?? "all",
+  );
+
+  /* Follow the URL under an already-open page — the tracker is the target of
+     several alerts and stat cards, each meaning a different slice of it. */
+  useEffect(() => {
+    const st = params.get("status");
+    if (st) setStatus(st as StatusFilter);
+    const h = params.get("head");
+    if (h) setHead(h);
+    const o = params.get("owner");
+    if (o) setOwners([o]);
+  }, [params]);
   const [win, setWin] = useState<Window>("quarter");
   const [group, setGroup] = useState<GroupBy>("month");
   const [sort, setSort] = useState<SortKey>("late");
@@ -72,6 +89,10 @@ export function MatrixPage() {
   const [peek, setPeek] = useState<Obligation | null>(null);
   const [limit, setLimit] = useState(ROWS);
   const [expanded, setExpanded] = useState(false);
+
+  /* The grid's own scroll container, and a marker just past the last row. */
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
 
   /* Escape is the expected way out of anything that has taken the viewport,
      and the page behind must not scroll while it has. */
@@ -201,6 +222,133 @@ export function MatrixPage() {
 
   const visible = rows.slice(0, limit);
 
+  const hasMore = limit < rows.length;
+
+  /**
+   * Load the next batch when the reader reaches the end of the grid.
+   *
+   * `root` is the grid's scroll container, not the viewport — `.trkwrap` is
+   * what actually scrolls in both the normal and full-screen views, so
+   * observing the page would never fire.
+   *
+   * `limit` IS a dependency, deliberately. An IntersectionObserver reports
+   * changes in intersection, so once the marker is in view it stays "in view"
+   * and never fires again; rebuilding the observer after each batch re-tests
+   * it, which also means a short batch that fails to fill the viewport pulls
+   * the next one immediately instead of stalling half-scrolled.
+   */
+  useEffect(() => {
+    if (!hasMore) return;
+    const root = wrapRef.current;
+    const target = endRef.current;
+    if (!root || !target) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setLimit((l) => l + ROWS);
+      },
+      /* Fires a little before the true end, so the rows are already there by
+         the time the reader gets to them. */
+      { root, rootMargin: "300px" },
+    );
+    io.observe(target);
+    return () => io.disconnect();
+  }, [hasMore, limit, expanded]);
+
+  /**
+   * The refinement controls, declared ONCE and rendered in two places: the
+   * page's own filter row, and the bar of the full-screen view.
+   *
+   * Full screen used to show the grid with no controls at all — the filter row
+   * stayed on the page underneath, covered by the overlay, so the moment you
+   * expanded a 640×31 grid you lost every means of narrowing it. Two hand-kept
+   * copies would drift the way the reminder guards did when they lived on two
+   * screens, so there is one definition and both views render it.
+   *
+   * One pill per field. On a grid of 640 clients the whole question is WHICH
+   * slice you are looking at, so the active narrowing stays legible without
+   * opening anything, and clearing one is a single click. Search and sort stay
+   * plain — neither narrows the book.
+   */
+  const filterControls = (
+    <>
+      <div className="field field--search">
+        <Icon name="search" size={15} />
+        <input
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setLimit(ROWS); }}
+          placeholder="Name, PAN or GSTIN"
+          aria-label="Search clients"
+        />
+      </div>
+      <FilterPill<Window>
+        field="Period"
+        value={win}
+        none={"quarter" as Window}
+        onChange={setWin}
+        options={[
+          { value: "month", label: "This month" },
+          { value: "quarter", label: "Next 3 months" },
+          { value: "year", label: "Full year" },
+        ]}
+      />
+      <FilterPill<string>
+        field="Head"
+        value={head}
+        none="all"
+        onChange={setHead}
+        options={[{ value: "all", label: "All heads" }, ...HEADS.map((h) => ({ value: h, label: h }))]}
+      />
+      <FilterPillMulti
+        field="Owner"
+        values={owners}
+        onChange={(v) => { setOwners(v); setLimit(ROWS); }}
+        searchPlaceholder="Search staff"
+        options={[
+          { value: "none", label: "Unassigned", avatar: "—" },
+          ...STAFF.map((st) => ({ value: st.id, label: st.name, avatar: st.initials, sub: st.role })),
+        ]}
+      />
+      <FilterPill<StatusFilter>
+        field="Status"
+        value={status}
+        none={"all" as StatusFilter}
+        onChange={(v) => { setStatus(v); setLimit(ROWS); }}
+        options={[
+          { value: "all", label: "Any status" },
+          { value: "late", label: "Has something late" },
+          { value: "open", label: "Has something open" },
+          { value: "filed", label: "Fully filed" },
+        ]}
+      />
+      <FilterPill<GroupBy>
+        field="Group"
+        value={group}
+        none={"month" as GroupBy}
+        onChange={setGroup}
+        options={[
+          { value: "month", label: "By month" },
+          { value: "head", label: "By head" },
+          { value: "none", label: "No grouping" },
+        ]}
+      />
+      <ClearFilters
+        count={(head !== "all" ? 1 : 0) + (owners.length > 0 ? 1 : 0) + (status !== "all" ? 1 : 0)
+          + (win !== "quarter" ? 1 : 0) + (group !== "month" ? 1 : 0)}
+        onClear={() => {
+          setHead("all"); setOwners([]); setStatus("all");
+          setWin("quarter"); setGroup("month"); setLimit(ROWS);
+        }}
+      />
+      <span className="u-spacer" />
+      <select className="plain" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort rows">
+        <option value="late">Most late</option>
+        <option value="open">Most open</option>
+        <option value="fees">Late fees</option>
+        <option value="name">Name</option>
+      </select>
+    </>
+  );
+
   return (
     <div className="page page--wide">
       <PageHead
@@ -220,82 +368,7 @@ export function MatrixPage() {
       />
 
       {/* ---- Filters + grouping ----------------------------------------- */}
-      <div className="filters">
-        <div className="field" style={{ width: 230 }}>
-          <Icon name="search" size={15} />
-          <input value={q} onChange={(e) => { setQ(e.target.value); setLimit(ROWS); }} placeholder="Name, PAN or GSTIN" />
-        </div>
-        {/* One pill per field. On a grid of 640 clients the whole question is
-            WHICH slice you are looking at, so the active narrowing stays
-            legible without opening anything, and clearing one is a single
-            click. Search and sort stay plain — neither narrows the book. */}
-        <FilterPill<Window>
-          field="Period"
-          value={win}
-          none={"quarter" as Window}
-          onChange={setWin}
-          options={[
-            { value: "month", label: "This month" },
-            { value: "quarter", label: "Next 3 months" },
-            { value: "year", label: "Full year" },
-          ]}
-        />
-        <FilterPill<string>
-          field="Head"
-          value={head}
-          none="all"
-          onChange={setHead}
-          options={[{ value: "all", label: "All heads" }, ...HEADS.map((h) => ({ value: h, label: h }))]}
-        />
-        <FilterPillMulti
-          field="Owner"
-          values={owners}
-          onChange={(v) => { setOwners(v); setLimit(ROWS); }}
-          searchPlaceholder="Search staff"
-          options={[
-            { value: "none", label: "Unassigned", avatar: "—" },
-            ...STAFF.map((st) => ({ value: st.id, label: st.name, avatar: st.initials, sub: st.role })),
-          ]}
-        />
-        <FilterPill<StatusFilter>
-          field="Status"
-          value={status}
-          none={"all" as StatusFilter}
-          onChange={(v) => { setStatus(v); setLimit(ROWS); }}
-          options={[
-            { value: "all", label: "Any status" },
-            { value: "late", label: "Has something late" },
-            { value: "open", label: "Has something open" },
-            { value: "filed", label: "Fully filed" },
-          ]}
-        />
-        <FilterPill<GroupBy>
-          field="Group"
-          value={group}
-          none={"month" as GroupBy}
-          onChange={setGroup}
-          options={[
-            { value: "month", label: "By month" },
-            { value: "head", label: "By head" },
-            { value: "none", label: "No grouping" },
-          ]}
-        />
-        <ClearFilters
-          count={(head !== "all" ? 1 : 0) + (owners.length > 0 ? 1 : 0) + (status !== "all" ? 1 : 0)
-            + (win !== "quarter" ? 1 : 0) + (group !== "month" ? 1 : 0)}
-          onClear={() => {
-            setHead("all"); setOwners([]); setStatus("all");
-            setWin("quarter"); setGroup("month"); setLimit(ROWS);
-          }}
-        />
-        <span className="u-spacer" />
-        <select className="plain" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort rows">
-          <option value="late">Most late</option>
-          <option value="open">Most open</option>
-          <option value="fees">Late fees</option>
-          <option value="name">Name</option>
-        </select>
-      </div>
+      <div className="filters">{filterControls}</div>
 
       {columns.length === 0 || rows.length === 0 ? (
         <div className="sheet">
@@ -309,14 +382,19 @@ export function MatrixPage() {
               module, so it belongs to it rather than to the page header. */}
           <div className={`trkbox${expanded ? " is-expanded" : ""}`}>
             {expanded ? (
-              <div className="trkbar">
-                <b>Compliance tracker</b>
-                <span className="num">{visible.length} of {rows.length.toLocaleString("en-IN")} clients × {columns.length} compliances</span>
-                <span className="u-spacer" />
-                <button type="button" className="btn btn--sm" onClick={() => setExpanded(false)}>
-                  <Icon name="collapse" size={13} /> Exit full screen
-                  <span className="kbd">esc</span>
-                </button>
+              <div className="trkhead">
+                <div className="trkbar">
+                  <b>Compliance tracker</b>
+                  <span className="num">{visible.length} of {rows.length.toLocaleString("en-IN")} clients × {columns.length} compliances</span>
+                  <span className="u-spacer" />
+                  <button type="button" className="btn btn--sm" onClick={() => setExpanded(false)}>
+                    <Icon name="fullscreenExit" size={13} /> Exit full screen
+                    <span className="kbd">esc</span>
+                  </button>
+                </div>
+                {/* The same controls as the page, so expanding never costs you
+                    the ability to narrow what you are looking at. */}
+                <div className="trkfilters">{filterControls}</div>
               </div>
             ) : (
               <button
@@ -326,10 +404,10 @@ export function MatrixPage() {
                 title="Expand to full screen"
                 aria-label="Expand the grid to full screen"
               >
-                <Icon name="expand" size={14} />
+                <Icon name="fullscreen" size={14} />
               </button>
             )}
-          <div className="trkwrap">
+          <div className="trkwrap" ref={wrapRef}>
             <table className="trk">
               <thead>
                 {spans.length > 0 ? (
@@ -400,9 +478,15 @@ export function MatrixPage() {
                 })}
               </tbody>
             </table>
-          </div>
+            {/* Crossing this pulls the next batch. Inside the scroller, so it
+                moves with the rows rather than with the page. */}
+            <div ref={endRef} className="trkend" aria-hidden="true" />
           </div>
 
+          {/* Inside .trkbox, not after it. As a sibling of the box this footer
+              sat behind the full-screen overlay, so expanding the grid hid the
+              legend AND the "Show more" button — capping the reader at the
+              first 50 clients on the one screen built for seeing more. */}
           <div className="trkfoot">
             <span className="u-row" style={{ gap: "var(--s4)", flexWrap: "wrap" }}>
               <span className="u-row"><i className="lg lg--filed" /> Filed</span>
@@ -420,6 +504,7 @@ export function MatrixPage() {
                 Showing all {rows.length.toLocaleString("en-IN")} matching clients
               </span>
             )}
+          </div>
           </div>
 
           <p className="u-faint" style={{ fontSize: "var(--t-11)", marginTop: "var(--s4)" }}>

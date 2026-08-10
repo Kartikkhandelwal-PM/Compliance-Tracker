@@ -29,13 +29,13 @@
    filings it belongs to.
    ========================================================================== */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { Icon } from "./ui/Icon.tsx";
 import type { IconName } from "./ui/Icon.tsx";
 import { CommandPalette } from "./ui/CommandPalette.tsx";
-import { useApp, useObligations, useOutbox } from "./ui/app-state.tsx";
-import { summarise } from "./domain/engine.ts";
+import { useApp, useEngine, useObligations, useOutbox } from "./ui/app-state.tsx";
+import { getNotificationSettings, summarise } from "./domain/engine.ts";
 import { CLIENTS, CLIENT_BY_ID } from "./domain/book.ts";
 import { DEFS } from "./domain/catalog.ts";
 import { TODAY, addDays, fmtDate } from "./domain/dates.ts";
@@ -69,13 +69,46 @@ export function App() {
   const { theme, toggleTheme, me } = useApp();
   const obligations = useObligations();
   const outbox = useOutbox();
+  const notifSettings = useEngine(getNotificationSettings);
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  /* On a phone the rail has nowhere to live permanently — it opens as an
+     off-canvas drawer over the page instead of sharing the row with it. */
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   /* Shown once per page load while the engine builds the book. */
   const [booting, setBooting] = useState(true);
+
+  /* The scrolling element is `.work`, not the window. */
+  const workRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [location.pathname]);
+
+  /**
+   * Send a new page back to the top.
+   *
+   * Nothing does this for us. The window never scrolls — `.work` owns the
+   * overflow — so the browser has no scroll position to restore and React
+   * Router's <ScrollRestoration> is both unavailable under BrowserRouter and
+   * scoped to the window regardless. The result was that leaving the tracker
+   * half-scrolled and coming back later dropped the reader into the middle of
+   * a grid, under a heading they never saw.
+   *
+   * `behavior: "instant"` because `.work` is declared `scroll-behavior: smooth`
+   * for in-page anchors; inherited here it would turn every navigation into a
+   * long glide up through the previous page's content.
+   *
+   * Keyed on pathname only. The query string is page-local state on several
+   * screens — Filing runs keeps its tab there, and the log its filters — and
+   * those must not throw the reader to the top mid-task.
+   */
+  useEffect(() => {
+    workRef.current?.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  }, [location.pathname]);
 
   const summary = useMemo(() => summarise(obligations), [obligations]);
 
@@ -108,6 +141,7 @@ export function App() {
     { to: "/tracker", label: "Tracker", icon: "matrix", count: summary.overdueCount, alarm: summary.overdueCount > 0 },
     { to: "/clients", label: "Clients", icon: "clients", count: CLIENTS.length },
     { to: "/reminders", label: "Reminders", icon: "outbox" },
+    { to: "/settings", label: "Settings", icon: "settings" },
   ];
 
   const crumbs = useMemo(() => breadcrumbs(location.pathname), [location.pathname]);
@@ -117,6 +151,10 @@ export function App() {
      it. Nothing here is a "welcome" or a "tip". */
   const notifications = useMemo(() => {
     const list: { to: string; title: string; body: string; tone: string; icon: IconName }[] = [];
+    /* Which conditions are allowed to shout is firm configuration — every one
+       of these is real, but which of them a given practice wants raised
+       differs. Set on Settings → Notifications. */
+    const on = notifSettings;
 
     const worst = new Map<string, { form: string; period: string; runId: string; n: number }>();
     let failedSends = 0;
@@ -132,54 +170,68 @@ export function App() {
     for (const e of outbox) if (e.status === "Failed") failedSends++;
 
     const top = [...worst.values()].sort((a, b) => b.n - a.n)[0];
-    if (top) {
+    if (top && on.gap) {
       list.push({
         to: `/runs/${encodeURIComponent(top.runId)}`,
         title: `${top.n} clients have not filed ${top.form}`,
-        body: `${top.period} · the widest gap in the book right now`,
+        body: `${top.period} · highest number of pending clients`,
         tone: "risk",
         icon: "alert",
       });
     }
-    if (dueToday > 0) {
+    if (dueToday > 0 && on.dueToday) {
       list.push({
-        to: "/calendar",
+        to: `/calendar?date=${TODAY}`,
         title: `${dueToday.toLocaleString("en-IN")} filings are due today`,
-        body: "Landing before midnight",
+        body: "Due by end of day",
         tone: "warn",
         icon: "clock",
       });
     }
-    if (summary.unassigned > 0) {
+    if (summary.unassigned > 0 && on.unowned) {
       list.push({
         to: "/clients?owner=none",
         title: `${summary.unassigned.toLocaleString("en-IN")} open items have no owner`,
-        body: "Nobody is accountable for these yet",
+        body: "No staff member is assigned",
         tone: "warn",
         icon: "user",
       });
     }
-    if (failedSends > 0) {
+    if (failedSends > 0 && on.failed) {
       list.push({
-        to: "/reminders",
+        to: "/reminders?status=failed",
         title: `${failedSends} reminders failed to send`,
-        body: "The client was never actually told",
+        body: "The client was not notified",
         tone: "risk",
         icon: "send",
       });
     }
     return list;
-  }, [obligations, outbox, summary.unassigned]);
+  }, [obligations, outbox, summary.unassigned, notifSettings]);
 
   return (
     <div className="shell">
-      <nav className={`rail${collapsed ? " is-collapsed" : ""}`} aria-label="Main">
+      {mobileNavOpen ? (
+        <div className="railscrim" onClick={() => setMobileNavOpen(false)} />
+      ) : null}
+      <nav
+        className={`rail${collapsed ? " is-collapsed" : ""}${mobileNavOpen ? " is-mobile-open" : ""}`}
+        aria-label="Main"
+      >
         <div className="rail__brand">
           <span className="rail__mark"><Logo size={26} /></span>
           <span className="rail__wordmark">
             <b>Compliance Tracker</b>
             <span>KDK · {fmtDate(TODAY)}</span>
           </span>
+          <button
+            type="button"
+            className="railclose"
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="Close menu"
+          >
+            <Icon name="close" size={18} />
+          </button>
         </div>
 
         <div className="rail__scroll">
@@ -237,13 +289,22 @@ export function App() {
         </div>
       </nav>
 
-      <main className="work">
+      <main className="work" ref={workRef}>
         {/* The breadcrumb used to repeat the page title on every top-level
             screen, so "Dashboard" appeared twice within 60px of itself. It now
             renders only where it earns its place: on a nested route, as a way
             back up. Top-level pages leave the slot empty and let the page's own
             header be the single title. */}
         <div className="topline">
+          <button
+            type="button"
+            className="navtoggle iconbtn"
+            onClick={() => setMobileNavOpen((v) => !v)}
+            aria-label="Open menu"
+            aria-expanded={mobileNavOpen}
+          >
+            <Icon name="menu" size={19} />
+          </button>
           {crumbs.length > 1 ? (
             <div className="crumbs">
               {crumbs.map((c, i) => (

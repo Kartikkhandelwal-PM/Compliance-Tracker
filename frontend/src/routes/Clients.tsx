@@ -150,7 +150,7 @@ export function ClientsPage() {
           {ALL_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select className="plain" value={owner} onChange={(e) => { setOwner(e.target.value); setLimit(PAGE); }}>
-          <option value="all">Any owner</option>
+          <option value="all">All owners</option>
           <option value="none">Unassigned</option>
           {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
@@ -159,7 +159,7 @@ export function ClientsPage() {
           value={health}
           onChange={(e) => { setHealth(e.target.value as Health); setLimit(PAGE); }}
         >
-          <option value="all">Any state</option>
+          <option value="all">All clients</option>
           <option value="arrears">In arrears</option>
           <option value="clear">Up to date</option>
         </select>
