@@ -442,7 +442,15 @@ export function CalendarPage() {
             value={monthTotals.filed.toLocaleString("en-IN")}
             tone="filed"
             icon="check"
-            sub="closed for this month's dates"
+            /* A fraction of the month's own workload, not a bare count. This
+               card counts DUE DATES in this month that are done, while the
+               dashboard's "Filed this month" counts work COMPLETED this month
+               whatever it was due — so the two screens legitimately disagree
+               (the gap is arrears cleared from earlier months). "Closed for
+               this month's dates" was trying to say that and wasn't landing;
+               naming the denominator does, because it ties the figure to the
+               1,026 open sitting in the card beside it. */
+            sub={`of ${(monthTotals.filed + monthTotals.open).toLocaleString("en-IN")} due in ${MONTHS[cm - 1]}`}
           />
           <Stat
             label="Busiest date"

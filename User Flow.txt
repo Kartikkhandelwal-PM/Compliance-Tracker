@@ -1,0 +1,115 @@
+COMPLIANCE TRACKER — END-TO-END USER FLOW
+==========================================
+(Plain-language walkthrough, for revision. Matches the code in frontend/src/domain/)
+
+STEP 1 — CLIENT DATA COMES FROM KDK
+------------------------------------
+KDK already holds the firm's client master: PAN, GSTIN, CIN, entity type
+(Individual/Firm/LLP/Company/Trust), turnover, income, state, GST registration
+type, director/DIN status, payroll headcount, etc.
+
+  -> In the app this becomes: Client + ClientProfile
+     (frontend/src/domain/types.ts — Client, ClientProfile)
+
+This is the raw fact sheet about the client. Nothing about filings yet.
+
+
+STEP 2 — CLIENT PROFILE MAPS AGAINST THE COMPLIANCE CALENDAR (RULE ENGINE)
+---------------------------------------------------------------------------
+The firm also maintains a Master Compliance Calendar: every form that exists
+(GSTR-3B, GSTR-1, TDS returns, ITR, ROC/MCA filings, PF/ESI, etc.), its
+frequency, its due-date rule, and WHO it applies to.
+
+The rule engine reads each client's profile against every compliance's
+applicability condition and decides: does this apply to THIS client, and why.
+
+  -> Function: applicableCompliances() in domain/rules.ts
+  -> Output: RuleHit — the exact rule that fired + the profile fields that
+     triggered it (so staff can audit "why is this client on GSTR-9?")
+
+This is the "mapping" step — client meets compliance calendar, and only the
+relevant subset survives.
+
+
+STEP 3 — DUE DATES GET GENERATED (OCCURRENCES)
+------------------------------------------------
+For every compliance that applies, the engine expands it into actual dated
+instances based on its frequency (Monthly / Quarterly / Half-yearly / Annual /
+Event-based).
+
+  Example: GSTR-3B is Monthly -> one Occurrence per month, due date = 20th of
+  the following month.
+
+  -> Type: Occurrence (defCode + period + dueDate)
+
+So now we have: THIS client must file THIS form for THIS period by THIS date.
+
+
+STEP 4 — CLIENT x OCCURRENCE = OBLIGATION (the actual trackable unit)
+------------------------------------------------------------------------
+Every (client, occurrence) pair becomes one Obligation — the row everything
+else hangs off:
+
+  - status: Filed / Pending / Overdue / Not Applicable
+  - basis: how we know (Portal verified / Filed via KDK / Manually marked /
+    Rule-excluded / Manually excluded / Due date passed or not)
+  - daysOverdue, exposure (₹ estimated penalty if late), exposureFormula
+  - assigneeId (which staff member owns it)
+  - reminderStage (where it is in the WhatsApp/Email ladder)
+
+  -> Type: Obligation in domain/types.ts
+  -> Built by: build() in domain/engine.ts
+
+This is the single source of truth per client per filing.
+
+
+STEP 5 — REMINDERS GET SCHEDULED AUTOMATICALLY
+--------------------------------------------------
+A reminder ladder sits on top of the due date (offsets, not fixed dates):
+  T-7 (7 days before) -> T-3 -> Due date -> Overdue escalation
+
+This ladder is the SAME for every compliance and every client, so it scales
+to thousands of clients without anyone maintaining a manual chase list.
+
+  -> ScheduleStep (the ladder definition, editable in Settings)
+  -> ScheduledSend (one future batch = one run x one step, aggregated by run,
+     never listed one-client-at-a-time)
+  -> Fires via: runScheduler() -> sends WhatsApp/Email -> logged as OutboxEntry
+
+Reminders keep going until the obligation is marked Filed, or someone
+suppresses/skips that send.
+
+
+STEP 6 — FILING GETS CONFIRMED (status closes the loop)
+------------------------------------------------------------
+Three ways an Obligation moves to "Filed":
+  1. Portal verified — checked against the government portal
+  2. Filed via KDK — synced automatically from KDK once the return is filed
+  3. Manually marked — staff marks it filed by hand (single or bulk action)
+
+Whichever way, the record keeps WHO/WHEN/HOW (filedBy, filedOn, arn where
+available) — this is the audit trail. Once filed, reminders for that
+obligation stop.
+
+
+STEP 7 — EVERYTHING ROLLS UP INTO DASHBOARDS
+------------------------------------------------
+Obligations aggregate (never shown one-per-client on a list — always grouped
+by compliance/run/client-count) into the screens:
+
+  - Today       -> what's in arrears, due this week, on the horizon
+  - Runs        -> one row per compliance x period, across all clients
+  - Clients     -> per-client health (clear / in arrears), assigned staff
+  - Calendar    -> day-by-day due-date load across the FY
+  - Compliance  -> drill into one form's history across periods
+
+Colour and urgency (this week / overdue) is the only signal — the whole
+design is built so a 10,000-client book still reads as a short list of
+decisions, not 10,000 rows.
+
+
+ONE-LINE SUMMARY
+------------------
+KDK client data -> mapped to applicable compliances (rule engine) ->
+expanded into dated Obligations -> chased automatically on a reminder ladder
+-> closed out by portal/KDK-sync/manual filing -> rolled up into dashboards.

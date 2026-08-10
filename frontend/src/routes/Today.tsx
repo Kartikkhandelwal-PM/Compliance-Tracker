@@ -20,7 +20,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp, useObligations } from "../ui/app-state.tsx";
 import { buildRuns, dayLoads, summarise } from "../domain/engine.ts";
-import { TODAY, addDays, dow, fmtLong, fmtShort, inrShort, urgency } from "../domain/dates.ts";
+import { MONTHS, TODAY, addDays, dow, fmtLong, fmtShort, inrShort, urgency } from "../domain/dates.ts";
 import { CountUp, PageHead, Seg, Stat } from "../ui/bits.tsx";
 import { Runway } from "../ui/Runway.tsx";
 import { RunList, type RunSort } from "../ui/RunList.tsx";
@@ -274,7 +274,15 @@ export function TodayPage() {
             tone="filed"
             icon="check"
             onClick={() => setFiledOpen(true)}
-            sub="click for the breakdown"
+            /* Names the axis instead of the interaction. This counts work
+               COMPLETED this month whatever it was due — including arrears
+               cleared from earlier months — while the calendar's "Filed" card
+               counts this month's DUE DATES that are done. Two different
+               questions, and the two screens showed different numbers under the
+               same word with nothing to explain the gap. That the card opens a
+               breakdown is discoverable by clicking it; which of the two figures
+               it is, is not. */
+            sub={`completed in ${MONTHS[Number(TODAY.slice(5, 7)) - 1]}, any due date`}
           />
           <Stat
             label="Unowned"
