@@ -392,8 +392,6 @@ export function App() {
                       <Link to="/tracker" className="pop__footlink" onClick={() => setNotifOpen(false)}>
                         Open the tracker
                       </Link>
-                      <span className="u-spacer" />
-                      <span className="pop__foothint">Rebuilt from the book, live</span>
                     </div>
                   </div>
                 </>

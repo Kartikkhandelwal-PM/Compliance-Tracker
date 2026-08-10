@@ -311,7 +311,7 @@ export function CalendarPage() {
               <b>{monthTotals.open.toLocaleString("en-IN")}</b> open
             </>
           ) : (
-            <>statutory dates only. The book is seeded for {fyLabel(FY_START)}.</>
+            <>statutory due dates only · client filings are available for {fyLabel(FY_START)}</>
           )
         }
         aside={
@@ -352,7 +352,7 @@ export function CalendarPage() {
           value={owner}
           onChange={(e) => { setOwner(e.target.value); setPicked(null); }}
           disabled={!seeded}
-          title={seeded ? undefined : "Owners come from the client book, which is only seeded for the current FY"}
+          title={seeded ? undefined : `Owners can only be filtered for ${fyLabel(FY_START)}`}
         >
           <option value="all">Any owner</option>
           <option value="none">Unassigned</option>
@@ -364,7 +364,7 @@ export function CalendarPage() {
           onChange={(e) => { setDayState(e.target.value as typeof dayState); setPicked(null); }}
           disabled={!seeded}
           aria-label="Day state"
-          title={seeded ? undefined : "Arrears need a client book, which this FY does not have"}
+          title={seeded ? undefined : `Arrears can only be shown for ${fyLabel(FY_START)}`}
         >
           <option value="all">All days</option>
           <option value="arrears">With arrears</option>

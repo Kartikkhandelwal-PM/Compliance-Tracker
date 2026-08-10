@@ -195,14 +195,14 @@ export function ObligationDrawer({
       <div className="obwhy">
         <div className="obwhy__head">
           <Icon name="rules" size={14} />
-          <span>{o.override ? "Overridden by a person" : "Why this applies"}</span>
+          <span>{o.override ? "Changed manually" : "Why this applies"}</span>
           <span className="num obwhy__ref">{o.rule.ruleRef}</span>
         </div>
         <p className="obwhy__rule">
           {o.override ? (
             <>
               <b>{o.override.by}</b> {o.override.action === "excluded" ? "removed" : "added back"} this
-              compliance on <span className="num">{o.override.on}</span>. Reason given:
+              compliance on <span className="num">{fmtLong(o.override.on)}</span>. Reason given:
               “{o.override.reason}”
             </>
           ) : (
@@ -210,7 +210,7 @@ export function ObligationDrawer({
           )}
         </p>
         {o.override ? (
-          <p className="obwhy__engine">The engine's own conclusion was: {o.rule.condition}</p>
+          <p className="obwhy__engine">What the rules say: {o.rule.condition}</p>
         ) : null}
         <div className="obwhy__facts">
           {shownFacts.map((f, i) => (

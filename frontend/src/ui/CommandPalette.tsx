@@ -34,7 +34,7 @@ const NAV: Item[] = [
   { group: "Go to", label: "Calendar", sub: "when everything is due", icon: "calendar", to: "/calendar" },
   { group: "Go to", label: "Compliances", sub: "the catalogue", icon: "rules", to: "/compliances" },
   { group: "Go to", label: "Tracker", sub: "every client × every compliance", icon: "matrix", to: "/tracker" },
-  { group: "Go to", label: "Clients", sub: "the book", icon: "clients", to: "/clients" },
+  { group: "Go to", label: "Clients", sub: "everyone you file for", icon: "clients", to: "/clients" },
   { group: "Go to", label: "Reminders", sub: "what clients were told", icon: "outbox", to: "/reminders" },
   { group: "Go to", label: "Settings", sub: "firm configuration", icon: "settings", to: "/settings" },
 ];
