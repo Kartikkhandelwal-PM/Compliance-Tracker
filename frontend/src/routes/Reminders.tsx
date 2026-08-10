@@ -38,6 +38,10 @@ const DELIVERY_TAG: Record<string, string> = {
   Read: "tag--read",
   Delivered: "tag--delivered",
   "Queued (quiet hours)": "tag--queued",
+  /* Cancelled is not a failure — the client filed, so the chase was correctly
+     dropped. Neutral grey, never the red that would have staff investigating a
+     system working exactly as intended. */
+  Cancelled: "tag--neutral",
   Failed: "tag--overdue",
 };
 
@@ -56,6 +60,7 @@ const STATUS_PARAM: Record<string, string> = {
   held: "Queued (quiet hours)",
   read: "Read",
   delivered: "Delivered",
+  cancelled: "Cancelled",
 };
 
 type Tab = "log" | "scheduled";
@@ -329,6 +334,7 @@ function LogTab() {
             { value: "Read", label: "Read" },
             { value: "Delivered", label: "Delivered, not read" },
             { value: "Queued (quiet hours)", label: "Held" },
+            { value: "Cancelled", label: "Cancelled — already filed" },
             { value: "Failed", label: "Failed" },
           ]}
         />
@@ -410,7 +416,19 @@ function LogTab() {
               <button
                 type="button"
                 className="btn btn--sm"
-                onClick={() => toast(`Released ${releaseQueued()} held ${queued === 1 ? "message" : "messages"}`)}
+                /* Both numbers are reported. Saying only "released 40" when 6 of
+                   them were dropped hides the more interesting half — that six
+                   clients filed while the messages were held, so they were not
+                   chased. */
+                onClick={() => {
+                  const { sent, cancelled } = releaseQueued();
+                  const one = (n: number) => (n === 1 ? "message" : "messages");
+                  toast(
+                    cancelled > 0
+                      ? `Sent ${sent} ${one(sent)} · cancelled ${cancelled} already filed`
+                      : `Released ${sent} held ${one(sent)}`,
+                  );
+                }}
               >
                 <Icon name="clock" size={14} /> Send now
               </button>

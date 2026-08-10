@@ -41,9 +41,13 @@ export function FiledDrawer({ open, onClose }: { open: boolean; onClose: () => v
 
   const total = useMemo(() => groups.reduce((a, g) => a + g.count, 0), [groups]);
   const clients = useMemo(
-    () => new Set(groups.flatMap((g) => g.clientIds)).size,
+    () => new Set(groups.flatMap((g) => g.rows.map((r) => r.clientId))).size,
     [groups],
   );
+  /* Filings with no acknowledgement on record. Surfaced because it is the one
+     number the export is worth running for: these are the rows that cannot be
+     proved from inside the app if a notice arrives. */
+  const noArn = useMemo(() => groups.reduce((a, g) => a + g.withoutArn, 0), [groups]);
 
   /* Step through months that actually have filings, so the arrows can never
      land somewhere empty. */
@@ -52,13 +56,18 @@ export function FiledDrawer({ open, onClose }: { open: boolean; onClose: () => v
   const newer = idx > 0 ? months[idx - 1] : null;
 
   const exportCsv = () => {
-    const head = ["Compliance", "Head", "Period", "Due date", "Client", "PAN"];
+    const head = [
+      "Compliance", "Head", "Period", "Due date", "Client", "PAN",
+      "Filed on", "Status source", "Acknowledgement", "Recorded by",
+    ];
     const lines: string[] = [];
     for (const g of groups) {
-      for (const id of g.clientIds) {
-        const c = CLIENT_BY_ID[id];
-        lines.push([g.form, g.head, g.periodLabel, g.dueDate, c?.name ?? id, c?.pan ?? ""]
-          .map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
+      for (const r of g.rows) {
+        const c = CLIENT_BY_ID[r.clientId];
+        lines.push([
+          g.form, g.head, g.periodLabel, g.dueDate, c?.name ?? r.clientId, c?.pan ?? "",
+          r.filedOn, r.basis, r.arn ?? "", r.filedBy ?? "",
+        ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
       }
     }
     const blob = new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
@@ -77,7 +86,12 @@ export function FiledDrawer({ open, onClose }: { open: boolean; onClose: () => v
       title={`Filed in ${monthLabelOf(month)}`}
       subtitle={
         total > 0
-          ? <><b>{total.toLocaleString("en-IN")}</b> filings · {clients.toLocaleString("en-IN")} clients</>
+          ? (
+            <>
+              <b>{total.toLocaleString("en-IN")}</b> filings · {clients.toLocaleString("en-IN")} clients
+              {noArn > 0 ? <> · {noArn.toLocaleString("en-IN")} without an acknowledgement</> : null}
+            </>
+          )
           : "Nothing completed in this month"
       }
       footer={
@@ -142,18 +156,20 @@ export function FiledDrawer({ open, onClose }: { open: boolean; onClose: () => v
                     {/* Capped. The point of the drill-down is "who", answered
                         for a readable number of them; the full set is the
                         export's job. */}
-                    {g.clientIds.slice(0, 40).map((id) => {
-                      const c = CLIENT_BY_ID[id];
+                    {g.rows.slice(0, 40).map((r) => {
+                      const c = CLIENT_BY_ID[r.clientId];
                       return (
-                        <Link key={id} to={`/clients/${id}`} className="filedcli" onClick={onClose}>
-                          <span className="u-truncate">{c?.name ?? id}</span>
-                          <span className="u-faint num">{c?.pan ?? ""}</span>
+                        <Link key={r.clientId} to={`/clients/${r.clientId}`} className="filedcli" onClick={onClose}>
+                          <span className="u-truncate">{c?.name ?? r.clientId}</span>
+                          {r.arn
+                            ? <span className="u-faint num">{r.arn}</span>
+                            : <span className="u-faint">no ARN</span>}
                         </Link>
                       );
                     })}
-                    {g.clientIds.length > 40 ? (
+                    {g.rows.length > 40 ? (
                       <div className="filedrow__more">
-                        +{(g.clientIds.length - 40).toLocaleString("en-IN")} more · use Export for the full list
+                        +{(g.rows.length - 40).toLocaleString("en-IN")} more · use Export for the full list
                       </div>
                     ) : null}
                   </div>

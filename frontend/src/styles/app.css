@@ -4882,6 +4882,23 @@ a.calpill.p-overdue:hover {
   gap: var(--s2);
   animation: rise 0.18s cubic-bezier(0.2, 0, 0.2, 1);
 }
+/* Reads as a control on the dark toast rather than as more of the sentence —
+   an underlined word gets missed in the few seconds an undo is on screen. */
+.toast__action {
+  margin-left: var(--s2);
+  padding: 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--ink-invert) 38%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--ink-invert) 12%, transparent);
+  color: var(--ink-invert);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.toast__action:hover {
+  background: color-mix(in srgb, var(--ink-invert) 22%, transparent);
+  border-color: color-mix(in srgb, var(--ink-invert) 60%, transparent);
+}
 
 .note {
   border: 1px solid var(--rule);
@@ -5951,6 +5968,32 @@ a.cprofile__ch:hover {
   color: var(--ink-2);
   margin-top: 4px;
   line-height: 1.5;
+}
+
+/* Filing record. Occupies the same slot as the fee block but reads as a settled
+   fact rather than a running risk, so no red and no oversized figure.
+
+   A filing with no acknowledgement says so in words instead of leaving a blank.
+   The number is optional by design — a bulk mark-filed cannot collect one per
+   client — so its absence is a normal state that has to be legible, not an
+   error to shout about. */
+.obstate__ack {
+  padding: var(--s3) var(--s4) var(--s4);
+  border-top: 1px solid var(--rule);
+  background: var(--sunk);
+}
+.obstate__ack b {
+  font-size: var(--t-16);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.obstate__ack b.is-missing {
+  font-weight: 500;
+  font-size: var(--t-14);
+  letter-spacing: 0;
+  color: var(--ink-4);
 }
 
 /* Why it applies: the trust surface, never behind a click. */

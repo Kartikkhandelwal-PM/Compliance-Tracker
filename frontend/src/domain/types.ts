@@ -209,6 +209,18 @@ export interface Obligation {
   exposure: number;
   exposureFormula: string;
   filedOn?: string;
+  /** Who recorded the filing. Always set when a person marked it — including
+   *  through a bulk action, where it is the only thing that can be captured.
+   *  Absent on portal and software confirmations, which have no human author. */
+  filedBy?: string;
+  /** Portal acknowledgement: ARN, receipt or token number.
+   *
+   *  Deliberately optional. Marking one client filed can ask for it, but a bulk
+   *  action covering 400 clients cannot collect 400 different numbers, and
+   *  demanding one would either stop the bulk action being used or get it filled
+   *  with junk. So a filed obligation may legitimately have no acknowledgement,
+   *  and the record says so rather than pretending otherwise. */
+  arn?: string;
   reminderStage: ReminderStage;
 }
 
@@ -240,7 +252,16 @@ export interface FilingRun {
 
 export type Channel = "WhatsApp" | "Email";
 
-export type DeliveryStatus = "Delivered" | "Read" | "Queued (quiet hours)" | "Failed";
+export type DeliveryStatus =
+  | "Delivered"
+  | "Read"
+  | "Queued (quiet hours)"
+  /** Held for quiet hours, then dropped because the return was settled before
+   *  the hold expired. Kept in the log rather than deleted: "we did not chase
+   *  them because they had already filed" is a thing staff need to be able to
+   *  see, and a vanished row looks like a system that lost the message. */
+  | "Cancelled"
+  | "Failed";
 
 export interface OutboxEntry {
   id: string;

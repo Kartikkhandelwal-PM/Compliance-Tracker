@@ -14,7 +14,9 @@ import { Link } from "react-router-dom";
 import type { Obligation } from "../domain/types.ts";
 import { CLIENT_BY_ID, STAFF } from "../domain/book.ts";
 import { DEF_BY_CODE } from "../domain/catalog.ts";
-import { markFiled, markNotApplicable, reassign, reinstate, sendReminders } from "../domain/engine.ts";
+import {
+  markFiled, markNotApplicable, reassign, reinstate, sendReminders, unmarkFiled,
+} from "../domain/engine.ts";
 import { fmtLong, inr } from "../domain/dates.ts";
 import { Countdown, StatusTag } from "./bits.tsx";
 import { Drawer } from "./Drawer.tsx";
@@ -26,7 +28,8 @@ export function ObligationDrawer({
 }: { obligation: Obligation | null; onClose: () => void }) {
   const { toast, me } = useApp();
   const [reason, setReason] = useState("");
-  const [asking, setAsking] = useState<"na" | "reinstate" | null>(null);
+  const [arn, setArn] = useState("");
+  const [asking, setAsking] = useState<"na" | "reinstate" | "filed" | null>(null);
 
   /* The engine emits a "Due-date route" fact whose value is the statutory rule
      verbatim, which the Record tab already shows. Two copies of the same
@@ -48,6 +51,7 @@ export function ObligationDrawer({
   const close = () => {
     setAsking(null);
     setReason("");
+    setArn("");
     onClose();
   };
 
@@ -69,7 +73,7 @@ export function ObligationDrawer({
             <button
               type="button"
               className="btn btn--primary"
-              onClick={() => { markFiled([o.id]); toast(`${o.form} marked filed for ${client.name}`); close(); }}
+              onClick={() => setAsking("filed")}
             >
               <Icon name="check" size={15} /> Mark as filed
             </button>
@@ -84,6 +88,26 @@ export function ObligationDrawer({
               }}
             >
               <Icon name="send" size={15} /> Send reminder
+            </button>
+          ) : null}
+          {/* The lasting way back, for when the toast's Undo is long gone —
+              someone spots the mistake a week later, or a client says the return
+              they reported as filed was rejected.
+
+              Offered only on filings a person recorded. A portal confirmation or
+              a KDK filing receipt is evidence from outside this app, and letting
+              a button here overrule it would make the status mean nothing. */}
+          {o.status === "Filed" && o.basis === "Manually marked" ? (
+            <button
+              type="button"
+              className="btn"
+              onClick={() => {
+                unmarkFiled([o.id]);
+                toast(`${o.form} reopened for ${client.name}`);
+                close();
+              }}
+            >
+              <Icon name="history" size={15} /> Not filed after all
             </button>
           ) : null}
           <span className="u-spacer" />
@@ -110,7 +134,13 @@ export function ObligationDrawer({
       <div className={`obstate${o.status === "Overdue" ? " is-risk" : ""}`}>
         <div className="obstate__row">
           <StatusTag status={o.status} />
-          {o.status !== "Not Applicable" ? <Countdown due={o.dueDate} /> : null}
+          {/* Only while the return is still open. `Countdown` reads the due date
+              alone, so on a settled row it announced "Filed · 31 days overdue"
+              in red — contradicting both the status beside it and the filing
+              date below it. Nothing is overdue once it has been filed. */}
+          {o.status === "Pending" || o.status === "Overdue"
+            ? <Countdown due={o.dueDate} />
+            : null}
           <span className="u-spacer" />
           {o.override
             ? <span className="tag tag--outline">Manual override</span>
@@ -142,6 +172,20 @@ export function ObligationDrawer({
             <b className="num">₹{inr(o.exposure)}</b>
             <span className="obstate__feesub">
               over {o.daysOverdue} {o.daysOverdue === 1 ? "day" : "days"} · {o.exposureFormula}
+            </span>
+          </div>
+        ) : null}
+
+        {o.status === "Filed" ? (
+          <div className="obstate__ack">
+            <span className="obstate__k">Acknowledgement</span>
+            {o.arn
+              ? <b className="num">{o.arn}</b>
+              : <b className="is-missing">Not recorded</b>}
+            <span className="obstate__feesub">
+              {o.basis}
+              {o.filedOn ? ` · filed ${fmtLong(o.filedOn)}` : ""}
+              {o.filedBy ? ` · recorded by ${o.filedBy}` : ""}
             </span>
           </div>
         ) : null}
@@ -181,8 +225,69 @@ export function ObligationDrawer({
         Open {client.name} <Icon name="chevronRight" size={13} />
       </Link>
 
+      {/* ---- Record a filing ----------------------------------------------
+           The acknowledgement is asked for here and nowhere else. Marking one
+           obligation filed can afford a field; the bulk action on the run
+           screen covers hundreds of clients at once and cannot collect a
+           different number for each, so requiring one would either stop the
+           bulk action being used or get it filled with the same junk value
+           hundreds of times. Optional and asked for beats mandatory and
+           worked around.
+
+           Who marked it is NOT asked for. The signed-in staff member is
+           already known, so it is recorded on every path including bulk. */}
+      {asking === "filed" ? (
+        <div className="sheet" style={{ marginTop: "var(--s4)" }}>
+          <div className="sheet__head">
+            <span className="sheet__title">Record this filing</span>
+          </div>
+          <div className="sheet__body">
+            <p className="u-mute" style={{ marginTop: 0, fontSize: "var(--t-13)" }}>
+              Recorded against <b>{me.name}</b> and dated today. Late fees stop accruing and any
+              scheduled reminder for this return is cancelled.
+            </p>
+            <label className="u-mute" style={{ fontSize: "var(--t-12)", display: "block", marginBottom: 4 }}>
+              Acknowledgement number — optional
+            </label>
+            <div className="field" style={{ height: 36 }}>
+              <input
+                autoFocus
+                value={arn}
+                placeholder={o.head === "GST" ? "ARN, e.g. AA0807260012345" : "ARN, receipt or token number"}
+                onChange={(e) => setArn(e.target.value)}
+              />
+            </div>
+            <div className="u-row" style={{ marginTop: "var(--s3)" }}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  const ack = arn.trim();
+                  markFiled([o.id], { by: me.name, arn: ack || undefined });
+                  toast(
+                    ack
+                      ? `${o.form} filed for ${client.name} · ${ack}`
+                      : `${o.form} marked filed for ${client.name}`,
+                    { label: "Undo", run: () => { unmarkFiled([o.id]); toast(`${o.form} reopened`); } },
+                  );
+                  close();
+                }}
+              >
+                {/* Not "Mark as filed" — that is the footer button that opened
+                    this prompt, and two controls with one label leaves the
+                    reader unsure whether anything has happened yet. */}
+                <Icon name="check" size={15} /> Record filing
+              </button>
+              <button type="button" className="btn" onClick={() => { setArn(""); setAsking(null); }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* ---- Override prompt ---------------------------------------------- */}
-      {asking ? (
+      {asking === "na" || asking === "reinstate" ? (
         <div className="sheet" style={{ marginTop: "var(--s4)" }}>
           <div className="sheet__head">
             <span className="sheet__title">

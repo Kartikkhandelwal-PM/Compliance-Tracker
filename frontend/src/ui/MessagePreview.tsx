@@ -35,6 +35,12 @@ function Receipt({ status }: { status: OutboxEntry["status"] }) {
   if (status.startsWith("Queued")) {
     return <Icon name="clock" size={12} className="wabubble__tick" />;
   }
+  /* Never left the building, so it must not carry delivery ticks — falling
+     through to the double tick claimed a message had reached a client who was
+     deliberately never sent it. */
+  if (status === "Cancelled") {
+    return <Icon name="ban" size={12} className="wabubble__tick" />;
+  }
   return (
     <Icon
       name="tickDouble"
@@ -164,7 +170,9 @@ export function MessagePreview({
                   ? "Delivered to the handset, not opened yet"
                   : e.status === "Failed"
                     ? "Never delivered. The number may be wrong or WhatsApp is not registered on it."
-                    : "Held until the sending window opens"}
+                    : e.status === "Cancelled"
+                      ? "Not sent. The return was filed while this was held for the sending window."
+                      : "Held until the sending window opens"}
             </div>
           </div>
 

@@ -54,6 +54,45 @@ function reminderStageFor(status: FilingStatus, dueDate: string, clientFacing: b
   return "T-7 scheduled";
 }
 
+/** A run of stable pseudo-random digits. Built in 6-digit chunks so a long
+ *  acknowledgement number never has to come out of one float. */
+function digitRun(id: string, salt: string, len: number): string {
+  let s = "";
+  for (let i = 0; s.length < len; i++) {
+    s += String(Math.floor(h(`${id}|${salt}|${i}`) * 1e6)).padStart(6, "0");
+  }
+  return s.slice(0, len);
+}
+
+/**
+ * A plausible portal acknowledgement for seeded history.
+ *
+ * Only filings that came from a portal or from KDK's own modules get one. A
+ * seeded "Manually marked" filing is left without, because that is the real
+ * gap this field exists to expose: someone ticked it off and no receipt was
+ * ever captured. The shapes only need to be recognisable to a practitioner —
+ * GST issues an ARN, the income-tax portal a 15-digit acknowledgement, MCA an
+ * SRN — since real numbers arrive from the portal, never from this function.
+ */
+function synthAck(id: string, head: Head, client: Client, filedOn: string): string {
+  const [y, m] = filedOn.split("-");
+  switch (head) {
+    case "GST": {
+      const st = client.gstin?.slice(0, 2) ?? "08";
+      const check = "ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(h(`${id}|ck`) * 24)];
+      return `AA${st}${m}${y.slice(2)}${digitRun(id, "arn", 6)}${check}`;
+    }
+    case "Income Tax":
+      return digitRun(id, "ack", 15);
+    case "ROC/MCA":
+    case "ROC/MCA (LLP)":
+      return `R${digitRun(id, "srn", 8)}`;
+    default:
+      /* TDS token numbers and challan receipts are both plain 15-digit runs. */
+      return digitRun(id, "tok", 15);
+  }
+}
+
 function build(): Obligation[] {
   const out: Obligation[] = [];
 
@@ -76,6 +115,8 @@ function build(): Obligation[] {
         let status: FilingStatus;
         let basis: StatusBasis;
         let filedOn: string | undefined;
+        let arn: string | undefined;
+        let filedBy: string | undefined;
         let override: Obligation["override"];
 
         /* ~1.5% of the book carries a human override — the spec requires
@@ -110,6 +151,7 @@ function build(): Obligation[] {
                that had not happened yet. Something already marked Filed must
                have been filed on or before today. */
             filedOn = addDays(TODAY, -Math.floor(h(id + "|f") * 6));
+            arn = synthAck(id, def.head, client, filedOn);
           } else {
             status = "Pending";
             basis = "Due date not passed";
@@ -128,6 +170,10 @@ function build(): Obligation[] {
                in the future, and a filing cannot be dated after today. */
             const guess = addDays(occ.dueDate, Math.floor(h(id + "|f") * 6) - 4);
             filedOn = guess > TODAY ? TODAY : guess;
+            /* Manually marked filings are left without an acknowledgement on
+               purpose — that is the gap, not an oversight in the seed. */
+            if (basis !== "Manually marked") arn = synthAck(id, def.head, client, filedOn);
+            else filedBy = staffOf(client.assigneeId).name;
           } else {
             status = "Overdue";
             basis = "Due date passed";
@@ -155,6 +201,8 @@ function build(): Obligation[] {
           exposure: exp.amount,
           exposureFormula: exp.formula,
           filedOn,
+          filedBy,
+          arn,
           reminderStage: reminderStageFor(status, occ.dueDate, def.clientFacing),
         });
       }
@@ -212,17 +260,35 @@ export function untrackedCodes(): Set<string> {
 
 let outbox: OutboxEntry[] = [];
 
-/** Mark a set of obligations filed — the manual fallback in the spec's
- *  three-source filing status model. */
-export function markFiled(ids: string[], by = "Manually marked" as StatusBasis) {
+/**
+ * Mark a set of obligations filed — the manual fallback in the spec's
+ * three-source filing status model.
+ *
+ * `by` is REQUIRED. Marking filed zeroes the penalty exposure and cancels the
+ * client's reminders, which makes it the entry most in need of an author: if a
+ * return turns out not to have been filed, "who decided this" is the first
+ * question asked. It costs the user nothing to capture — the signed-in staff
+ * member is already known — so it is recorded on every path, bulk included.
+ *
+ * `arn` is optional, and only the single-obligation path offers it. See the
+ * field's note on `Obligation` for why a bulk action cannot ask for one.
+ */
+export function markFiled(
+  ids: string[],
+  rec: { by: string; arn?: string },
+  basis: StatusBasis = "Manually marked",
+) {
   const set = new Set(ids);
+  const arn = rec.arn?.trim();
   OBLIGATIONS = OBLIGATIONS.map((o) => {
     if (!set.has(o.id) || o.status === "Filed") return o;
     return {
       ...o,
       status: "Filed",
-      basis: by,
+      basis,
       filedOn: TODAY,
+      filedBy: rec.by,
+      ...(arn ? { arn } : {}),
       daysOverdue: 0,
       exposure: 0,
       exposureFormula: "Filed — penalty no longer accruing.",
@@ -230,6 +296,50 @@ export function markFiled(ids: string[], by = "Manually marked" as StatusBasis) 
     };
   });
   emit();
+}
+
+/**
+ * Reverse a filing — the undo for a mis-click.
+ *
+ * Needed because marking filed is the one destructive action in the app that
+ * had no way back: it zeroes the penalty exposure and cancels the client's
+ * reminders, and the bulk control on the run screen can apply it to several
+ * hundred clients in a single press. Until the backend exists a refresh
+ * happens to rescue you; once filings persist, an unrecoverable mis-click on
+ * 400 clients silently understates the firm's exposure.
+ *
+ * The obligation goes back to whatever the due date says it is — Pending or
+ * Overdue — rather than to whatever it was before, because days have passed and
+ * the penalty has to be recomputed from today. Only obligations recorded as
+ * filed BY A PERSON can be reversed; a portal or software confirmation is not
+ * this screen's to overrule.
+ */
+export function unmarkFiled(ids: string[]): number {
+  const set = new Set(ids);
+  let n = 0;
+  OBLIGATIONS = OBLIGATIONS.map((o) => {
+    if (!set.has(o.id) || o.status !== "Filed" || o.basis !== "Manually marked") return o;
+    const client = CLIENT_BY_ID[o.clientId];
+    const def = DEF_BY_CODE[o.defCode];
+    const overdue = Math.max(0, diffDays(o.dueDate, TODAY));
+    const exp = estimateExposure(def, overdue, client);
+    const status: FilingStatus = overdue > 0 ? "Overdue" : "Pending";
+    n++;
+    return {
+      ...o,
+      status,
+      basis: overdue > 0 ? "Due date passed" : "Due date not passed",
+      filedOn: undefined,
+      filedBy: undefined,
+      arn: undefined,
+      daysOverdue: overdue,
+      exposure: exp.amount,
+      exposureFormula: exp.formula,
+      reminderStage: reminderStageFor(status, o.dueDate, def.clientFacing),
+    };
+  });
+  if (n > 0) emit();
+  return n;
 }
 
 /** Manual override: take a compliance off a client with a recorded reason. */
@@ -803,16 +913,36 @@ export function retryFailed(by = "s1"): number {
   return resendEntries(outbox.filter((e) => e.status === "Failed").map((e) => e.id), by);
 }
 
-/** Release everything held for quiet hours, now. */
-export function releaseQueued(): number {
-  let n = 0;
+/**
+ * Release everything held for quiet hours, now.
+ *
+ * Live status is re-checked per message before it goes out. A message held
+ * overnight can have been settled by morning — the client rings in, someone
+ * marks it filed — and releasing it anyway chases a client for a return this
+ * same app shows as filed. That is the one failure a reminder system cannot
+ * recover from, and the engine's own rule at the top of this section says a
+ * step is evaluated at SEND time; a held message is sent here, so this is send
+ * time. `resendEntries` has always guarded this; releasing did not.
+ *
+ * Cancelled messages stay in the log with a status of their own rather than
+ * being deleted, so "why didn't this go?" has an answer.
+ */
+export function releaseQueued(): { sent: number; cancelled: number } {
+  const byId = new Map(OBLIGATIONS.map((o) => [o.id, o]));
+  let sent = 0;
+  let cancelled = 0;
   outbox = outbox.map((e) => {
     if (!e.status.startsWith("Queued")) return e;
-    n++;
+    const o = byId.get(e.obligationId);
+    if (!o || !chaseable(o)) {
+      cancelled++;
+      return { ...e, status: "Cancelled" as DeliveryStatus };
+    }
+    sent++;
     return { ...e, status: outcome(`${e.id}|rel`, NOW), sentAt: NOW };
   });
-  if (n > 0) emit();
-  return n;
+  if (sent > 0 || cancelled > 0) emit();
+  return { sent, cancelled };
 }
 
 export function getOutbox(): OutboxEntry[] {
@@ -962,6 +1092,15 @@ export interface FirmSummary {
    by, not spill a client list nobody can read at 10,000.
    ========================================================================== */
 
+/** One completed filing inside a group — enough to prove it happened. */
+export interface FiledRow {
+  clientId: string;
+  filedOn: string;
+  basis: StatusBasis;
+  arn?: string;
+  filedBy?: string;
+}
+
 export interface FiledGroup {
   runId: string;
   defCode: string;
@@ -970,7 +1109,11 @@ export interface FiledGroup {
   periodLabel: string;
   dueDate: string;
   count: number;
-  clientIds: string[];
+  rows: FiledRow[];
+  /** How many of `rows` carry no acknowledgement number. Bulk marking cannot
+   *  collect one per client, so this is expected to be non-zero — it is here so
+   *  the gap can be seen and worked through, not treated as a fault. */
+  withoutArn: number;
   /** Latest filing date in the group, for ordering by recency. */
   lastFiledOn: string;
 }
@@ -991,13 +1134,21 @@ export function filedInMonth(month: string): FiledGroup[] {
         periodLabel: o.periodLabel,
         dueDate: o.dueDate,
         count: 0,
-        clientIds: [],
+        rows: [],
+        withoutArn: 0,
         lastFiledOn: o.filedOn,
       };
       map.set(o.runId, g);
     }
     g.count++;
-    g.clientIds.push(o.clientId);
+    g.rows.push({
+      clientId: o.clientId,
+      filedOn: o.filedOn,
+      basis: o.basis,
+      arn: o.arn,
+      filedBy: o.filedBy,
+    });
+    if (!o.arn) g.withoutArn++;
     if (o.filedOn > g.lastFiledOn) g.lastFiledOn = o.filedOn;
   }
   /* Most work first — that is what "what did we get through" means. */

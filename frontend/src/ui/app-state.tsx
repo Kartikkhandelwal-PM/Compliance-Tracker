@@ -38,10 +38,19 @@ export function useEngine<T>(read: () => T): T {
 
 type Theme = "light" | "dark";
 
+/** An offer attached to a toast — in practice, undoing what just happened. */
+interface ToastAction {
+  label: string;
+  run: () => void;
+}
+
 interface AppCtx {
   theme: Theme;
   toggleTheme: () => void;
-  toast: (msg: string) => void;
+  /** A toast with an action stays up more than twice as long: three seconds is
+   *  enough to read a confirmation but not enough to notice a mistake, read the
+   *  offer to reverse it, and move the mouse there. */
+  toast: (msg: string, action?: ToastAction) => void;
   /** The signed-in user — Phase 1 is internal-only, so this is always staff. */
   me: { id: string; name: string; initials: string; role: string };
 }
@@ -54,7 +63,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (saved === "light" || saved === "dark") return saved;
     return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<{ text: string; action?: ToastAction } | null>(null);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -63,12 +72,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!msg) return;
-    const t = setTimeout(() => setMsg(null), 3200);
+    const t = setTimeout(() => setMsg(null), msg.action ? 8000 : 3200);
     return () => clearTimeout(t);
   }, [msg]);
 
   const toggleTheme = useCallback(() => setTheme((t) => (t === "light" ? "dark" : "light")), []);
-  const toast = useCallback((m: string) => setMsg(m), []);
+  /* A fresh object every call, so re-toasting the same text restarts the timer
+     instead of leaving a stale message to expire on the old schedule. */
+  const toast = useCallback((text: string, action?: ToastAction) => setMsg({ text, action }), []);
 
   const value = useMemo<AppCtx>(
     () => ({
@@ -83,7 +94,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={value}>
       {children}
-      {msg ? <div className="toast" role="status">{msg}</div> : null}
+      {msg ? (
+        <div className="toast" role="status">
+          <span>{msg.text}</span>
+          {msg.action ? (
+            <button
+              type="button"
+              className="toast__action"
+              /* Dismiss BEFORE running. Both calls land in one React batch, so
+                 clearing afterwards discarded whatever the action itself
+                 announced — pressing Undo reversed the filings and then showed
+                 nothing at all, which reads as a dead button. */
+              onClick={() => {
+                const run = msg.action?.run;
+                setMsg(null);
+                run?.();
+              }}
+            >
+              {msg.action.label}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </Ctx.Provider>
   );
 }

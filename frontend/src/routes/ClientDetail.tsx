@@ -211,7 +211,11 @@ export function ClientDetailPage() {
                         <span className="u-mute">{o.periodLabel}</span>
                         {o.override ? <span className="tag tag--outline">override</span> : null}
                       </span>
-                      <span className="u-mute" style={{ fontSize: "var(--t-11)", marginTop: 2 }}>{o.basis}</span>
+                      <span className="u-mute" style={{ fontSize: "var(--t-11)", marginTop: 2 }}>
+                        {o.basis}
+                        {o.arn ? <> · <span className="num">{o.arn}</span></> : null}
+                        {o.filedBy ? ` · ${o.filedBy}` : null}
+                      </span>
                     </span>
                     <span className="num u-mute u-nowrap">{o.filedOn ? fmtDate(o.filedOn) : fmtDate(o.dueDate)}</span>
                     <StatusTag status={o.status} />

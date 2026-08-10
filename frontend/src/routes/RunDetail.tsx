@@ -14,7 +14,7 @@ import type { FilingStatus, Obligation } from "../domain/types.ts";
 import { useApp, useObligations } from "../ui/app-state.tsx";
 import { CLIENT_BY_ID, STAFF, staffOf } from "../domain/book.ts";
 import { DEF_BY_CODE } from "../domain/catalog.ts";
-import { markFiled, reassign, sendReminders } from "../domain/engine.ts";
+import { markFiled, reassign, sendReminders, unmarkFiled } from "../domain/engine.ts";
 import { fmtLong, inr, inrShort } from "../domain/dates.ts";
 import {
   Avatar, Check, Countdown, Empty, HeadName, PageHead, Pbar, Stat, StatusTag,
@@ -28,13 +28,19 @@ export function RunDetailPage() {
   const { runId = "" } = useParams();
   const decoded = decodeURIComponent(runId);
   const all = useObligations();
-  const { toast } = useApp();
+  const { toast, me } = useApp();
 
   const [filter, setFilter] = useState<Filter>("open");
   const [q, setQ] = useState("");
   const [owner, setOwner] = useState("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [peek, setPeek] = useState<Obligation | null>(null);
+  /* Mark-filed is the one bulk action here that cannot be shrugged off: it
+     zeroes penalty exposure and stops the chase for every row it touches. The
+     other two are recoverable — a reassignment is one more reassignment away
+     from correct, and an extra reminder is a nuisance, not a compliance risk —
+     so only this one asks. */
+  const [confirming, setConfirming] = useState(false);
 
   const items = useMemo(() => all.filter((o) => o.runId === decoded), [all, decoded]);
 
@@ -110,12 +116,13 @@ export function RunDetailPage() {
   const selectedIds = [...selected];
 
   const exportCsv = () => {
-    const head = ["Client", "PAN", "GSTIN", "State", "Form", "Period", "Due date", "Status", "Status source", "Days overdue", "Estimated penalty", "Owner"];
+    const head = ["Client", "PAN", "GSTIN", "State", "Form", "Period", "Due date", "Status", "Status source", "Acknowledgement", "Filed on", "Recorded by", "Days overdue", "Estimated penalty", "Owner"];
     const lines = rows.map((o) => {
       const c = CLIENT_BY_ID[o.clientId];
       return [
         c.name, c.pan, c.gstin ?? "", c.state, o.form, o.periodLabel, o.dueDate,
-        o.status, o.basis, String(o.daysOverdue), String(o.exposure), staffOf(o.assigneeId).name,
+        o.status, o.basis, o.arn ?? "", o.filedOn ?? "", o.filedBy ?? "",
+        String(o.daysOverdue), String(o.exposure), staffOf(o.assigneeId).name,
       ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
     });
     const blob = new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
@@ -235,7 +242,18 @@ export function RunDetailPage() {
                     </span>
                   </td>
                   <td><StatusTag status={o.status} /></td>
-                  <td className="u-mute" style={{ fontSize: "var(--t-12)" }}>{o.basis}</td>
+                  <td className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+                    {o.basis}
+                    {/* The acknowledgement, or the fact that there isn't one.
+                        Filed rows with nothing to show are the ones worth
+                        finding later, so the absence is printed rather than
+                        left as an empty cell that reads as "not checked". */}
+                    {o.status === "Filed" ? (
+                      <div className="num" style={{ fontSize: "var(--t-11)", marginTop: 2 }}>
+                        {o.arn ?? <span className="u-faint">no ARN</span>}
+                      </div>
+                    ) : null}
+                  </td>
                   <td className="u-mute" style={{ fontSize: "var(--t-12)" }}>{o.reminderStage}</td>
                   <td className="u-right">
                     {o.status === "Overdue"
@@ -256,11 +274,50 @@ export function RunDetailPage() {
 
       {selectedIds.length > 0 ? (
         <div className="bulkbar">
+          {confirming ? (
+            <>
+              {/* The count is spelled out again here rather than left to the
+                  selection the reader may have stopped looking at. "Mark 312
+                  filed?" is a different decision from "Mark filed?" and the
+                  number is the whole of it. */}
+              <span>
+                Mark <b className="num">{selectedIds.length}</b>{" "}
+                {selectedIds.length === 1 ? "client" : "clients"} filed?
+                {" "}Late fees stop and reminders are cancelled. No acknowledgement
+                number is recorded for a bulk action.
+              </span>
+              <button
+                type="button"
+                className="btn btn--primary btn--sm"
+                onClick={() => {
+                  const ids = selectedIds;
+                  markFiled(ids, { by: me.name });
+                  toast(`${ids.length} marked filed by ${me.name}`, {
+                    label: "Undo",
+                    run: () => toast(`${unmarkFiled(ids)} filings reopened`),
+                  });
+                  setSelected(new Set());
+                  setConfirming(false);
+                }}
+              >
+                <Icon name="check" size={14} /> Yes, mark filed
+              </button>
+              <button type="button" className="btn btn--sm" onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
           <span className="num"><b>{selectedIds.length}</b> selected</span>
           <button
             type="button"
             className="btn btn--sm"
-            onClick={() => { markFiled(selectedIds); toast(`${selectedIds.length} marked filed`); setSelected(new Set()); }}
+            /* No acknowledgement prompt here, by design: this action routinely
+               covers hundreds of clients and there is one ARN per client, not
+               one per batch. Who marked them is still recorded — that costs the
+               user nothing and is the question asked first when a filing is
+               later disputed. */
+            onClick={() => setConfirming(true)}
           >
             <Icon name="check" size={14} /> Mark filed
           </button>
@@ -288,6 +345,8 @@ export function RunDetailPage() {
           <button type="button" className="btn btn--sm btn--ghost" onClick={() => setSelected(new Set())} aria-label="Clear selection">
             <Icon name="close" size={14} />
           </button>
+            </>
+          )}
         </div>
       ) : null}
 
