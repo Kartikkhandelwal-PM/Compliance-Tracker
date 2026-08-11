@@ -157,21 +157,29 @@ export function addMinutes(ts: string, n: number): string {
   );
 }
 
-/** "14:32" — the clock alone, for a column that already says which day. */
-export function fmtTime(ts: string): string {
-  return timeOf(ts) || "—";
+/** "14:32" -> "2:32 PM" — a CA's office reads a clock in 12-hour time. */
+function to12h(hhmm: string): string {
+  const [h, m] = hhmm.split(":").map(Number);
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
 
-/** "6 Aug 2026, 14:32" */
+/** "2:32 PM" — the clock alone, for a column that already says which day. */
+export function fmtTime(ts: string): string {
+  const t = timeOf(ts);
+  return t ? to12h(t) : "—";
+}
+
+/** "6 Aug 2026, 2:32 PM" */
 export function fmtDateTime(ts: string): string {
   const t = timeOf(ts);
-  return t ? `${fmtDate(dateOf(ts))}, ${t}` : fmtDate(dateOf(ts));
+  return t ? `${fmtDate(dateOf(ts))}, ${to12h(t)}` : fmtDate(dateOf(ts));
 }
 
-/** "6 Aug, 14:32" — the log's default, where the year is nearly always this one. */
+/** "6 Aug, 2:32 PM" — the log's default, where the year is nearly always this one. */
 export function fmtStampShort(ts: string): string {
   const t = timeOf(ts);
-  return t ? `${fmtShort(dateOf(ts))}, ${t}` : fmtShort(dateOf(ts));
+  return t ? `${fmtShort(dateOf(ts))}, ${to12h(t)}` : fmtShort(dateOf(ts));
 }
 
 /**
@@ -195,6 +203,14 @@ export function fmtAgo(ts: string, nowTs = stamp(TODAY, 17, 30)): string {
   if (days === 1) return "yesterday";
   if (days < 7) return `${days} days ago`;
   return fmtShort(dateOf(ts));
+}
+
+/** Same as fmtAgo, but null once the answer stops adding anything — past a
+ *  week it degrades to the same "6 Aug" already sitting next to it in a log
+ *  row, and a repeated date under its own timestamp reads as a bug. */
+export function fmtAgoIfFresh(ts: string, nowTs = stamp(TODAY, 17, 30)): string | null {
+  const text = fmtAgo(ts, nowTs);
+  return text === fmtShort(dateOf(ts)) ? null : text;
 }
 
 /** Is this stamp outside the sending window? The window defaults to office

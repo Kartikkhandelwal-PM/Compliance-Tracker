@@ -30,6 +30,7 @@
    ========================================================================== */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { Icon } from "./ui/Icon.tsx";
 import type { IconName } from "./ui/Icon.tsx";
@@ -72,6 +73,16 @@ export function App() {
   const notifSettings = useEngine(getNotificationSettings);
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  /* The rail's own scroll container clips anything that pokes out past its
+     width (an `overflow-y: auto` box forces overflow-x to auto too, per the
+     CSS spec, even though only y was ever set) — so a tooltip positioned
+     relative to its nav link never escapes the collapsed 60px rail. Rendered
+     through a portal at real screen coordinates instead, it sits above
+     everything and isn't clipped by any ancestor. */
+  const [navTip, setNavTip] = useState<{ label: string; top: number; left: number } | null>(null);
+  useEffect(() => {
+    if (!collapsed) setNavTip(null);
+  }, [collapsed]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -241,7 +252,19 @@ export function App() {
               to={it.to}
               end={it.end}
               className={({ isActive }) => `navlink${isActive ? " is-active" : ""}`}
-              title={collapsed ? it.label : undefined}
+              aria-label={collapsed ? it.label : undefined}
+              onMouseEnter={(e) => {
+                if (!collapsed) return;
+                const r = e.currentTarget.getBoundingClientRect();
+                setNavTip({ label: it.label, top: r.top + r.height / 2, left: r.right + 12 });
+              }}
+              onFocus={(e) => {
+                if (!collapsed) return;
+                const r = e.currentTarget.getBoundingClientRect();
+                setNavTip({ label: it.label, top: r.top + r.height / 2, left: r.right + 12 });
+              }}
+              onMouseLeave={() => setNavTip(null)}
+              onBlur={() => setNavTip(null)}
             >
               <Icon name={it.icon} className="navlink__icon" />
               <span className="navlink__text">{it.label}</span>
@@ -253,6 +276,12 @@ export function App() {
             </NavLink>
           ))}
         </div>
+        {collapsed && navTip ? createPortal(
+          <span className="navtip" style={{ top: navTip.top, left: navTip.left }}>
+            {navTip.label}
+          </span>,
+          document.body,
+        ) : null}
 
         {/* The rail used to end after the nav list and read as unfinished. It
             now closes with the two things a rail is actually good for: a live

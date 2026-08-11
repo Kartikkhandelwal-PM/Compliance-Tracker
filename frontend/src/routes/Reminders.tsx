@@ -23,7 +23,7 @@ import {
   scheduledSends, sendScheduledNow, skipScheduled,
 } from "../domain/engine.ts";
 import {
-  TODAY, addDays, dateOf, fmtAgo, fmtDate, fmtDateTime, fmtShort, fmtStampShort, fmtTime,
+  TODAY, addDays, dateOf, fmtAgo, fmtAgoIfFresh, fmtDate, fmtDateTime, fmtShort, fmtStampShort, fmtTime,
 } from "../domain/dates.ts";
 import { Avatar, Check, CountUp, Empty, PageHead, Seg, Stat } from "../ui/bits.tsx";
 import { ClearFilters, DateRangePill, FilterPill, type PillOption } from "../ui/Filters.tsx";
@@ -495,7 +495,9 @@ function LogTab() {
                         whether the client still had working hours to act. */}
                     <td className="u-nowrap">
                       <div className="num">{fmtStampShort(e.sentAt)}</div>
-                      <div className="u-faint" style={{ fontSize: "var(--t-11)" }}>{fmtAgo(e.sentAt)}</div>
+                      {fmtAgoIfFresh(e.sentAt) ? (
+                        <div className="u-faint" style={{ fontSize: "var(--t-11)" }}>{fmtAgoIfFresh(e.sentAt)}</div>
+                      ) : null}
                     </td>
                     <td>
                       <div className="u-strong u-truncate" style={{ maxWidth: 190 }}>

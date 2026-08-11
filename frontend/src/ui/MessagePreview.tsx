@@ -12,7 +12,7 @@
 
 import type { OutboxEntry } from "../domain/types.ts";
 import { CLIENT_BY_ID, staffOf } from "../domain/book.ts";
-import { dateOf, fmtAgo, fmtLong, fmtTime } from "../domain/dates.ts";
+import { dateOf, fmtAgoIfFresh, fmtLong, fmtTime } from "../domain/dates.ts";
 import { resendEntries } from "../domain/engine.ts";
 import { getSender } from "../domain/messages.ts";
 import { useApp, useEngine } from "./app-state.tsx";
@@ -67,6 +67,7 @@ export function MessagePreview({
      message showed a different "time" than the row it came from, and two
      chases on one day were indistinguishable. */
   const time = fmtTime(e.sentAt);
+  const ago = fmtAgoIfFresh(e.sentAt);
   const isWa = e.channel === "WhatsApp";
 
   const statusTag = e.status === "Failed" ? "tag--overdue"
@@ -80,7 +81,7 @@ export function MessagePreview({
       title={<>{isWa ? "WhatsApp" : "Email"} to {client?.name ?? e.clientId}</>}
       subtitle={
         <>
-          {e.stage} · {fmtLong(dateOf(e.sentAt))} at {time} · {fmtAgo(e.sentAt)}
+          {e.stage} · {fmtLong(dateOf(e.sentAt))} at {time}{ago ? <> · {ago}</> : null}
           {e.attempt > 1 ? <> · attempt {e.attempt}</> : null}
         </>
       }

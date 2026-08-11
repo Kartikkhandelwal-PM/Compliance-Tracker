@@ -358,6 +358,48 @@ a {
   display: none;
 }
 
+/* Collapsed rail loses its labels, so a hovered (or focused) icon flies out
+   its name — otherwise a collapsed rail is a strip of unlabelled glyphs.
+   Rendered through a portal at fixed screen coordinates (see App.tsx):
+   `.rail__scroll` sets overflow-y, which per spec forces overflow-x to auto
+   too, clipping anything anchored inside it that pokes out past the rail. */
+.navtip {
+  position: fixed;
+  transform: translateY(-50%);
+  background: var(--sheet);
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+  padding: 5px 10px;
+  font-size: var(--t-12);
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 200;
+  animation: navtipin 0.15s cubic-bezier(0.2, 0, 0.2, 1) both;
+  animation-delay: 40ms;
+}
+.navtip::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  background: var(--sheet);
+  border-left: 1px solid var(--rule-strong);
+  border-bottom: 1px solid var(--rule-strong);
+  transform: translateY(-50%) rotate(45deg);
+}
+@keyframes navtipin {
+  from { opacity: 0; transform: translateY(-50%) translateX(-6px); }
+  to { opacity: 1; transform: translateY(-50%) translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .navtip { animation: none; opacity: 1; }
+}
+
 /* ============================================================================
    RAIL FOOT  —  a live read on the week, then who you are
    ========================================================================== */
