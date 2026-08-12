@@ -31,6 +31,7 @@ import { MONTHS, TODAY, addDays, fmtShort, inrShort, monthLabelLong, parts } fro
 import { Empty, PageHead } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
 import { ClearFilters, FilterPill, FilterPillMulti } from "../ui/Filters.tsx";
+import { exportXlsx } from "../ui/exportXlsx.ts";
 import { ObligationDrawer } from "../ui/ObligationDrawer.tsx";
 
 type SortKey = "open" | "late" | "fees" | "name";
@@ -202,21 +203,16 @@ export function MatrixPage() {
     return list;
   }, [obligations, colIndex, columns.length, owners, q, sort, status]);
 
-  const exportCsv = () => {
-    const headerRow = ["Client", "PAN", "GSTIN", "Owner", ...columns.map((c) => `${c.form} ${c.period} (due ${c.due})`)];
-    const lines = rows.map((r) => {
+  const exportXlsxFile = async () => {
+    const headers = ["Client", "PAN", "GSTIN", "Owner", ...columns.map((c) => `${c.form} ${c.period} (due ${c.due})`)];
+    const dataRows = rows.map((r) => {
       const c = CLIENT_BY_ID[r.clientId];
       return [
         c.name, c.pan, c.gstin ?? "", staffOf(c.assigneeId).name,
         ...r.cells.map((cell) => (cell ? cell.status : "—")),
-      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+      ];
     });
-    const blob = new Blob([[headerRow.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `compliance-tracker-${TODAY}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    await exportXlsx({ filename: `compliance-tracker-${TODAY}.xlsx`, headers, rows: dataRows });
     toast(`Exported ${rows.length} clients × ${columns.length} compliances`);
   };
 
@@ -361,7 +357,7 @@ export function MatrixPage() {
           </>
         }
         aside={
-          <button type="button" className="btn btn--sm" onClick={exportCsv}>
+          <button type="button" className="btn btn--sm" onClick={exportXlsxFile}>
             <Icon name="download" size={14} /> Export
           </button>
         }

@@ -21,6 +21,7 @@ import { filedInMonth, monthsWithFilings } from "../domain/engine.ts";
 import { MONTHS_LONG, TODAY, fmtShort } from "../domain/dates.ts";
 import { useApp, useEngine } from "./app-state.tsx";
 import { Drawer } from "./Drawer.tsx";
+import { exportXlsx } from "./exportXlsx.ts";
 import { Empty } from "./bits.tsx";
 import { Icon } from "./Icon.tsx";
 
@@ -36,8 +37,14 @@ export function FiledDrawer({ open, onClose }: { open: boolean; onClose: () => v
      open client lists at once is the list the drawer exists to avoid. */
   const [openRun, setOpenRun] = useState<string | null>(null);
 
+  /* `months` already subscribes to the store via useEngine, so this
+     component re-renders on every store change. `groups` is computed plainly
+     (not through useEngine) because it also depends on `month`, local state
+     that useEngine's memo does not track — memoizing it there left the list
+     frozen on the old month whenever the arrows below changed `month`
+     without a store change alongside it. */
   const months = useEngine(monthsWithFilings);
-  const groups = useEngine(() => filedInMonth(month));
+  const groups = filedInMonth(month);
 
   const total = useMemo(() => groups.reduce((a, g) => a + g.count, 0), [groups]);
   const clients = useMemo(
@@ -55,27 +62,22 @@ export function FiledDrawer({ open, onClose }: { open: boolean; onClose: () => v
   const older = idx >= 0 && idx < months.length - 1 ? months[idx + 1] : null;
   const newer = idx > 0 ? months[idx - 1] : null;
 
-  const exportCsv = () => {
-    const head = [
+  const exportXlsxFile = async () => {
+    const headers = [
       "Compliance", "Head", "Period", "Due date", "Client", "PAN",
       "Filed on", "Status source", "Acknowledgement", "Recorded by",
     ];
-    const lines: string[] = [];
+    const rows: (string | number)[][] = [];
     for (const g of groups) {
       for (const r of g.rows) {
         const c = CLIENT_BY_ID[r.clientId];
-        lines.push([
+        rows.push([
           g.form, g.head, g.periodLabel, g.dueDate, c?.name ?? r.clientId, c?.pan ?? "",
           r.filedOn, r.basis, r.arn ?? "", r.filedBy ?? "",
-        ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
+        ]);
       }
     }
-    const blob = new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `filed-${month}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    await exportXlsx({ filename: `filed-${month}.xlsx`, headers, rows });
     toast(`Exported ${total} filings`);
   };
 
@@ -115,7 +117,7 @@ export function FiledDrawer({ open, onClose }: { open: boolean; onClose: () => v
             <Icon name="chevronRight" size={14} />
           </button>
           <span className="u-spacer" />
-          <button type="button" className="btn btn--sm" onClick={exportCsv} disabled={total === 0}>
+          <button type="button" className="btn btn--sm" onClick={exportXlsxFile} disabled={total === 0}>
             <Icon name="download" size={14} /> Export
           </button>
           <button type="button" className="btn btn--primary btn--sm" onClick={onClose}>Close</button>

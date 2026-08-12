@@ -27,6 +27,7 @@ import {
 } from "../domain/dates.ts";
 import { Avatar, Check, CountUp, Empty, PageHead, Seg, Stat } from "../ui/bits.tsx";
 import { ClearFilters, DateRangePill, FilterPill, type PillOption } from "../ui/Filters.tsx";
+import { exportXlsx } from "../ui/exportXlsx.ts";
 import { BrandIcon, Icon } from "../ui/Icon.tsx";
 import { MessagePreview } from "../ui/MessagePreview.tsx";
 import type { OutboxEntry } from "../domain/types.ts";
@@ -243,23 +244,18 @@ function LogTab() {
 
   const allPicked = rows.length > 0 && rows.every((r) => picked.has(r.id));
 
-  const exportCsv = () => {
-    const head0 = ["Sent", "Time", "Client", "PAN", "Compliance", "Head",
+  const exportXlsxFile = async () => {
+    const headers = ["Sent", "Time", "Client", "PAN", "Compliance", "Head",
       "Channel", "Trigger", "Origin", "Sent by", "Delivery", "Attempt", "Message"];
-    const lines = rows.map((e) => {
+    const dataRows = rows.map((e) => {
       const c = CLIENT_BY_ID[e.clientId];
       return [
         fmtDate(dateOf(e.sentAt)), fmtTime(e.sentAt), c?.name ?? e.clientId, c?.pan ?? "",
         e.form, e.head, e.channel, e.stage, e.origin,
-        e.sentBy ? staffOf(e.sentBy).name : "Scheduler", e.status, String(e.attempt), e.preview,
-      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+        e.sentBy ? staffOf(e.sentBy).name : "Scheduler", e.status, e.attempt, e.preview,
+      ];
     });
-    const blob = new Blob([[head0.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `reminders-${TODAY}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    await exportXlsx({ filename: `reminders-${TODAY}.xlsx`, headers, rows: dataRows });
     toast(`Exported ${rows.length} reminders`);
   };
 
@@ -358,7 +354,7 @@ function LogTab() {
         <span className="u-mute num" style={{ fontSize: "var(--t-12)" }}>
           {rows.length} of {outbox.length}
         </span>
-        <button type="button" className="btn btn--sm" onClick={exportCsv}>
+        <button type="button" className="btn btn--sm" onClick={exportXlsxFile}>
           <Icon name="download" size={14} /> Export
         </button>
       </div>

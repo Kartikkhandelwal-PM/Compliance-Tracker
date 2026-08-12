@@ -19,6 +19,7 @@ import { fmtLong, inr, inrShort } from "../domain/dates.ts";
 import {
   Avatar, Check, Countdown, Empty, HeadName, PageHead, Pbar, Stat, StatusTag,
 } from "../ui/bits.tsx";
+import { exportXlsx } from "../ui/exportXlsx.ts";
 import { Icon } from "../ui/Icon.tsx";
 import { ObligationDrawer } from "../ui/ObligationDrawer.tsx";
 
@@ -115,22 +116,20 @@ export function RunDetailPage() {
 
   const selectedIds = [...selected];
 
-  const exportCsv = () => {
-    const head = ["Client", "PAN", "GSTIN", "State", "Form", "Period", "Due date", "Status", "Status source", "Acknowledgement", "Filed on", "Recorded by", "Days overdue", "Estimated penalty", "Owner"];
-    const lines = rows.map((o) => {
+  const exportXlsxFile = async () => {
+    const headers = ["Client", "PAN", "GSTIN", "State", "Form", "Period", "Due date", "Status", "Status source", "Acknowledgement", "Filed on", "Recorded by", "Days overdue", "Estimated penalty", "Owner"];
+    const dataRows = rows.map((o) => {
       const c = CLIENT_BY_ID[o.clientId];
       return [
         c.name, c.pan, c.gstin ?? "", c.state, o.form, o.periodLabel, o.dueDate,
         o.status, o.basis, o.arn ?? "", o.filedOn ?? "", o.filedBy ?? "",
-        String(o.daysOverdue), String(o.exposure), staffOf(o.assigneeId).name,
-      ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",");
+        o.daysOverdue, o.exposure, staffOf(o.assigneeId).name,
+      ];
     });
-    const blob = new Blob([[head.join(","), ...lines].join("\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${def.code}-${first.periodLabel.replace(/[^\w]+/g, "-")}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    await exportXlsx({
+      filename: `${def.code}-${first.periodLabel.replace(/[^\w]+/g, "-")}.xlsx`,
+      headers, rows: dataRows,
+    });
     toast(`Exported ${rows.length} rows`);
   };
 
@@ -147,7 +146,7 @@ export function RunDetailPage() {
         }
         aside={
           <>
-            <button type="button" className="btn" onClick={exportCsv}>
+            <button type="button" className="btn" onClick={exportXlsxFile}>
               <Icon name="download" size={15} /> Export
             </button>
             <Link to="/calendar" className="btn"><Icon name="chevronLeft" size={15} /> Calendar</Link>
