@@ -36,7 +36,9 @@ import { Icon } from "./ui/Icon.tsx";
 import type { IconName } from "./ui/Icon.tsx";
 import { CommandPalette } from "./ui/CommandPalette.tsx";
 import { useApp, useEngine, useObligations, useOutbox } from "./ui/app-state.tsx";
-import { getNotificationSettings, summarise } from "./domain/engine.ts";
+import {
+  getFirm, getNotificationSettings, getViewedNotifs, markNotifViewed, summarise,
+} from "./domain/engine.ts";
 import { CLIENTS, CLIENT_BY_ID } from "./domain/book.ts";
 import { DEFS } from "./domain/catalog.ts";
 import { TODAY, addDays, fmtDate } from "./domain/dates.ts";
@@ -71,6 +73,8 @@ export function App() {
   const obligations = useObligations();
   const outbox = useOutbox();
   const notifSettings = useEngine(getNotificationSettings);
+  const viewedNotifs = useEngine(getViewedNotifs);
+  const firm = useEngine(getFirm);
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   /* The rail's own scroll container clips anything that pokes out past its
@@ -161,7 +165,7 @@ export function App() {
      condition someone has to act on, and each links to the screen that acts on
      it. Nothing here is a "welcome" or a "tip". */
   const notifications = useMemo(() => {
-    const list: { to: string; title: string; body: string; tone: string; icon: IconName }[] = [];
+    const list: { to: string; title: string; body: string; tone: string; icon: IconName; kind: string }[] = [];
     /* Which conditions are allowed to shout is firm configuration — every one
        of these is real, but which of them a given practice wants raised
        differs. Set on Settings → Notifications. */
@@ -188,6 +192,7 @@ export function App() {
         body: `${top.period} · highest number of pending clients`,
         tone: "risk",
         icon: "alert",
+        kind: "gap",
       });
     }
     if (dueToday > 0 && on.dueToday) {
@@ -197,6 +202,7 @@ export function App() {
         body: "Due by end of day",
         tone: "warn",
         icon: "clock",
+        kind: "dueToday",
       });
     }
     if (summary.unassigned > 0 && on.unowned) {
@@ -206,6 +212,7 @@ export function App() {
         body: "No staff member is assigned",
         tone: "warn",
         icon: "user",
+        kind: "unowned",
       });
     }
     if (failedSends > 0 && on.failed) {
@@ -215,10 +222,16 @@ export function App() {
         body: "The client was not notified",
         tone: "risk",
         icon: "send",
+        kind: "failed",
       });
     }
     return list;
   }, [obligations, outbox, summary.unassigned, notifSettings]);
+
+  /* Read against the title, not a stored flag — the same alert with a bigger
+     number ("3 clients" → "5 clients") is new information and should raise
+     the badge again, not stay marked read because that kind was clicked once. */
+  const unreadCount = notifications.filter((n) => viewedNotifs[n.kind] !== n.title).length;
 
   return (
     <div className="shell">
@@ -363,14 +376,15 @@ export function App() {
                 aria-expanded={notifOpen}
                 aria-haspopup="menu"
                 title="Notifications"
-                aria-label={`Notifications, ${notifications.length} needing attention`}
+                aria-label={`Notifications, ${unreadCount} unread`}
               >
                 <Icon name="bell" size={17} />
                 {/* A bare dot said "something happened" and nothing more. The
                     count is the whole point: four things needing attention is
-                    a different morning from one. */}
-                {notifications.length > 0 ? (
-                  <span className="iconbtn__badge num">{notifications.length}</span>
+                    a different morning from one. Counts unread only — an alert
+                    already opened stops raising the badge until it changes. */}
+                {unreadCount > 0 ? (
+                  <span className="iconbtn__badge num">{unreadCount}</span>
                 ) : null}
               </button>
 
@@ -385,30 +399,36 @@ export function App() {
                       ) : null}
                     </div>
                     <div className="pop__list">
-                      {notifications.map((n) => (
-                        <Link
-                          key={n.to + n.title}
-                          to={n.to}
-                          className="notif"
-                          role="menuitem"
-                          onClick={() => setNotifOpen(false)}
-                        >
-                          {/* Tone was carried by a 8px dot, which is the least
-                              legible mark available. It is now the tint of an
-                              icon chip that also says what kind of thing this
-                              is — a deadline, an owner gap, a failed send. */}
-                          <span className={`notif__ico n-${n.tone}`}>
-                            <Icon name={n.icon} size={14} />
-                          </span>
-                          <span className="notif__body">
-                            <b>{n.title}</b>
-                            <span>{n.body}</span>
-                          </span>
-                          <span className="notif__go">
-                            <Icon name="chevronRight" size={14} />
-                          </span>
-                        </Link>
-                      ))}
+                      {notifications.map((n) => {
+                        const unread = viewedNotifs[n.kind] !== n.title;
+                        return (
+                          <Link
+                            key={n.to + n.title}
+                            to={n.to}
+                            className={`notif${unread ? " is-unread" : ""}`}
+                            role="menuitem"
+                            onClick={() => {
+                              markNotifViewed(n.kind, n.title);
+                              setNotifOpen(false);
+                            }}
+                          >
+                            {/* Tone was carried by a 8px dot, which is the least
+                                legible mark available. It is now the tint of an
+                                icon chip that also says what kind of thing this
+                                is — a deadline, an owner gap, a failed send. */}
+                            <span className={`notif__ico n-${n.tone}`}>
+                              <Icon name={n.icon} size={14} />
+                            </span>
+                            <span className="notif__body">
+                              <b>{n.title}</b>
+                              <span>{n.body}</span>
+                            </span>
+                            <span className="notif__go">
+                              <Icon name="chevronRight" size={14} />
+                            </span>
+                          </Link>
+                        );
+                      })}
                       {notifications.length === 0 ? (
                         <div className="pop__empty">
                           <span className="pop__emptyico"><Icon name="check" size={18} /></span>
@@ -465,7 +485,7 @@ export function App() {
                       <Avatar initials={me.initials} large />
                       <span className="pop__idtext">
                         <b>{me.name}</b>
-                        <em>{me.role} · KDK Software</em>
+                        <em>{me.role} · {firm.name}</em>
                       </span>
                     </div>
                     <div className="pop__list">

@@ -247,7 +247,7 @@ export function ObligationDrawer({
               scheduled reminder for this return is cancelled.
             </p>
             <label className="u-mute" style={{ fontSize: "var(--t-12)", display: "block", marginBottom: 4 }}>
-              Acknowledgement number — optional
+              Acknowledgement number (optional)
             </label>
             <div className="field" style={{ height: 36 }}>
               <input
@@ -303,7 +303,7 @@ export function ObligationDrawer({
               <input
                 autoFocus
                 value={reason}
-                placeholder="e.g. Registration surrendered in June — confirmed with client"
+                placeholder="e.g. Registration surrendered in June, confirmed with client"
                 onChange={(e) => setReason(e.target.value)}
               />
             </div>

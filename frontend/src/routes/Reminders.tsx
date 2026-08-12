@@ -334,7 +334,7 @@ function LogTab() {
             { value: "Read", label: "Read" },
             { value: "Delivered", label: "Delivered, not read" },
             { value: "Queued (quiet hours)", label: "Held" },
-            { value: "Cancelled", label: "Cancelled — already filed" },
+            { value: "Cancelled", label: "Cancelled, already filed" },
             { value: "Failed", label: "Failed" },
           ]}
         />

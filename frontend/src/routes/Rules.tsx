@@ -274,7 +274,7 @@ function SenderSection() {
       <Card
         title="WhatsApp Business"
         note="Managed by KDK"
-        foot="One Meta-verified account serves every practice on the product, so these cannot be changed here. A practice wanting to send from its own number needs its own Meta Business verification and template approval — contact KDK."
+        foot="This number is set up for you and can't be changed here. Contact KDK to send from your own WhatsApp number instead."
       >
         <div className="sbrand">
           <BrandIcon name="whatsapp" size={26} />
@@ -302,7 +302,7 @@ function SenderSection() {
 
       <Card
         title="Email"
-        foot="The sending address belongs to KDK's mail domain — changing it would fail the sender checks that keep these messages out of spam. Replies are yours to route."
+        foot="This address is set up for you and can't be changed here. Replies are yours to route."
       >
         <div className="sbrand">
           <BrandIcon name="email" size={24} />
@@ -417,21 +417,14 @@ function RemindersSection() {
           on={r.skipWeekends}
           onToggle={() => updateReminderSettings({ skipWeekends: !r.skipWeekends })}
           title="Skip weekends"
-          body="Reminders due on a Saturday or Sunday move to a working day — Friday if the deadline has not passed, Monday if it has."
+          body="Reminders due on a Saturday or Sunday move to a working day: Friday if the deadline has not passed, Monday if it has."
         />
       </Card>
 
-      <Card
-        title="Multiple filings"
-        foot="Applies when a client has more than one filing due in the same window."
-      >
-        <Toggle
-          on={r.digest}
-          onToggle={() => updateReminderSettings({ digest: !r.digest })}
-          title="Combine reminders"
-          body="If a client has more than one filing due at the same time, send a single message instead of separate ones."
-        />
-      </Card>
+      {/* No "combine reminders" card here. Digest is scoped to a later phase —
+          this is an internal note, not something to surface to a user as a
+          disabled toggle. `ReminderSettings.digest` still exists on the type
+          and defaults to false; there's just no UI for it yet. */}
     </>
   );
 }
@@ -442,14 +435,6 @@ function Ladder({ schedule }: { schedule: ReturnType<typeof getSchedule> }) {
     <div className="ladder">
       {schedule.map((s) => (
         <div key={s.id} className={`lstep${s.enabled ? "" : " is-off"}`}>
-          <button
-            type="button"
-            className={`switch${s.enabled ? " is-on" : ""}`}
-            onClick={() => updateStep(s.id, { enabled: !s.enabled })}
-            aria-pressed={s.enabled}
-            aria-label={`${s.label} step`}
-          />
-
           {/* The offset is the step's identity, so it reads as a figure. */}
           <span className={`lstep__off${s.offset > 0 ? " is-late" : ""}`}>
             <b className="num">{s.offset > 0 ? `+${s.offset}` : s.offset === 0 ? "0" : s.offset}</b>
@@ -457,7 +442,14 @@ function Ladder({ schedule }: { schedule: ReturnType<typeof getSchedule> }) {
           </span>
 
           <span className="lstep__id">
-            <b>{s.label}</b>
+            <span className="lstep__id-row">
+              <b>{s.label}</b>
+              {s.ccOwner ? (
+                <span className="tag tag--outline u-nowrap" title="The client's owner is copied in">
+                  <Icon name="user" size={11} /> cc owner
+                </span>
+              ) : null}
+            </span>
             <span className="u-mute">{s.intent}</span>
           </span>
 
@@ -493,11 +485,13 @@ function Ladder({ schedule }: { schedule: ReturnType<typeof getSchedule> }) {
             </select>
           </span>
 
-          {s.ccOwner ? (
-            <span className="tag tag--outline u-nowrap" title="The client's owner is copied in">
-              <Icon name="user" size={11} /> cc owner
-            </span>
-          ) : <span />}
+          <button
+            type="button"
+            className={`switch${s.enabled ? " is-on" : ""}`}
+            onClick={() => updateStep(s.id, { enabled: !s.enabled })}
+            aria-pressed={s.enabled}
+            aria-label={`${s.label} step`}
+          />
         </div>
       ))}
     </div>

@@ -132,9 +132,9 @@ function build(): Obligation[] {
             on: addDays(TODAY, -Math.floor(h(id + "|d") * 90) - 5),
             action: "excluded",
             reason: [
-              "Registration surrendered — confirmed with the client.",
+              "Registration surrendered. Confirmed with the client.",
               "Client filed directly through their own consultant this period.",
-              "Not applicable — turnover below threshold, verified from books.",
+              "Not applicable. Turnover below threshold, verified from books.",
               "Duplicate registration; obligation tracked under the other GSTIN.",
             ][Math.floor(h(id + "|r") * 4)],
           };
@@ -291,7 +291,7 @@ export function markFiled(
       ...(arn ? { arn } : {}),
       daysOverdue: 0,
       exposure: 0,
-      exposureFormula: "Filed — penalty no longer accruing.",
+      exposureFormula: "Filed. Penalty no longer accruing.",
       reminderStage: "Cancelled: resolved",
     };
   });
@@ -353,7 +353,7 @@ export function markNotApplicable(ids: string[], reason: string, by: string) {
       basis: "Manually excluded",
       daysOverdue: 0,
       exposure: 0,
-      exposureFormula: "Not applicable — no penalty exposure.",
+      exposureFormula: "Not applicable. No penalty exposure.",
       reminderStage: "N/A",
       override: { by, on: TODAY, action: "excluded", reason },
     };
@@ -493,7 +493,12 @@ let SETTINGS: ReminderSettings = {
   quietStart: 9,
   quietEnd: 20,
   skipWeekends: true,
-  digest: true,
+  /* Off — combining several due filings into one message is not built yet.
+     Nothing in this file merges obligations before composing a send, so a
+     default of `true` here would claim behaviour the scheduler doesn't have.
+     Scoped to a later phase; deliberately has no control on Settings — do
+     not add one without checking that decision still holds. */
+  digest: false,
 };
 
 /* --- Organisation ---------------------------------------------------------
@@ -574,6 +579,21 @@ export function resetCompliances() {
   emit();
 }
 
+/**
+ * Flip a client's WhatsApp opt-in.
+ *
+ * `Client` records are looked up by id everywhere (`CLIENT_BY_ID[id]`), never
+ * held onto across a render, so mutating the record in place and emitting is
+ * enough — the next read sees the change, and nothing depends on the object's
+ * identity staying stable the way OBLIGATIONS' array-replace pattern does.
+ */
+export function updateClient(id: string, patch: Partial<Client>) {
+  const client = CLIENT_BY_ID[id];
+  if (!client) return;
+  Object.assign(client, patch);
+  emit();
+}
+
 /** How many compliances the firm has switched off, for the settings summary. */
 export function untrackedCount(): number {
   let n = 0;
@@ -598,6 +618,22 @@ export function getNotificationSettings(): NotificationSettings {
 
 export function updateNotificationSettings(patch: NotificationSettings) {
   NOTIFS = { ...NOTIFS, ...patch };
+  emit();
+}
+
+/* The signature last seen for each alert, not just a read/unread flag — an
+   alert someone opened at "3 clients have not filed" is a different alert
+   once the count moves to 5, and should raise the badge again rather than
+   staying silent because that ID was clicked once before. */
+let VIEWED_NOTIFS: Record<string, string> = {};
+
+export function getViewedNotifs(): Record<string, string> {
+  return VIEWED_NOTIFS;
+}
+
+export function markNotifViewed(kind: string, signature: string) {
+  if (VIEWED_NOTIFS[kind] === signature) return;
+  VIEWED_NOTIFS = { ...VIEWED_NOTIFS, [kind]: signature };
   emit();
 }
 
@@ -924,6 +960,12 @@ export function retryFailed(by = "s1"): number {
  * step is evaluated at SEND time; a held message is sent here, so this is send
  * time. `resendEntries` has always guarded this; releasing did not.
  *
+ * The wording is re-checked too, not just the status. A message queued last
+ * night was composed against that moment — "due today", a days-overdue count
+ * — and hours or a weekend can pass before it actually reaches the wire.
+ * Re-running `composeFor` here means the client reads the day it actually
+ * received the message, never the day it was originally drafted.
+ *
  * Cancelled messages stay in the log with a status of their own rather than
  * being deleted, so "why didn't this go?" has an answer.
  */
@@ -939,7 +981,7 @@ export function releaseQueued(): { sent: number; cancelled: number } {
       return { ...e, status: "Cancelled" as DeliveryStatus };
     }
     sent++;
-    return { ...e, status: outcome(`${e.id}|rel`, NOW), sentAt: NOW };
+    return { ...e, ...composeFor(o), status: outcome(`${e.id}|rel`, NOW), sentAt: NOW };
   });
   if (sent > 0 || cancelled > 0) emit();
   return { sent, cancelled };

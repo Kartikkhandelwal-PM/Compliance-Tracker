@@ -116,7 +116,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           <input
             ref={inputRef}
             value={q}
-            placeholder="Search clients by name, PAN or GSTIN — or jump to a screen"
+            placeholder="Search clients by name, PAN or GSTIN, or jump to a screen"
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") { e.preventDefault(); setCursor((c) => Math.min(c + 1, results.length - 1)); }

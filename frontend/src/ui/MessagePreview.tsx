@@ -99,7 +99,7 @@ export function MessagePreview({
               const n = resendEntries([e.id], me.id);
               toast(n > 0
                 ? `${e.status === "Failed" ? "Retrying" : "Re-sent"} to ${client?.name ?? "client"}`
-                : "That filing has since closed — nothing sent");
+                : "That filing has since closed. Nothing sent.");
               onClose();
             }}
           >
@@ -197,7 +197,7 @@ export function MessagePreview({
           <dl className="mailpane__meta">
             <div><dt>From</dt><dd>{sender.name} &lt;{sender.fromEmail}&gt;</dd></div>
             <div><dt>To</dt><dd>{client?.email ?? ""}</dd></div>
-            <div><dt>Cc</dt><dd>{owner.name === "Unassigned" ? "no owner assigned" : `${owner.name}, KDK`}</dd></div>
+            <div><dt>Cc</dt><dd>{owner.name === "Unassigned" ? "no owner assigned" : owner.name}</dd></div>
             <div><dt>Sent</dt><dd className="num">{fmtLong(dateOf(e.sentAt))} · {time}</dd></div>
           </dl>
           <div className="mailpane__body">

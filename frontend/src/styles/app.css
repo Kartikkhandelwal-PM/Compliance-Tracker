@@ -691,6 +691,7 @@ a {
 /* A tinted chip carrying the tone AND the kind of thing. The 8px dot it
    replaces could only say "one of two colours". */
 .notif__ico {
+  position: relative;
   width: 30px;
   height: 30px;
   border-radius: 9px;
@@ -700,8 +701,23 @@ a {
   background: var(--sunk);
   color: var(--ink-3);
 }
+/* Unread vs. already-opened: the dot on the chip is the header-line signal,
+   but a dot alone is too easy to miss next to identically-weighted text, so
+   the chip and the title fade together once an alert has been clicked. */
+.notif.is-unread .notif__ico::after {
+  content: "";
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--sheet);
+}
 .notif__ico.n-risk { background: var(--st-overdue-bg); color: var(--st-overdue-fg); }
 .notif__ico.n-warn { background: var(--urg-soon-bg); color: var(--urg-soon); }
+.notif:not(.is-unread) .notif__ico { opacity: 0.5; }
 .notif__go {
   color: var(--ink-4);
   display: grid;
@@ -722,9 +738,13 @@ a {
 }
 .notif__body b {
   font-size: var(--t-13);
-  font-weight: 600;
-  color: var(--ink);
+  font-weight: 500;
+  color: var(--ink-3);
   line-height: 1.35;
+}
+.notif.is-unread .notif__body b {
+  font-weight: 650;
+  color: var(--ink);
 }
 .notif__body span {
   font-size: var(--t-11);
@@ -5056,7 +5076,7 @@ a.calpill.p-overdue:hover {
 }
 .lstep {
   display: grid;
-  grid-template-columns: 34px 72px minmax(220px, 1fr) auto 96px auto;
+  grid-template-columns: 72px minmax(220px, 1fr) auto 96px 34px;
   align-items: center;
   gap: var(--s4);
   padding: var(--s3) var(--s4);
@@ -5113,9 +5133,14 @@ a.calpill.p-overdue:hover {
   font-size: var(--t-14);
   font-weight: 620;
 }
-.lstep__id > span {
+.lstep__id > .u-mute {
   font-size: var(--t-12);
   line-height: 1.4;
+}
+.lstep__id-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
 }
 
 .lstep__ch {
@@ -5160,12 +5185,11 @@ a.calpill.p-overdue:hover {
 
 @media (max-width: 1100px) {
   .lstep {
-    grid-template-columns: 34px 64px minmax(160px, 1fr) auto;
+    grid-template-columns: 64px minmax(160px, 1fr) auto 34px;
     row-gap: var(--s2);
   }
-  .lstep__at,
-  .lstep > .tag {
-    grid-column: 3 / -1;
+  .lstep__at {
+    grid-column: 2 / -1;
     justify-self: start;
   }
 }

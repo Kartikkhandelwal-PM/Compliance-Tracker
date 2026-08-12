@@ -373,7 +373,7 @@ export function MatrixPage() {
       {columns.length === 0 || rows.length === 0 ? (
         <div className="sheet">
           <Empty title="Nothing in this slice">
-            No compliances fall inside this window for the current filters — widen the period or clear a filter.
+            No compliances fall inside this window for the current filters. Widen the period or clear a filter.
           </Empty>
         </div>
       ) : (
@@ -463,7 +463,7 @@ export function MatrixPage() {
                             <button
                               type="button"
                               className={`mxcell ${CELL_CLASS[cell.status]}`}
-                              title={`${c.name} · ${cell.form} ${cell.periodLabel} — ${cell.status}`}
+                              title={`${c.name} · ${cell.form} ${cell.periodLabel} · ${cell.status}`}
                               onClick={() => setPeek(cell)}
                             >
                               <i />

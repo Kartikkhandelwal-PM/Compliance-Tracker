@@ -88,7 +88,7 @@ export function compose(o: Obligation, client: Client, staff: Staff): Composed {
 
   const subject = overdue
     ? `Overdue: ${o.form} · ${o.periodLabel}`
-    : `Reminder: ${o.form} · ${o.periodLabel} — due ${due}`;
+    : `Reminder: ${o.form} · ${o.periodLabel}, due ${due}`;
 
   const opening = `Dear ${client.name},`;
 
@@ -112,7 +112,7 @@ export function compose(o: Obligation, client: Client, staff: Staff): Composed {
     opening,
     "",
     overdue
-      ? `${o.form} for ${o.periodLabel} was due on ${due} and is still showing as unfiled — ${late} ${late === 1 ? "day" : "days"} past the statutory date.`
+      ? `${o.form} for ${o.periodLabel} was due on ${due} and is still showing as unfiled, ${late} ${late === 1 ? "day" : "days"} past the statutory date.`
       : `This is a reminder that ${o.form} for ${o.periodLabel} is due on ${due}.`,
     ...(feeLine ? ["", feeLine] : []),
     "",

@@ -19,6 +19,7 @@ import type { Obligation } from "../domain/types.ts";
 import { useObligations, useOutbox } from "../ui/app-state.tsx";
 import { CLIENT_BY_ID, staffOf } from "../domain/book.ts";
 import { decideItrForm, estimatedTax } from "../domain/rules.ts";
+import { updateClient } from "../domain/engine.ts";
 import { HEADS } from "../domain/catalog.ts";
 import { TODAY, fmtDate, inr, inrShort } from "../domain/dates.ts";
 import {
@@ -129,9 +130,28 @@ export function ClientDetailPage() {
             <span className="cprofile__ch">
               <BrandIcon name="whatsapp" size={14} />
               <span className="num">{client.phone}</span>
-              {client.whatsapp
-                ? <span className="tag tag--filed" style={{ marginLeft: "auto" }}><i className="tag__dot" />Opted in</span>
-                : <span className="tag tag--na" style={{ marginLeft: "auto" }}>Email only</span>}
+              {/* A tag reporting a fact nobody could change was a dead end —
+                  the only way to fix a client wrongly marked opted in (or to
+                  record that they've now agreed to it) was to edit the seed
+                  data. This is the one place that consent gets recorded, so
+                  it has to be a control. A switch, not a clickable tag — a
+                  coloured chip that happens to respond to a click reads as a
+                  status label, not as something to act on. */}
+              <span className="u-row" style={{ marginLeft: "auto", gap: 6 }}>
+                <span className="u-mute" style={{ fontSize: "var(--t-11)" }}>
+                  {client.whatsapp ? "Opted in" : "Email only"}
+                </span>
+                <button
+                  type="button"
+                  className={`switch${client.whatsapp ? " is-on" : ""}`}
+                  onClick={() => updateClient(client.id, { whatsapp: !client.whatsapp })}
+                  aria-pressed={client.whatsapp}
+                  aria-label="WhatsApp opt-in"
+                  title={client.whatsapp
+                    ? "Opted in to WhatsApp. Click to switch this client to email only"
+                    : "Email only. Click if this client has agreed to WhatsApp"}
+                />
+              </span>
             </span>
           </div>
         </div>

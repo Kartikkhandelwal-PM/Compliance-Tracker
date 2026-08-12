@@ -79,7 +79,7 @@ export function decideItrForm(p: ClientProfile): ItrDecision {
       hit: {
         ruleRef: ref(1),
         condition:
-          "Required to furnish a return under section 139(4A), (4B), (4C) or (4D) — trusts, political parties, research institutions and similar bodies.",
+          "Required to furnish a return under section 139(4A), (4B), (4C) or (4D): trusts, political parties, research institutions and similar bodies.",
         facts: [f("Entity type", p.entityType), f("s.139(4A)–(4D) applies", true)],
       },
     };
@@ -101,7 +101,7 @@ export function decideItrForm(p: ClientProfile): ItrDecision {
       form: "ITR-5",
       hit: {
         ruleRef: ref(3),
-        condition: "Not an individual, HUF or company — firms, LLPs, AOP/BOI. Excluded if required to file ITR-7.",
+        condition: "Not an individual, HUF or company: firms, LLPs, AOP/BOI. Excluded if required to file ITR-7.",
         facts: [f("Entity type", p.entityType), f("Is LLP", p.isLlp)],
       },
     };
@@ -223,7 +223,7 @@ export function applicableCompliances(c: Client): Applicable[] {
   if (p.taxAuditApplicable) {
     add("TAX-AUDIT", {
       ruleRef: "Income Tax · s.44AB",
-      condition: "Assessee liable to tax audit under section 44AB — turnover or gross receipts exceed the prescribed threshold.",
+      condition: "Assessee liable to tax audit under section 44AB: turnover or gross receipts exceed the prescribed threshold.",
       facts: [f("Turnover (preceding FY)", money(p.turnover)), f("Entity type", p.entityType)],
     });
   }
@@ -249,12 +249,12 @@ export function applicableCompliances(c: Client): Applicable[] {
     if (p.turnover > 5 * CR) {
       add("GSTR-1", {
         ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
-        condition: "Regular taxpayer with turnover above ₹5 crore — monthly filing is mandatory, the QRMP option is not available.",
+        condition: "Regular taxpayer with turnover above ₹5 crore. Monthly filing is mandatory; the QRMP option is not available.",
         facts: gstFacts,
       });
       add("GSTR-3B", {
         ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
-        condition: "Regular taxpayer with turnover above ₹5 crore — monthly filing is mandatory, the QRMP option is not available.",
+        condition: "Regular taxpayer with turnover above ₹5 crore. Monthly filing is mandatory; the QRMP option is not available.",
         facts: gstFacts,
       });
       add("GSTR-9C", {
@@ -265,23 +265,23 @@ export function applicableCompliances(c: Client): Applicable[] {
     } else if (p.gstQrmpOpted) {
       add("GSTR-1-QRMP", {
         ruleRef: "GST Return Type Mapping · QRMP",
-        condition: "Regular taxpayer with turnover up to ₹5 crore who has opted into QRMP — quarterly GSTR-1 with optional monthly IFF.",
+        condition: "Regular taxpayer with turnover up to ₹5 crore who has opted into QRMP: quarterly GSTR-1 with optional monthly IFF.",
         facts: gstFacts,
       });
       add(p.gstStateCategory === "Category A" ? "GSTR-3B-QRMP-A" : "GSTR-3B-QRMP-B", {
         ruleRef: `GST Return Type Mapping · QRMP ${p.gstStateCategory}`,
-        condition: `QRMP taxpayer in a ${p.gstStateCategory} state — quarterly GSTR-3B due on the ${p.gstStateCategory === "Category A" ? "22nd" : "24th"} of the month following the quarter.`,
+        condition: `QRMP taxpayer in a ${p.gstStateCategory} state. Quarterly GSTR-3B due on the ${p.gstStateCategory === "Category A" ? "22nd" : "24th"} of the month following the quarter.`,
         facts: [...gstFacts, f("State", c.state)],
       });
     } else {
       add("GSTR-1", {
         ruleRef: "GST Return Type Mapping · Regular ≤ ₹5cr",
-        condition: "Regular taxpayer with turnover up to ₹5 crore that has not opted into QRMP — monthly GSTR-1 and GSTR-3B.",
+        condition: "Regular taxpayer with turnover up to ₹5 crore that has not opted into QRMP: monthly GSTR-1 and GSTR-3B.",
         facts: gstFacts,
       });
       add("GSTR-3B", {
         ruleRef: "GST Return Type Mapping · Regular ≤ ₹5cr",
-        condition: "Regular taxpayer with turnover up to ₹5 crore that has not opted into QRMP — monthly GSTR-1 and GSTR-3B.",
+        condition: "Regular taxpayer with turnover up to ₹5 crore that has not opted into QRMP: monthly GSTR-1 and GSTR-3B.",
         facts: gstFacts,
       });
     }
@@ -296,35 +296,35 @@ export function applicableCompliances(c: Client): Applicable[] {
   } else if (p.gstRegType === "Composition") {
     add("CMP-08", {
       ruleRef: "GST Return Type Mapping · Composition",
-      condition: "Composition scheme taxpayer — quarterly tax payment through CMP-08 and an annual return in GSTR-4.",
+      condition: "Composition scheme taxpayer: quarterly tax payment through CMP-08 and an annual return in GSTR-4.",
       facts: gstFacts,
     });
     add("GSTR-4", {
       ruleRef: "GST Return Type Mapping · Composition",
-      condition: "Composition scheme taxpayer — quarterly tax payment through CMP-08 and an annual return in GSTR-4.",
+      condition: "Composition scheme taxpayer: quarterly tax payment through CMP-08 and an annual return in GSTR-4.",
       facts: gstFacts,
     });
   } else if (p.gstRegType === "TDS Deductor") {
     add("GSTR-7", {
       ruleRef: "GST Return Type Mapping · s.51",
-      condition: "TDS deductor registered under GST (section 51) — monthly GSTR-7.",
+      condition: "TDS deductor registered under GST (section 51): monthly GSTR-7.",
       facts: gstFacts,
     });
   } else if (p.gstRegType === "E-commerce Operator") {
     add("GSTR-8", {
       ruleRef: "GST Return Type Mapping · s.52",
-      condition: "E-commerce operator (section 52) — monthly TCS return in GSTR-8.",
+      condition: "E-commerce operator (section 52): monthly TCS return in GSTR-8.",
       facts: gstFacts,
     });
     if (p.turnover > 5 * CR) {
       add("GSTR-3B", {
         ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
-        condition: "The operator also holds a regular registration with turnover above ₹5 crore — monthly GSTR-3B applies.",
+        condition: "The operator also holds a regular registration with turnover above ₹5 crore. Monthly GSTR-3B applies.",
         facts: gstFacts,
       });
       add("GSTR-1", {
         ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
-        condition: "The operator also holds a regular registration with turnover above ₹5 crore — monthly GSTR-1 applies.",
+        condition: "The operator also holds a regular registration with turnover above ₹5 crore. Monthly GSTR-1 applies.",
         facts: gstFacts,
       });
     }
@@ -354,8 +354,8 @@ export function applicableCompliances(c: Client): Applicable[] {
     add("26Q", {
       ruleRef: "TDS Return Form Mapping · 26Q",
       condition: entityAlwaysDeducts
-        ? "Companies, firms and LLPs are always liable to deduct on non-salary payments above the section thresholds — Form 26Q quarterly."
-        : "An individual or HUF subject to tax audit in the preceding financial year is liable to deduct on non-salary payments — Form 26Q quarterly.",
+        ? "Companies, firms and LLPs are always liable to deduct on non-salary payments above the section thresholds. Form 26Q quarterly."
+        : "An individual or HUF subject to tax audit in the preceding financial year is liable to deduct on non-salary payments. Form 26Q quarterly.",
       facts: deductorFacts,
     });
   }
@@ -389,7 +389,7 @@ export function applicableCompliances(c: Client): Applicable[] {
     const abridged = p.companyType === "OPC" || p.companyType === "Small Company";
     add("AOC-4", {
       ruleRef: "ROC/MCA Form Applicability · All companies",
-      condition: "Baseline annual filing for every company — financial statements in AOC-4 within 30 days of the AGM.",
+      condition: "Baseline annual filing for every company: financial statements in AOC-4 within 30 days of the AGM.",
       facts: [f("Entity type", p.entityType), f("Company type", p.companyType ?? "—")],
     });
     add("MGT-7", {
@@ -421,12 +421,12 @@ export function applicableCompliances(c: Client): Applicable[] {
   if (p.isLlp) {
     add("LLP-11", {
       ruleRef: "ROC/MCA Form Applicability · LLP",
-      condition: "An LLP follows the LLP Act rather than the Companies Act — Form 11 annual return by 30 May and Form 8 by 30 October.",
+      condition: "An LLP follows the LLP Act rather than the Companies Act. Form 11 annual return by 30 May and Form 8 by 30 October.",
       facts: [f("Is LLP", true)],
     });
     add("LLP-8", {
       ruleRef: "ROC/MCA Form Applicability · LLP",
-      condition: "An LLP follows the LLP Act rather than the Companies Act — Form 11 annual return by 30 May and Form 8 by 30 October.",
+      condition: "An LLP follows the LLP Act rather than the Companies Act. Form 11 annual return by 30 May and Form 8 by 30 October.",
       facts: [f("Is LLP", true)],
     });
   }
@@ -457,7 +457,7 @@ export function applicableCompliances(c: Client): Applicable[] {
   if (p.professionalTaxState) {
     add("PTAX", {
       ruleRef: "Other Statutory · Professional Tax",
-      condition: "Professional tax is a state levy. Rates, forms and periodicity vary — the due date shown is the common annual enrolment date and must be verified against the state's own schedule.",
+      condition: "Professional tax is a state levy. Rates, forms and periodicity vary; the due date shown is the common annual enrolment date and must be verified against the state's own schedule.",
       facts: [f("PT state", p.professionalTaxState)],
     });
   }
@@ -484,7 +484,7 @@ export interface Exposure {
 }
 
 export function estimateExposure(def: ComplianceDef, daysOverdue: number, c: Client): Exposure {
-  if (daysOverdue <= 0) return { amount: 0, formula: "Not yet due — no penalty accruing.", perDay: 0 };
+  if (daysOverdue <= 0) return { amount: 0, formula: "Not yet due. No penalty accruing.", perDay: 0 };
   const p = c.profile;
   const lf = def.lateFee;
 
@@ -503,8 +503,8 @@ export function estimateExposure(def: ComplianceDef, daysOverdue: number, c: Cli
         amount,
         perDay: capped ? 0 : lf.amount,
         formula: cap != null
-          ? `₹${lf.amount}/day × ${daysOverdue} ${daysOverdue === 1 ? "day" : "days"} = ₹${inr(raw)}${capped ? ` — capped at ₹${inr(cap)}` : ` (cap ₹${inr(cap)})`}`
-          : `₹${lf.amount}/day × ${daysOverdue} ${daysOverdue === 1 ? "day" : "days"} = ₹${inr(raw)} — uncapped`,
+          ? `₹${lf.amount}/day × ${daysOverdue} ${daysOverdue === 1 ? "day" : "days"} = ₹${inr(raw)}${capped ? ` (capped at ₹${inr(cap)})` : ` (cap ₹${inr(cap)})`}`
+          : `₹${lf.amount}/day × ${daysOverdue} ${daysOverdue === 1 ? "day" : "days"} = ₹${inr(raw)} (uncapped)`,
       };
     }
     case "flat":
@@ -539,7 +539,7 @@ export function estimateExposure(def: ComplianceDef, daysOverdue: number, c: Cli
       return {
         amount,
         perDay: 0,
-        formula: `${(lf.pct * 100).toFixed(2)}% of turnover ₹${inr(p.turnover)} = ₹${inr(raw)}${raw > lf.cap ? ` — capped at ₹${inr(lf.cap)}` : ""}.`,
+        formula: `${(lf.pct * 100).toFixed(2)}% of turnover ₹${inr(p.turnover)} = ₹${inr(raw)}${raw > lf.cap ? ` (capped at ₹${inr(lf.cap)})` : ""}.`,
       };
     }
   }

@@ -178,7 +178,7 @@ const between = (r: () => number, lo: number, hi: number) => Math.round(lo + r()
 const ARCHETYPES: Archetype[] = [
   {
     key: "salaried",
-    label: "Salaried individual — ITR-1",
+    label: "Salaried individual · ITR-1",
     weight: 20,
     naming: "person",
     profile: (r, cat) => base({
@@ -191,7 +191,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "presumptive-prop",
-    label: "Proprietor, presumptive 44AD — ITR-4",
+    label: "Proprietor, presumptive 44AD · ITR-4",
     weight: 15,
     naming: "prop",
     profile: (r, cat, state) => {
@@ -211,7 +211,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "professional",
-    label: "Professional, tax audit — ITR-3",
+    label: "Professional, tax audit · ITR-3",
     weight: 10,
     naming: "prop",
     profile: (r, cat, state) => {
@@ -236,7 +236,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "composition",
-    label: "Composition dealer — CMP-08 / GSTR-4",
+    label: "Composition dealer · CMP-08 / GSTR-4",
     weight: 7,
     naming: "prop",
     profile: (r, cat, state) => {
@@ -255,7 +255,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "firm",
-    label: "Partnership firm — ITR-5",
+    label: "Partnership firm · ITR-5",
     weight: 9,
     naming: "firm",
     profile: (r, cat, state) => {
@@ -281,7 +281,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "llp",
-    label: "LLP — Form 11 / Form 8",
+    label: "LLP · Form 11 / Form 8",
     weight: 9,
     naming: "llp",
     profile: (r, cat, state) => {
@@ -309,7 +309,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "pvt-small",
-    label: "OPC / small company — MGT-7A",
+    label: "OPC / small company · MGT-7A",
     weight: 8,
     naming: "company",
     profile: (r, cat, state) => {
@@ -341,7 +341,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "pvt-large",
-    label: "Private company > ₹5cr — monthly GST, GSTR-9C",
+    label: "Private company > ₹5cr · monthly GST, GSTR-9C",
     weight: 12,
     naming: "company",
     profile: (r, cat, state) => {
@@ -376,7 +376,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "ecommerce",
-    label: "E-commerce operator — GSTR-8",
+    label: "E-commerce operator · GSTR-8",
     weight: 3,
     naming: "company",
     profile: (r, cat, state) => {
@@ -406,7 +406,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "trust",
-    label: "Charitable trust — ITR-7",
+    label: "Charitable trust · ITR-7",
     weight: 3,
     naming: "trust",
     profile: (r, cat, state) => base({
@@ -428,7 +428,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "gst-tds",
-    label: "GST TDS deductor — GSTR-7",
+    label: "GST TDS deductor · GSTR-7",
     weight: 2,
     naming: "company",
     profile: (r, cat, state) => base({
@@ -453,7 +453,7 @@ const ARCHETYPES: Archetype[] = [
   },
   {
     key: "aop",
-    label: "AOP / BOI — ITR-5",
+    label: "AOP / BOI · ITR-5",
     weight: 2,
     naming: "firm",
     profile: (r, cat, state) => base({

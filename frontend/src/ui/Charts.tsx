@@ -87,7 +87,7 @@ export function HeadExposureBars({ byHead }: { byHead: Record<string, number> })
   const max = Math.max(1, ...rows.map((r) => r.value));
 
   if (!rows.length) {
-    return <div className="u-mute" style={{ padding: "var(--s4) 0" }}>No exposure by head — nothing overdue.</div>;
+    return <div className="u-mute" style={{ padding: "var(--s4) 0" }}>No exposure by head. Nothing overdue.</div>;
   }
 
   return (
