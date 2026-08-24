@@ -12,7 +12,7 @@ import type {
   Channel, Client, ComplianceOverride, DeliveryStatus, FilingRun, FilingStatus,
   FirmProfile, Head, NotificationSettings, Obligation, OutboxEntry,
   ReminderSettings, ReminderStage, ScheduleStep, ScheduledSend, SenderProfile,
-  StatusBasis,
+  StatusBasis, StepKind,
 } from "./types.ts";
 import { CLIENTS, CLIENT_BY_ID, staffOf } from "./book.ts";
 import { DEF_BY_CODE, OCCURRENCES } from "./catalog.ts";
@@ -693,9 +693,24 @@ export function updateReminderSettings(patch: Partial<ReminderSettings>) {
 }
 
 /** Message text for an obligation, in the shape OutboxEntry stores it. */
-function composeFor(o: Obligation): { preview: string; body: string; subject: string } {
-  const c = compose(o, CLIENT_BY_ID[o.clientId], staffOf(o.assigneeId));
+function composeFor(
+  o: Obligation, channel: Channel, kind: StepKind,
+): { preview: string; body: string; subject: string } {
+  const c = compose(o, CLIENT_BY_ID[o.clientId], channel, kind);
   return { preview: c.line, body: c.body, subject: c.subject };
+}
+
+/** Which rung of the ladder a manual, ad-hoc chase reads as. Capped at "p1"
+ *  regardless of how overdue the obligation actually is — the escalation and
+ *  final-notice wording (and the owner cc that comes with them) belong to
+ *  the automatic ladder's own p7/p30 steps, never to a one-off chase someone
+ *  fires from a client screen. */
+function manualKindFor(o: Obligation): StepKind {
+  if (o.status === "Overdue") return "p1";
+  const n = diffDays(TODAY, o.dueDate);
+  if (n === 0) return "t0";
+  if (n <= 3) return "t3";
+  return "t7";
 }
 
 /** Obligations still in scope for a chase: unresolved, on a compliance the
@@ -826,6 +841,7 @@ function entryFor(
   o: Obligation,
   ch: Channel,
   stage: ReminderStage,
+  kind: StepKind,
   at: string,
   origin: OutboxEntry["origin"],
   extra: Partial<OutboxEntry> = {},
@@ -837,6 +853,7 @@ function entryFor(
     obligationId: o.id,
     channel: ch,
     stage,
+    kind,
     sentAt: at,
     status: outcome(`${o.id}|${ch}|${at}`, at),
     origin,
@@ -844,7 +861,7 @@ function entryFor(
     defCode: o.defCode,
     head: def.head,
     form: def.form,
-    ...composeFor(o),
+    ...composeFor(o, ch, kind),
     ...extra,
   };
 }
@@ -861,7 +878,7 @@ function materialise(send: ScheduledSend, at: string, origin: OutboxEntry["origi
     if (!client) continue;
     for (const ch of send.step.channels) {
       if (ch === "WhatsApp" && !client.whatsapp) continue;
-      entries.push(entryFor(o, ch, send.step.stage, at, origin, by ? { sentBy: by } : {}));
+      entries.push(entryFor(o, ch, send.step.stage, send.step.id, at, origin, by ? { sentBy: by } : {}));
     }
   }
   if (entries.length > 0) outbox = [...entries, ...outbox];
@@ -904,13 +921,12 @@ export function sendReminders(
     if (!set.has(o.id) || !chaseable(o)) continue;
     const client = CLIENT_BY_ID[o.clientId];
     if (!client) continue;
+    const kind = manualKindFor(o);
+    const stage: ReminderStage = o.status === "Overdue" ? "Overdue escalation"
+      : kind === "t0" ? "Due-date sent" : kind === "t3" ? "T-3 sent" : "T-7 sent";
     for (const ch of channels) {
       if (ch === "WhatsApp" && !client.whatsapp) continue;
-      entries.push(entryFor(
-        o, ch,
-        o.status === "Overdue" ? "Overdue escalation" : "T-7 sent",
-        at, "Manual", { sentBy: by },
-      ));
+      entries.push(entryFor(o, ch, stage, kind, at, "Manual", { sentBy: by }));
     }
   }
   if (entries.length > 0) {
@@ -921,7 +937,11 @@ export function sendReminders(
 }
 
 /** Send the same message again, on the same channel, recorded as a repeat
- *  rather than as a fresh first notice. */
+ *  rather than as a fresh first notice.
+ *
+ *  Reuses the original entry's subject, body and preview line verbatim
+ *  rather than recomposing them — a resend is "as the original, unchanged",
+ *  not a freshly worded notice for however many days it has now been. */
 export function resendEntries(entryIds: string[], by = "s1"): number {
   const wanted = new Set(entryIds);
   const byId = new Map(OBLIGATIONS.map((o) => [o.id, o]));
@@ -930,11 +950,16 @@ export function resendEntries(entryIds: string[], by = "s1"): number {
     if (!wanted.has(e.id)) continue;
     const o = byId.get(e.obligationId);
     if (!o || !chaseable(o)) continue;
-    entries.push(entryFor(o, e.channel, e.stage, NOW, "Manual", {
+    entries.push({
+      ...e,
+      id: `ob-${serial++}`,
+      sentAt: NOW,
+      status: outcome(`${e.id}|resend|${serial}`, NOW),
+      origin: "Manual",
       sentBy: by,
       resendOf: e.id,
       attempt: e.attempt + 1,
-    }));
+    });
   }
   if (entries.length > 0) {
     outbox = [...entries, ...outbox];
@@ -981,7 +1006,7 @@ export function releaseQueued(): { sent: number; cancelled: number } {
       return { ...e, status: "Cancelled" as DeliveryStatus };
     }
     sent++;
-    return { ...e, ...composeFor(o), status: outcome(`${e.id}|rel`, NOW), sentAt: NOW };
+    return { ...e, ...composeFor(o, e.channel, e.kind), status: outcome(`${e.id}|rel`, NOW), sentAt: NOW };
   });
   if (sent > 0 || cancelled > 0) emit();
   return { sent, cancelled };
@@ -1048,7 +1073,7 @@ export function getOutbox(): OutboxEntry[] {
       const at = stamp(dateOf(send.fireAt), send.step.sendAt, Math.floor(r * 58));
       for (const ch of send.step.channels) {
         if (ch === "WhatsApp" && !client.whatsapp) continue;
-        entries.push(entryFor(o, ch, send.step.stage, at, "Automatic"));
+        entries.push(entryFor(o, ch, send.step.stage, send.step.id, at, "Automatic"));
       }
     }
   }
@@ -1072,7 +1097,7 @@ export function getOutbox(): OutboxEntry[] {
        hour past the current one belongs to a previous day. */
     const daysBack = Math.floor(r * 4) + (hour > 17 ? 1 : 0);
     const at = stamp(addDays(TODAY, -daysBack), hour, Math.floor(r * 59));
-    entries.push(entryFor(o, "Email", "Overdue escalation", at, "Manual", {
+    entries.push(entryFor(o, "Email", "Overdue escalation", "p1", at, "Manual", {
       sentBy: ["s1", "s2", "s3"][Math.floor(r * 3)],
     }));
   });

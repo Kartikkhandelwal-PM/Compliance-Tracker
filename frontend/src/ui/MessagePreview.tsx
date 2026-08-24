@@ -197,7 +197,12 @@ export function MessagePreview({
           <dl className="mailpane__meta">
             <div><dt>From</dt><dd>{sender.name} &lt;{sender.fromEmail}&gt;</dd></div>
             <div><dt>To</dt><dd>{client?.email ?? ""}</dd></div>
-            <div><dt>Cc</dt><dd>{owner.name === "Unassigned" ? "no owner assigned" : owner.name}</dd></div>
+            {/* Only the escalation and final-notice steps cc the engagement
+                owner — every earlier step in the ladder, and every manual
+                chase, goes to the client alone. */}
+            <div><dt>Cc</dt><dd>{e.kind === "p7" || e.kind === "p30"
+              ? (owner.name === "Unassigned" ? "no owner assigned" : owner.name)
+              : "—"}</dd></div>
             <div><dt>Sent</dt><dd className="num">{fmtLong(dateOf(e.sentAt))} · {time}</dd></div>
           </dl>
           <div className="mailpane__body">

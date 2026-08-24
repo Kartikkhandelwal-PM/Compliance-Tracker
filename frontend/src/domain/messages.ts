@@ -6,28 +6,42 @@
    describes. Previously each was written at its own call site and they had
    already drifted apart.
 
-   WHO IS SPEAKING. These go out on KDK's **CA Connect** WhatsApp Business
-   account, on behalf of the practice — never as the practice's own number.
-   That has to be said in the message itself: a client who gets a payment
-   demand from an unrecognised business account and cannot tell whose it is
-   will either ignore it or report it. So every message names the sender, names
-   the CA it is sent for, and closes with the firm.
+   This is the code-side half of "Compliance Tracker - Reminder Templates
+   (Email, WhatsApp, Notifications).xlsx" — that workbook is the reviewable
+   copy deck a partner signs off on; this file is what actually sends. The two
+   have to be kept in sync by hand; when the workbook changes, this file does.
 
    HOUSE RULES, all of which exist because this is a statutory reminder going
    to a paying client, not a marketing blast:
      • Address the entity by its own name, never "Dear Sir/Madam".
      • State the form, the period and the statutory date in the first line.
        That is the whole message; everything after it is courtesy.
-     • Ask for one specific thing. "Please share the working papers" is an
-       action; "please do the needful" is not.
-     • Say what happens if they have already filed. Without that line every
-       reminder generates a reply, and the ones that matter get buried.
-     • Never threaten. Late fees are stated as a fact with a figure, once.
+     • Ask for one specific thing on Email. "Please share the working papers"
+       is an action; "please do the needful" is not.
+     • Say what happens if they have already filed — on Email only. Without
+       that line every reminder generates a reply, and the ones that matter
+       get buried.
+     • Never threaten. On Email a late fee is stated as a fact, once. On
+       WhatsApp it is stated as a condition ("a late fee applies and
+       increases with delay"), never a rupee figure — the accrual shown
+       elsewhere in the product is a planning estimate, not a number precise
+       enough to hand a client as settled fact on a channel with no reply.
      • No emoji, no exclamation marks, no marketing.
+
+   WHATSAPP IS NOT EMAIL WITH SHORTER SENTENCES. It goes out on the single
+   "CA Connect" WhatsApp Business number KDK operates for every firm on the
+   product, so the number itself carries no firm identity — every WhatsApp
+   template names the firm inline in its first line instead of in a
+   sign-off. It never asks for anything (no reply, no document, no
+   acknowledgement number): a reply on the shared number is not visible to
+   the firm today, so inviting one would set an expectation the product
+   cannot meet. Email carries the ask, because its Reply-To genuinely reaches
+   the firm. Neither channel ever names KDK or an individual staff member —
+   both speak for the client's own firm.
    ========================================================================== */
 
-import type { Obligation, Client, Staff } from "./types.ts";
-import { fmtLong, inr } from "./dates.ts";
+import type { Channel, Client, Obligation, StepKind } from "./types.ts";
+import { fmtLong } from "./dates.ts";
 
 export interface Composed {
   /** One line for the outbox table. */
@@ -72,56 +86,134 @@ export function setSender(patch: Partial<Sender>) {
   sender = { ...sender, ...patch };
 }
 
-function signature(staff: Staff): string {
-  const who = staff.name === "Unassigned" ? "your engagement team" : staff.name;
-  return `Sent by ${sender.name} on behalf of ${who}, ${sender.by}.`;
+/** The condition-not-figure late fee line. Left out entirely wherever the
+ *  accrued fee is zero — "a late fee applies" about a filing with no fee
+ *  accruing is noise, not a warning. */
+function emailFeeLine(o: Obligation, kind: StepKind): string | null {
+  if (o.exposure <= 0) return null;
+  return kind === "p1"
+    ? "A late fee applies from the due date and increases with each additional day of delay."
+    : "A late fee applies from the due date and continues to increase with each additional day of delay.";
 }
 
-export function compose(o: Obligation, client: Client, staff: Staff): Composed {
+function emailContent(
+  o: Obligation, client: Client, kind: StepKind, due: string, firmName: string,
+): { subject: string; body: string } {
+  const opening = `Dear ${client.name},`;
+  const fee = emailFeeLine(o, kind);
+  const sign = ["Regards,", firmName];
+
+  switch (kind) {
+    /* Email has no -3 step of its own — WhatsApp's "Follow-up" sits between
+       Email's first reminder and its due-date notice, so a t3-kinded Email
+       (from a manual send, never from the schedule) reads as the same first
+       reminder. */
+    case "t7":
+    case "t3":
+      return {
+        subject: `Reminder: ${o.form} for ${o.periodLabel} (due ${due})`,
+        body: [
+          opening, "",
+          `Your ${o.form} for ${o.periodLabel} is due on ${due}.`, "",
+          "Please send us the details we need so this can be completed well ahead of the deadline.", "",
+          "If this has already been completed, please let us know so we can update our records.", "",
+          ...sign,
+        ].join("\n"),
+      };
+    case "t0":
+      return {
+        subject: `Due today: ${o.form} for ${o.periodLabel}`,
+        body: [
+          opening, "",
+          `Your ${o.form} for ${o.periodLabel} is due on ${due}.`, "",
+          "Please send us the pending details today so this can be completed on your behalf.", "",
+          "If this has already been completed, please share the reference number so we can update our records.", "",
+          ...sign,
+        ].join("\n"),
+      };
+    case "p1":
+      return {
+        subject: `Overdue: ${o.form} for ${o.periodLabel}`,
+        body: [
+          opening, "",
+          `Your ${o.form} for ${o.periodLabel} was due on ${due} and has not yet been completed. It is now ${o.daysOverdue} day(s) overdue.`,
+          ...(fee ? ["", fee] : []), "",
+          "Please send us the pending details at the earliest so this can be completed without further delay.", "",
+          "If this has already been completed, please share the reference number so we can update our records.", "",
+          ...sign,
+        ].join("\n"),
+      };
+    case "p7":
+      return {
+        subject: `Overdue: ${o.form} for ${o.periodLabel} (second notice)`,
+        body: [
+          opening, "",
+          `Your ${o.form} for ${o.periodLabel} was due on ${due} and remains pending. It has now been ${o.daysOverdue} days, over a week past the due date.`,
+          ...(fee ? ["", fee] : []), "",
+          "Please send us the pending details at the earliest so this can be completed without further delay.", "",
+          "If this has already been completed, please share the reference number so we can update our records.", "",
+          ...sign,
+        ].join("\n"),
+      };
+    case "p30":
+      /* Off by default, and the one step with no "already filed" line — this
+         is the escalation-before-escalation, not another invitation to reply. */
+      return {
+        subject: `Overdue: ${o.form} for ${o.periodLabel} (final notice)`,
+        body: [
+          opening, "",
+          `Your ${o.form} for ${o.periodLabel} was due on ${due} and remains pending, now ${o.daysOverdue} days overdue.`,
+          ...(fee ? ["", fee] : []), "",
+          "This is our final reminder before this is escalated internally. Please send us the pending details at the earliest so this can be completed without further delay.", "",
+          ...sign,
+        ].join("\n"),
+      };
+  }
+}
+
+function whatsappContent(
+  o: Obligation, client: Client, kind: StepKind, due: string, firmName: string,
+): string {
+  const opener = `Dear ${client.name}, this is ${firmName} regarding your ${o.form} for ${o.periodLabel},`;
+
+  switch (kind) {
+    case "t7":
+      return `${opener} due on ${due}.\n\nPlease ensure this is completed well ahead of the deadline.`;
+    case "t3":
+      return `${opener} due on ${due}.\n\nPlease ensure this is completed in time.`;
+    case "t0":
+      return `${opener} due on ${due}.\n\nPlease ensure this is completed at the earliest.`;
+    /* WhatsApp carries only one overdue template. There is no Meta-approved
+       escalation or final-notice variant — those steps stay Email-only, cc'd
+       to the engagement owner, which is the more formal channel escalation
+       is meant to be. */
+    case "p1":
+    case "p7":
+    case "p30": {
+      const fee = o.exposure > 0
+        ? "A late fee applies from the due date and increases with each additional day of delay."
+        : null;
+      return [
+        `${opener} which was due on ${due} and has not yet been completed. It is now ${o.daysOverdue} day(s) overdue.`,
+        ...(fee ? [fee] : []),
+        "Please ensure this is completed at the earliest to avoid further delay.",
+      ].join("\n\n");
+    }
+  }
+}
+
+export function compose(o: Obligation, client: Client, channel: Channel, kind: StepKind): Composed {
   const due = fmtLong(o.dueDate);
-  const overdue = o.status === "Overdue";
-  const late = o.daysOverdue;
+  const firmName = sender.by;
+  const overdue = kind === "p1" || kind === "p7" || kind === "p30";
 
   const line = overdue
     ? `${o.form} for ${o.periodLabel} was due on ${due} and is still pending.`
     : `${o.form} for ${o.periodLabel} is due on ${due}.`;
 
-  const subject = overdue
-    ? `Overdue: ${o.form} · ${o.periodLabel}`
-    : `Reminder: ${o.form} · ${o.periodLabel}, due ${due}`;
-
-  const opening = `Dear ${client.name},`;
-
-  /* The fee is stated once, with a figure, and only when there is one. A
-     reminder that says "penalties may apply" is noise; "₹4,200 so far, rising
-     ₹200 a day" is a reason to act this afternoon. */
-  const feeLine =
-    overdue && o.exposure > 0
-      ? `A late fee of ₹${inr(o.exposure)} has accrued so far and continues to increase for every day the return stays unfiled.`
-      : null;
-
-  const ask = overdue
-    ? "Please share the pending details today so we can file on your behalf immediately."
-    : "Please share the required documents so we can complete the filing before the due date.";
-
-  const alreadyFiled = overdue
-    ? "If the return has already been filed, please send us the acknowledgement number and we will update our records."
-    : "If you have already filed this yourself, please let us know and we will close it at our end.";
-
-  const body = [
-    opening,
-    "",
-    overdue
-      ? `${o.form} for ${o.periodLabel} was due on ${due} and is still showing as unfiled, ${late} ${late === 1 ? "day" : "days"} past the statutory date.`
-      : `This is a reminder that ${o.form} for ${o.periodLabel} is due on ${due}.`,
-    ...(feeLine ? ["", feeLine] : []),
-    "",
-    ask,
-    "",
-    alreadyFiled,
-    "",
-    signature(staff),
-  ].join("\n");
-
+  if (channel === "WhatsApp") {
+    return { line, body: whatsappContent(o, client, kind, due, firmName), subject: "" };
+  }
+  const { subject, body } = emailContent(o, client, kind, due, firmName);
   return { line, body, subject };
 }

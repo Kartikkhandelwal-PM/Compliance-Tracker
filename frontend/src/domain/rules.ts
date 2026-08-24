@@ -204,11 +204,18 @@ export function applicableCompliances(c: Client): Applicable[] {
 
   /* ---- Income Tax: return + audit ------------------------------------- */
   const itr = decideItrForm(p);
+  /* Finance Act, 2026 split the old single 31 July non-audit bucket by
+     whether the return carries business/professional income: ITR-3 and
+     ITR-4 filers now have until 31 August, while ITR-1 and ITR-2 (no
+     business income) stay at 31 July. */
+  const hasBusinessForm = itr.form.startsWith("ITR-3") || itr.form.startsWith("ITR-4");
   const auditRoute = p.hasTransferPricing
     ? "ITR-TP"
     : p.taxAuditApplicable || p.entityType === "Company" || p.isLlp
       ? "ITR-AUDIT"
-      : "ITR-NONAUDIT";
+      : hasBusinessForm
+        ? "ITR-NONAUDIT-BIZ"
+        : "ITR-NONAUDIT";
 
   add(auditRoute, {
     ruleRef: itr.hit.ruleRef,
@@ -266,6 +273,15 @@ export function applicableCompliances(c: Client): Applicable[] {
       add("GSTR-1-QRMP", {
         ruleRef: "GST Return Type Mapping · QRMP",
         condition: "Regular taxpayer with turnover up to ₹5 crore who has opted into QRMP: quarterly GSTR-1 with optional monthly IFF.",
+        facts: gstFacts,
+      });
+      /* Applied to every QRMP client, not gated behind a per-client opt-in —
+         the profile has no field recording who actually uses IFF month to
+         month, and it costs nothing to show it on a client who never files
+         it: the flat ₹0 fee means it never contributes a penalty figure. */
+      add("IFF", {
+        ruleRef: "GST Return Type Mapping · QRMP",
+        condition: "QRMP taxpayer. IFF lets B2B invoices for month 1 and month 2 of the quarter reach the recipient early, instead of waiting for the quarterly GSTR-1.",
         facts: gstFacts,
       });
       add(p.gstStateCategory === "Category A" ? "GSTR-3B-QRMP-A" : "GSTR-3B-QRMP-B", {
@@ -508,7 +524,11 @@ export function estimateExposure(def: ComplianceDef, daysOverdue: number, c: Cli
       };
     }
     case "flat":
-      return { amount: lf.amount, perDay: 0, formula: `Flat penalty ₹${inr(lf.amount)} once the due date passes.` };
+      /* A flat fee of ₹0 (IFF) isn't a penalty regime with a zero figure —
+         there is no fee at all, so the note itself is the whole explanation. */
+      return lf.amount === 0
+        ? { amount: 0, perDay: 0, formula: lf.note }
+        : { amount: lf.amount, perDay: 0, formula: `Flat penalty ₹${inr(lf.amount)} once the due date passes.` };
 
     case "s234f": {
       const fee = p.totalIncome > 500000 ? 5000 : 1000;

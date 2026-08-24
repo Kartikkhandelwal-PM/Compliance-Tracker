@@ -70,6 +70,24 @@ function monthlyFollowing(
   });
 }
 
+/** Monthly, but only the first two months of each quarter — for IFF, where
+ *  the third month's invoices go through the quarterly return itself rather
+ *  than a monthly upload of their own. */
+function iffMonths(fyStart: number, code: string, day: number): Occurrence[] {
+  return fyMonths(fyStart)
+    .filter((_, i) => i % 3 !== 2)
+    .map(([y, m]) => {
+      const [ny, nm] = nextMonth(y, m);
+      return {
+        runId: `${code}::${y}-${String(m).padStart(2, "0")}`,
+        defCode: code,
+        periodKey: `${y}-${String(m).padStart(2, "0")}`,
+        periodLabel: monthLabel(y, m),
+        dueDate: iso(ny, nm, day),
+      };
+    });
+}
+
 /** Quarterly return due on `day` of the `offset`-th month after quarter end. */
 function quarterlyFollowing(fyStart: number, code: string, day: number, offset = 1): Occurrence[] {
   return fyQuarters(fyStart).map((q) => {
@@ -170,6 +188,17 @@ export const DEFS: ComplianceDef[] = [
     dueRule: "13th of the month following the quarter",
     applicability: "QRMP scheme taxpayers",
     lateFee: { kind: "perDay", amount: 50, nilAmount: 20, cap: 5000, note: "Late fee per the standard GSTR-1 slab." },
+    clientFacing: true,
+  },
+  {
+    code: "IFF",
+    head: "GST",
+    form: "IFF",
+    description: "Invoice Furnishing Facility — optional early upload of B2B invoices",
+    frequency: "Monthly",
+    dueRule: "13th of the following month, for month 1 and month 2 of each quarter only",
+    applicability: "QRMP scheme taxpayers, optional in place of waiting for the quarterly GSTR-1",
+    lateFee: { kind: "flat", amount: 0, note: "No late fee under GST law — IFF is a facility, not a statutory return. Skipping it only delays those invoices reaching the recipient's books until the quarterly GSTR-1." },
     clientFacing: true,
   },
   {
@@ -285,13 +314,28 @@ export const DEFS: ComplianceDef[] = [
     clientFacing: true,
   },
   {
+    /* Finance Act, 2026 split what used to be one 31 July non-audit bucket
+       in two: ITR-1/ITR-2 filers (no business or professional income) keep
+       31 July, while ITR-3/ITR-4 filers move to 31 August — see
+       ITR-NONAUDIT-BIZ below. */
     code: "ITR-NONAUDIT",
     head: "Income Tax",
     form: "ITR (non-audit)",
-    description: "Income tax return filing",
+    description: "Income tax return filing — no business or professional income",
     frequency: "Annual",
     dueRule: "31 July following the financial year",
-    applicability: "Assessees not requiring audit",
+    applicability: "Individual / HUF not requiring audit, with no business or professional income (ITR-1 / ITR-2)",
+    lateFee: { kind: "s234f", note: "Late fee ₹1,000–₹5,000 u/s 234F plus interest u/s 234A." },
+    clientFacing: true,
+  },
+  {
+    code: "ITR-NONAUDIT-BIZ",
+    head: "Income Tax",
+    form: "ITR (non-audit, business)",
+    description: "Income tax return filing — business or professional income",
+    frequency: "Annual",
+    dueRule: "31 August following the financial year",
+    applicability: "Individual / HUF not requiring audit, with business or professional income (ITR-3 / ITR-4)",
     lateFee: { kind: "s234f", note: "Late fee ₹1,000–₹5,000 u/s 234F plus interest u/s 234A." },
     clientFacing: true,
   },
@@ -522,6 +566,7 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
     ...monthlyFollowing(fyStart, "GSTR-7", 10),
     ...monthlyFollowing(fyStart, "GSTR-8", 10),
     ...quarterlyFollowing(fyStart, "GSTR-1-QRMP", 13),
+    ...iffMonths(fyStart, "IFF", 13),
     ...quarterlyFollowing(fyStart, "GSTR-3B-QRMP-A", 22),
     ...quarterlyFollowing(fyStart, "GSTR-3B-QRMP-B", 24),
     ...quarterlyFollowing(fyStart, "CMP-08", 18),
@@ -552,6 +597,7 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
     },
 
     once("ITR-NONAUDIT", fyStart, 7, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart)),
+    once("ITR-NONAUDIT-BIZ", fyStart, 8, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart)),
     once("TAX-AUDIT", fyStart, 9, 30, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart)),
     once("ITR-AUDIT", fyStart, 10, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart)),
     once("ITR-TP", fyStart, 11, 30, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart)),

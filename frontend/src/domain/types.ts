@@ -269,6 +269,8 @@ export interface OutboxEntry {
   obligationId: string;
   channel: Channel;
   stage: ReminderStage;
+  /** Which template `compose()` used — see `StepKind`. */
+  kind: StepKind;
   /** `yyyy-mm-ddThh:mm`. A date alone cannot separate two sends on the same
    *  day, nor answer whether the client had working hours left to act. */
   sentAt: string;
@@ -309,8 +311,14 @@ export interface OutboxEntry {
    the quiet-hours window.
    ------------------------------------------------------------------------- */
 
+/** Which rung of the ladder a message was composed for — the exact template
+ *  `compose()` used. Kept on the sent record (not just derived from status)
+ *  so a resend or a released hold reuses the same wording category instead
+ *  of drifting to a different one if the obligation's state has moved on. */
+export type StepKind = "t7" | "t3" | "t0" | "p1" | "p7" | "p30";
+
 export interface ScheduleStep {
-  id: string;
+  id: StepKind;
   /** Signed days from the due date. -7 = a week before, +1 = day after. */
   offset: number;
   /** What the client sees this as, and what the log records. */

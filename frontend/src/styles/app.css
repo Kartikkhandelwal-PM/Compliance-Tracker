@@ -3051,7 +3051,10 @@ button.stat:hover {
   position: fixed;
   inset: 0;
   background: rgba(26, 24, 21, 0.34);
-  z-index: 90;
+  /* Above the tracker's own full-screen mode (.trkbox.is-expanded, 120) — a
+     cell clicked while the grid is expanded opened this drawer underneath
+     that opaque layer, invisibly, which read as the click doing nothing. */
+  z-index: 121;
   animation: fade 0.16s ease;
   backdrop-filter: blur(1.5px);
 }
@@ -3068,7 +3071,7 @@ button.stat:hover {
   width: min(560px, 94vw);
   background: var(--paper);
   border-left: 1px solid var(--rule);
-  z-index: 91;
+  z-index: 122;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-3);
@@ -4748,7 +4751,10 @@ a.calpill.p-overdue:hover {
 .cmdwrap {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  /* Same reason as .scrim/.drawer above: must clear .trkbox.is-expanded's
+     120, or opening the palette while the tracker is full-screen is
+     invisible underneath it. */
+  z-index: 123;
   display: flex;
   justify-content: center;
   padding-top: 12vh;
