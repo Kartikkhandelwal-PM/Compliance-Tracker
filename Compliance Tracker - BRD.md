@@ -18,8 +18,7 @@ across spreadsheets and manual follow-ups.
 
 This document specifies the product screen by screen, in the order a user moves through the
 app. Each module lists every element on that screen, what it does, where every click leads,
-what every colour means, and every validation or edge case. Screenshots of every screen are
-attached once the whole document is finalized.
+what every colour means, and every validation or edge case.
 
 **Note:** This design has not yet been approved by management or stakeholders. Once feedback
 is received, this document and the underlying product will be revised accordingly.
@@ -212,9 +211,10 @@ slightly on hover to show that. Each tile's number also animates up or down when
     filings, that button is greyed out.
   - **Export**: greyed out if there are no filings that month. Otherwise downloads an Excel
     file with a coloured, frozen header row, named `filed-YYYY-MM.xlsx`, with a column each
-    for Compliance, Head, Period, Due date, Client, PAN, Filed on, Status source,
-    Acknowledgement, and Recorded by. This covers every filing that month, not just the 40
-    shown on screen. A message confirms "Exported **[how many]** filings" once done.
+    for Compliance, Head, Period, Due date, Client, an identifying number (PAN, GSTIN, or TAN,
+    matching each client's own record type), Filed on, Status source, Acknowledgement, and
+    Recorded by. This covers every filing that month, not just the 40 shown on screen. A
+    message confirms "Exported **[how many]** filings" once done.
 
 ### 1.9 Shared colour/behaviour reference used throughout this module
 
@@ -736,14 +736,13 @@ Described here in full; later sections just point back to it.
 
 On this screen, the filter bar has, left to right:
 
-- A plain search box (not a pill, always shown), placeholder "Name, PAN or GSTIN". Typing
-  narrows the grid to clients whose name, PAN, or GSTIN contains what was typed.
-- **Period** pill: "This month" / "Next 3 months" (the default) / "Full year", all three
-  relative to today. Shown only while the header's year dropdown (section 4.3) is set to the
-  current financial year, since "this month" or "the next 3 months" has no meaning for a year
-  that isn't the one happening right now. As soon as a different year is picked, the pill
-  disappears and the grid always shows that whole year's columns instead; picking the current
-  year again brings the pill back, still set to whatever it was last on.
+- A plain search box (not a pill, always shown), placeholder "Name, PAN, GSTIN or TAN". Typing
+  narrows the grid to clients whose name, PAN, GSTIN, or TAN contains what was typed — Tracker
+  mixes all three record types in one grid, so all three identifiers need to be searchable.
+- **Period** pill: "This month" / "Next 3 months" / "Full year" (the default), all relative to
+  today. Only shown for the current financial year, since these options don't mean anything
+  for a different year. Picking a different year hides the pill and shows that year's whole
+  grid instead; picking the current year again brings the pill back as it was.
 - **Head** pill: "All heads" (default) or one specific head.
 - **Owner** pill: pick any number of staff members, or none for everyone. "Unassigned" is one
   of the choices.
@@ -785,8 +784,8 @@ On this screen, the filter bar has, left to right:
 
 - One row per client matching the current filters. **Clicking a row's client name** goes to
   that client's own page, covered in its own module later in this document.
-- Under the client's name: their PAN, and, if they have anything overdue, how many, in the
-  overdue colour.
+- Under the client's name: its identifying number (PAN, GSTIN, or TAN, matching its own record
+  type), and, if it has anything overdue, how many, in the overdue colour.
 - Each cell is a small coloured square: one of the four status colours used throughout this
   document (Filed green, Pending blue, Overdue red, Not applicable grey).
 - If a compliance genuinely does not apply to a client, that cell is left empty instead of
@@ -827,9 +826,10 @@ On this screen, the filter bar has, left to right:
 
 **Clicking Export** (in the page header, section 4.3) downloads every client currently
 matching the filters, not only the ones already loaded on screen, as an Excel file with a
-coloured, frozen header row. One row per client, with columns for Client, PAN, GSTIN, Owner,
-and then one column per compliance shown on the grid, each holding that client's status for
-it (or a dash where it doesn't apply). The file is named
+coloured, frozen header row. One row per client, with columns for Client, an identifying
+number (PAN, GSTIN, or TAN — whichever that row's own record type uses), Owner, and then one
+column per compliance shown on the grid, each holding that client's status for it (or a dash
+where it doesn't apply). The file is named
 `compliance-tracker-[today's date].xlsx`. A message confirms how many clients and compliances
 were exported.
 
@@ -846,9 +846,13 @@ The list screen is the whole client book, searchable and filterable, nothing els
 screen is everything about one client: the profile that decides which compliances apply to
 them, their full obligation history for the year, and every message they've been sent.
 
+Clients are fetched from KDK's GST, TDS and ITR modules. This screen shows all three on one
+shared list and one shared detail page (section 5.7 onward), behind a switch for which of the
+three to view.
+
 ### 5.2 Layout, top to bottom (list screen)
 
-1. Page header
+1. Page header, with the record-type switch and the sync control
 2. Filters row
 3. The client table
 4. "Show more" control
@@ -856,17 +860,45 @@ them, their full obligation history for the year, and every message they've been
 ### 5.3 Page header
 
 - Title: "Clients", with its icon repeated from the left-side menu.
-- Note line: "**[how many match]** of **[the total]** clients".
+- Note line: "**[how many match]** of **[the total]** **[GST/TDS/ITR]** records", the type
+  matching whichever of the three is currently selected.
+- On the right: a three-way switch, **"GST"** (selected by default) / **"TDS"** / **"ITR"**,
+  deciding which of the three record types the whole screen reads. This is a bigger switch
+  than a filter: it changes which array is on screen, not which rows within one array are
+  shown, so it sits beside the title rather than among the filters below (the same reason
+  Calendar's Calendar/Timeline switch sits here too). Switching it clears every filter below
+  back to its default and resets the list back to the first page.
+- Next to that, a **"Sync from KDK"** button. See section 5.3.1.
+
+### 5.3.1 Syncing from KDK
+
+Every record on this screen originates in one of the three KDK modules named above; nothing is
+entered directly into this module. Sync keeps this module's copy current.
+
+- Sync **runs automatically in the background** on its own schedule, pulling fresh data from
+  all three KDK modules at once, not just the one currently selected on screen.
+- **Clicking "Sync from KDK"** runs it immediately instead of waiting for the next automatic
+  run. Confirms "Synced: **[how many]** new · **[how many]** updated" broken down per module
+  (e.g. "GST: 5 new · TDS: 1 new · ITR: 8 new, 3 updated"), since the three feeds are genuinely
+  separate and a single combined number would hide which module actually changed.
+- A sync adds new records and refreshes the profile fields that drive applicability (turnover,
+  entity type, registration details, and so on) on existing ones. It never touches anything
+  local to this module: the assigned staff owner, the WhatsApp opt-in, and any manual
+  "not applicable" override all stay exactly as they were, even if the record they belong to
+  was just refreshed. A newly added record has applicability run against it immediately, the
+  same as any profile edit already does (section 5.12).
 
 ### 5.4 Filters row
 
-- A plain search box, placeholder "Name, PAN or GSTIN". Typing narrows the list to clients
-  whose name, PAN, or GSTIN contains what was typed.
-- **Entity** dropdown: "All entities" or one specific type (Individual, Company, LLP, Firm,
-  Trust, AOP/BOI, HUF).
+- A plain search box, placeholder "Name or **[GSTIN/TAN/PAN]**", matching whichever record type
+  is selected. Typing narrows the list to records whose name or that identifier contains what
+  was typed.
+- A **detail** dropdown, its options depending on the selected record type: registration type
+  for GST (Regular, Composition, TDS Deductor, E-commerce Operator, ISD, Non-Resident Taxable),
+  or entity type for TDS and ITR (Individual, Company, LLP, Firm, Trust, AOP/BOI, HUF).
 - **State** dropdown: "All states" or one specific Indian state.
 - **Owner** dropdown: "All owners", "Unassigned", or one specific staff member.
-- **Compliance health** dropdown: "All clients" / "In arrears" / "Up to date".
+- **Compliance health** dropdown: "All records" / "In arrears" / "Up to date".
 - On the right, a **Sort** dropdown: "Name A-Z" (the default) / "Most overdue" / "Turnover" /
   "Late fees".
 - Changing any of the five filters above resets the list back to showing only the first 40
@@ -875,12 +907,13 @@ them, their full obligation history for the year, and every message they've been
 
 ### 5.5 The client table
 
-**Clicking anywhere on a row** goes to that client's own page (section 5.7 onward). The client's name
+**Clicking anywhere on a row** goes to that record's own page (section 5.7 onward). The name
 is also its own separate link to the same destination.
 
-- **Client**: a small avatar with the client's initials, their trading name, and underneath,
-  their PAN and GSTIN (if they have one).
-- **Entity**, **State**: plain text.
+- **GST / TDS / ITR** (the column heading matches the selected tab): a small avatar with the
+  record's initials, its trading name, and underneath, its identifying number (GSTIN, TAN, or
+  PAN).
+- **Registration** (GST tab) or **Entity** (TDS/ITR tabs), **State**: plain text.
 - **Owner**: the assigned staff member's avatar and name.
 - **Turnover**: right-aligned, shortened (e.g. "₹13L"), or a dash if none is on record.
 - **Compliance health**: the same 3-colour progress bar (filed green, pending blue, overdue
@@ -900,8 +933,9 @@ these filters."
 Reached from the client table (section 5.5) or from a client's name anywhere else in this
 document. If the client can't be found, the screen shows "Client not found."
 
-- Title: the client's trading name. Note line: their PAN. On the right: a **financial year**
-  dropdown, listing every year the firm has used the product plus the year ahead, the same
+- Title: the client's trading name. Note line: its identifying number (PAN, GSTIN, or TAN,
+  matching its own record type) and which of the three record types it is. On the right: a
+  **financial year** dropdown, listing every year the firm has used the product plus the year ahead, the same
   list Calendar offers (section 2.3), followed by a "← All clients" button, back to section
   5.3. The current year is selected by default. Changing it re-runs the summary stats
   (section 5.9) and the Obligations tab (section 5.11) for the newly picked year; the
@@ -913,9 +947,10 @@ document. If the client can't be found, the screen shows "Client not found."
 - A large initials mark, the client's full legal name in bold, and underneath, a
   plain-language description of their business type (e.g. "Proprietor, presumptive scheme").
 - Three small tags: entity type, company type (only shown for companies), and state.
-- A list of facts: **PAN**; **GSTIN** (or "Not registered" if they have none); **CIN** (only
-  shown if the client has one); **ITR form** (the income tax return form this client is
-  expected to file, worked out from their profile); **Turnover**.
+- A list of facts: its identifying number, labelled to match its own record type (**PAN**,
+  **GSTIN**, or **TAN**); **CIN** (only shown for a company that has one); **ITR form** (only
+  shown for the ITR record type — the income tax return form this client is expected to file,
+  worked out from their profile); **Turnover**.
 - On the right, two blocks:
   - **Owner**: the assigned staff member's avatar, name, and role.
   - **Reachable on**: the client's email (clicking it opens a new email to them) and WhatsApp
@@ -1007,12 +1042,39 @@ against the **[financial year]** statutory calendar."
 
 ## Module 6: Reminders
 
+**Reminder Templates Reference:** the exact wording of every reminder, across Email, WhatsApp
+and in-app notifications, is documented in a single reference file. _[link to be added]_
+
 ### 6.1 Purpose
 
 What the firm has told its clients, and what it's about to tell them next. Two tabs: **Log**
 (what already went out, and whether it landed) and **Scheduled** (what's queued to go out,
 with the ability to send it early or stop it). Setting up the reminder cadence itself is not
 here; that lives in Settings, covered in its own module later in this document.
+
+### 6.1.1 What stops a reminder
+
+An obligation is only ever eligible for a reminder while it is genuinely open. The moment it
+is Filed or marked Not Applicable, it drops out of the cadence. If it is later reopened
+("Not filed after all", section 9.4), it becomes eligible again, but a reminder step that had
+already gone out for that compliance and period does not fire a second time just because one
+client's obligation reopened after the fact — a step's batch fires once for everyone chaseable
+in it at that moment, not per client. The reopened client can still be sent that one reminder
+by hand, from the obligation's own drawer. Beyond all that, a reminder is never sent for one
+of these reasons:
+
+- **The compliance itself is switched off.** "Tracked" off in Settings (section 7.7) removes
+  it from reminders entirely; "Remind client" off keeps it tracked but stops client reminders
+  specifically, while staff still see it everywhere else.
+- **The client filed after a batch was queued but before it actually went out.** The queued
+  send is cancelled, not sent; the Scheduled tab's counts update live to reflect this
+  (section 6.12).
+- **The obligation belongs to a financial year other than the current one.** Reminders only
+  ever chase the year that is actually underway. A residual arrear left over from a closed
+  financial year is not automatically chased again, the same way it no longer counts toward
+  the Dashboard's own "in arrears" figure (Module 1).
+- **WhatsApp specifically, when the client has not opted in.** The reminder still goes out on
+  Email; only the WhatsApp leg is skipped (section 5.8).
 
 ### 6.2 Layout, top to bottom
 
@@ -1051,8 +1113,8 @@ Clicking either one switches the content below it.
 
 Uses the filter pill pattern described in Module 4, section 4.4.
 
-- A plain search box, placeholder "Search client, PAN or form". A small **×** appears inside
-  it once something is typed, clearing it in one click.
+- A plain search box, placeholder "Search client, PAN, GSTIN, TAN or form". A small **×**
+  appears inside it once something is typed, clearing it in one click.
 - **Compliance** pill: "All compliances", or narrow to everything under one head, or to one
   specific form. Only heads and forms that actually appear in the log are offered; there's no
   option that would always show zero rows.
@@ -1063,13 +1125,28 @@ Uses the filter pill pattern described in Module 4, section 4.4.
 - **Sent by** pill: "Anyone" / "Automatic" (sent by the schedule itself, marked with a small
   lightning-bolt icon) / or one specific staff member, each shown with their avatar and role.
 - A **date** pill: pick a preset (Today / Last 7 days / Last 30 days / This month) or set an
-  exact from/to range.
-- A **"Clear all"** button, shown once any of the above is active, clearing every one at once.
-- On the right: a running count, "**[how many match]** of **[the total]**", and an
-  **Export** button (see section 6.9).
-- **Note:** this log only ever shows, and exports, the most recent 250 messages that match the
-  current filters. If more than 250 match, the rest are not shown or included; narrowing the
-  filters further is the only way to see or export the remainder.
+  exact from/to range. **Defaults to the last 7 days**, not an unbounded "all time" view — the
+  same reason Dashboard and Clients default to the current year rather than every year at
+  once. Left unbounded, the default view would quietly be "whatever the 250 newest messages
+  happen to be" once the log has years of history behind it, rather than a deliberate window.
+  A link elsewhere in the product that already names a specific slice (for example, the bell's
+  "18 reminders failed to send") arrives with no date restriction instead, since that count was
+  never computed against a date window and the reader would otherwise see fewer rows than the
+  number that sent them here.
+  - On a plain visit, this pill can be changed to any other preset or a custom range, but not
+    cleared back to "no range at all" — there's no × for it, since that isn't a state the pill
+    is ever meant to be in. Arriving via a slice-specific link is the one exception: it starts
+    with no date restriction, and if a range is then picked by hand, it can be cleared again,
+    since removing a range the reader deliberately set there is a real, valid action.
+- A **"Clear all"** button, shown once any of the above is not on its default setting; clicking
+  it resets every one, including the date pill back to the last 7 days.
+- On the right: a running count, "**[how many shown]** of **[how many match]** matching", and
+  an **Export** button (see section 6.9).
+- **Note:** the table on screen only ever shows the most recent 250 messages that match the
+  current filters, so a very wide filter (or the "18 failed" case above) still reads as one
+  screen rather than a wall of rows; narrowing the filters is the way to bring a specific
+  message into view. **This cap is a display limit only.** Export is not subject to it — see
+  section 6.9.
 - If nothing matches: "Nothing matches: try clearing a filter or widening the date range."
 
 ### 6.7 Log tab: selecting rows and bulk actions
@@ -1120,10 +1197,13 @@ is covered in its own module later in this document.
 
 ### 6.9 Log tab: exporting to Excel
 
-**Clicking Export** downloads whatever the table is currently showing (so it is also subject
-to the same 250-row cap described in section 6.6) as an Excel file with a coloured, frozen
-header row, one row per message, with columns for Sent, Time, Client, PAN, Compliance, Head,
-Channel, Trigger, Origin, Sent by, Delivery, Attempt, and Message. The file is named
+**Clicking Export** downloads every message matching the current filters, complete — **not**
+capped at the 250 the on-screen table shows (section 6.6). The cap exists so the table stays
+readable on screen; a downloaded workbook has no such limit, so there is no reason to also
+truncate a file someone deliberately asked for. The file is an Excel workbook with a coloured,
+frozen header row, one row per message, with columns for Sent, Time, Client, an identifying
+number (PAN, GSTIN, or TAN, matching that client's own record type), Compliance, Head, Channel,
+Trigger, Origin, Sent by, Delivery, Attempt, and Message. The file is named
 `reminders-[today's date].xlsx`. A message confirms how many were exported.
 
 ### 6.10 Scheduled tab: summary stats (4 boxes)
@@ -1229,15 +1309,23 @@ one** switches the panel on the right to it:
   - Shows the WhatsApp brand icon, the display name clients see, the caption "Sending on
     behalf of the practice", and a status tag on the right: "Verified business" (green) or
     "Unverified" (blue).
-  - Below that, two fields shown but **not editable**: Display name (hint: "What clients see
-    as the sender") and Business number. The text can still be selected and copied even though
-    it can't be changed.
+  - Below that, two fields shown but **not editable**: Display name — **"CA Connect"**, the
+    single shared WhatsApp Business identity every firm sends from, not a number specific to
+    this firm (hint: "What clients see as the sender") — and Business number. The text can
+    still be selected and copied even though it can't be changed.
 - **"Email"** card. Footer: "This address is set up for you and can't be changed here. Replies
   are yours to route."
   - Shows the email brand icon, the From address, and "Replies arrive at **[reply-to
     address]**".
-  - Below that: From address (not editable, hint: "Managed by KDK"), and Reply-to address,
-    hint "Yours to set". **This is the only editable field in the whole Sender section.**
+  - Below that: From address — **`noreply@kdksoftware.com`**, fixed and not editable (hint:
+    "Managed by KDK") — and Reply-to address, hint "Yours to set". **This is the only editable
+    field in the whole Sender section.**
+  - **This field matters more than its plain "yours to set" hint suggests.** The From address
+    is always KDK's, never the firm's own, since every firm sends through the same address. If
+    Reply-to is left blank, a client's reply goes nowhere useful; setting it to the firm's own
+    email is what makes a reply reach the firm instead of KDK. The footer note above exists
+    because of this: routing replies is the one thing this screen leaves for the firm to get
+    right.
 
 ### 7.6 Reminders
 
@@ -1355,7 +1443,8 @@ date**.
 
 ### 8.5 Filters row
 
-- A search box, placeholder "Find a client by name, PAN or GSTIN".
+- A search box, placeholder "Find a client by name or **[PAN/GSTIN/TAN]**", matching whichever
+  identifier this run's own record type uses (every client on one run shares the same type).
 - A 5-option switch: **Open** (the default, meaning Pending and Overdue together) / **Overdue**
   / **Filed** / **Everyone** / **Not applicable**. Clicking one narrows the table to that
   slice.
@@ -1369,7 +1458,8 @@ detail panel for that one client and compliance, covered in its own module later
 document.
 
 - A select-all checkbox in the header, selecting or clearing every row currently shown.
-- **Client**: name, then PAN and GSTIN underneath.
+- **Client**: name, then its identifying number underneath (PAN, GSTIN, or TAN — whichever
+  this run's own record type uses; every client on one run shares the same type).
 - **State**, **Owner** (avatar and name).
 - **Status**: a status tag.
 - **Source**: the status basis (how the system knows this is its current status), and, only
@@ -1405,9 +1495,10 @@ Checking at least one row opens a bulk action bar at the bottom of the screen:
 
 **Clicking Export** downloads exactly the rows currently shown (respecting the search, the
 5-option switch, and the Owner filter) as an Excel file with a coloured, frozen header row,
-one row per client, with columns for Client, PAN, GSTIN, State, Form, Period, Due date,
-Status, Status source, Acknowledgement, Filed on, Recorded by, Days overdue, Estimated
-penalty, and Owner. The file is named `[compliance code]-[period].xlsx`. A message confirms
+one row per client, with columns for Client, an identifying number (PAN, GSTIN, or TAN —
+whichever this run's own record type uses), State, Form, Period, Due date, Status, Status
+source, Acknowledgement, Filed on, Recorded by, Days overdue, Estimated penalty, and Owner.
+The file is named `[compliance code]-[period].xlsx`. A message confirms
 how many rows were exported.
 
 ### 8.9 Footer note
@@ -1638,8 +1729,8 @@ Sits above the page content on every screen.
   one specific client's page, or one specific compliance's page); it's left out entirely on
   every top-level page, so a page title is never repeated next to itself. **Clicking any
   segment except the last one** goes back up to that level.
-- A **search bar** filling the middle of the bar, reading "Search clients, compliances, PAN or
-  GSTIN" with a "/" hint. **Clicking it, or pressing / anywhere in the product** (outside a
+- A **search bar** filling the middle of the bar, reading "Search clients, compliances, PAN,
+  GSTIN or TAN" with a "/" hint. **Clicking it, or pressing / anywhere in the product** (outside a
   text field), opens the command palette (section 11.4).
 - On the right, four controls in a row:
   - The **notification bell**, present here on every screen. See section 11.3.1 below for what
@@ -1683,8 +1774,8 @@ list; if none apply, the popover reads "Nothing to flag right now."
   description.
 - Typing narrows the list to:
   - Any of the 7 destinations whose name matches.
-  - Any client whose name, legal name, PAN, or GSTIN matches (up to 40 shown), with their
-    avatar, PAN, and their owner's avatar.
+  - Any client whose name, legal name, PAN, GSTIN, or TAN matches (up to 40 shown), with their
+    avatar, identifying number, and their owner's avatar.
   - Any compliance whose form name or code matches (up to 55 results total, combined with the
     client results above), with its head underneath. A compliance the firm has switched off
     entirely in Settings is never offered here.

@@ -35,6 +35,14 @@ import type { OutboxEntry } from "../domain/types.ts";
 /* Delivery state is not compliance state, so it gets its own four tones rather
    than borrowing filed/pending/overdue. Read and Delivered in particular must
    never share a colour — the whole question is whether anyone looked. */
+/* The Log tab defaults to the last 7 days rather than "everything, ever" —
+   the same reason Dashboard and Clients default to the current year instead
+   of all time. Left unbounded, the default view would silently be "whatever
+   the 250 most recent messages happen to be" once the log has years of
+   history behind it, rather than a real, deliberate window. */
+const DEFAULT_FROM = addDays(TODAY, -6);
+const DEFAULT_TO = TODAY;
+
 const DELIVERY_TAG: Record<string, string> = {
   Read: "tag--read",
   Delivered: "tag--delivered",
@@ -135,8 +143,16 @@ function LogTab() {
     () => STATUS_PARAM[params.get("status") ?? ""] ?? "all",
   );
   const [sender, setSender] = useState(() => params.get("sender") ?? "all");
-  const [from, setFrom] = useState(() => params.get("from") ?? "");
-  const [to, setTo] = useState(() => params.get("to") ?? "");
+  /* A deep link that already names a slice (the bell's "18 reminders failed
+     to send", for example) promises an exact count computed with no date
+     restriction at all — silently also clipping it to the default week
+     would show fewer rows than the number that sent the reader here. So the
+     week default only applies to an otherwise-plain visit; arriving via a
+     link that already narrows the log some other way gets no date
+     restriction unless that link set one explicitly. */
+  const arrivedViaSlice = !!(params.get("status") || params.get("channel") || params.get("scope"));
+  const [from, setFrom] = useState(() => params.get("from") ?? (arrivedViaSlice ? "" : DEFAULT_FROM));
+  const [to, setTo] = useState(() => params.get("to") ?? (arrivedViaSlice ? "" : DEFAULT_TO));
 
   /* Follow the URL when it changes under an already-open page. */
   useEffect(() => {
@@ -189,7 +205,12 @@ function LogTab() {
     ];
   }, [outbox]);
 
-  const rows = useMemo(() => {
+  /* Every message matching the current filters, uncapped — what Export
+     downloads. The on-screen table only ever shows the most recent 250 of
+     these (`rows`, below); a long list is unusable to scroll and slow to
+     render, but a downloaded workbook has neither problem, so there is no
+     reason to also truncate the file someone actually asked for. */
+  const filtered = useMemo(() => {
     let list = outbox;
     if (channel !== "all") list = list.filter((e) => e.channel === channel);
     if (scope.startsWith("head:")) {
@@ -215,8 +236,10 @@ function LogTab() {
           || e.form.toLowerCase().includes(needle);
       });
     }
-    return list.slice(0, 250);
+    return list;
   }, [outbox, channel, scope, status, sender, from, to, q]);
+
+  const rows = useMemo(() => filtered.slice(0, 250), [filtered]);
 
   /* "Reached the client" counted Delivered and Read together and painted them
      one green, which is the one distinction that matters here: a message on
@@ -227,11 +250,12 @@ function LogTab() {
   const failed = outbox.filter((e) => e.status === "Failed").length;
 
   const filterCount = (channel !== "all" ? 1 : 0) + (scope !== "all" ? 1 : 0)
-    + (status !== "all" ? 1 : 0) + (sender !== "all" ? 1 : 0) + (from || to ? 1 : 0);
+    + (status !== "all" ? 1 : 0) + (sender !== "all" ? 1 : 0)
+    + (from !== DEFAULT_FROM || to !== DEFAULT_TO ? 1 : 0);
 
   const clearAll = () => {
     setChannel("all"); setScope("all"); setStatus("all"); setSender("all");
-    setFrom(""); setTo("");
+    setFrom(DEFAULT_FROM); setTo(DEFAULT_TO);
   };
 
   const toggle = (id: string) =>
@@ -247,7 +271,7 @@ function LogTab() {
   const exportXlsxFile = async () => {
     const headers = ["Sent", "Time", "Client", "Id", "Compliance", "Head",
       "Channel", "Trigger", "Origin", "Sent by", "Delivery", "Attempt", "Message"];
-    const dataRows = rows.map((e) => {
+    const dataRows = filtered.map((e) => {
       const c = ownerOf(e);
       return [
         fmtDate(dateOf(e.sentAt)), fmtTime(e.sentAt), c?.name ?? e.clientId, ownerIdOf(e).value,
@@ -256,7 +280,7 @@ function LogTab() {
       ];
     });
     await exportXlsx({ filename: `reminders-${TODAY}.xlsx`, headers, rows: dataRows });
-    toast(`Exported ${rows.length} reminders`);
+    toast(`Exported ${filtered.length} reminders`);
   };
 
   return (
@@ -302,7 +326,7 @@ function LogTab() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search client, PAN or form"
+            placeholder="Search client, PAN, GSTIN, TAN or form"
             aria-label="Search the reminder log"
           />
           {q ? (
@@ -342,6 +366,12 @@ function LogTab() {
           from={from}
           to={to}
           onChange={(f, t) => { setFrom(f); setTo(t); }}
+          /* A plain visit always has some date range set (the last 7 days by
+             default) — there is no "no range at all" state for the × to
+             clear it back to, so it's hidden. A deep link that deliberately
+             arrived with no date restriction keeps the ×, since removing a
+             range the reader picked by hand is a real, valid action there. */
+          clearable={arrivedViaSlice}
           presets={[
             { label: "Today", from: TODAY, to: TODAY },
             { label: "Last 7 days", from: addDays(TODAY, -6), to: TODAY },
@@ -352,7 +382,7 @@ function LogTab() {
         <ClearFilters count={filterCount} onClear={clearAll} />
         <span className="u-spacer" />
         <span className="u-mute num" style={{ fontSize: "var(--t-12)" }}>
-          {rows.length} of {outbox.length}
+          {rows.length} of {filtered.length} matching
         </span>
         <button type="button" className="btn btn--sm" onClick={exportXlsxFile}>
           <Icon name="download" size={14} /> Export

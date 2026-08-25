@@ -18,7 +18,7 @@ import {
   CLIENTS, CLIENT_BY_ID, GST_ENTITIES, GST_ENTITY_BY_ID, TDS_DEDUCTORS,
   TDS_DEDUCTOR_BY_ID, staffOf,
 } from "./book.ts";
-import { DEF_BY_CODE, OCCURRENCES_BY_FY, SEEDED_FYS } from "./catalog.ts";
+import { DEF_BY_CODE, FY_START, OCCURRENCES_BY_FY, SEEDED_FYS } from "./catalog.ts";
 import type { Applicable, ExposureContext } from "./rules.ts";
 import {
   applicableClientCompliances, applicableDeductorCompliances,
@@ -795,8 +795,12 @@ function manualKindFor(o: Obligation): StepKind {
 
 /** Obligations still in scope for a chase: unresolved, on a compliance the
  *  firm still tracks, and one the client is the one who files. The last two
- *  are the firm's settings, not the catalogue's defaults. */
+ *  are the firm's settings, not the catalogue's defaults. Scoped to the
+ *  current year on top of that — a stray arrear still open from a retired
+ *  financial year is a write-off conversation, not something the automated
+ *  cadence should still be messaging a client about. */
 function chaseable(o: Obligation): boolean {
+  if (o.fy !== FY_START) return false;
   if (o.status !== "Pending" && o.status !== "Overdue") return false;
   const cfg = complianceSetting(o.defCode);
   return cfg.tracked && cfg.clientFacing;
@@ -1166,7 +1170,7 @@ export function getOutbox(): OutboxEntry[] {
      the scheduler itself never picks an hour outside the window, so without
      these the held state would exist in the code and nowhere on screen. */
   const manual = OBLIGATIONS.filter(
-    (o) => o.status === "Overdue" && DEF_BY_CODE[o.defCode].clientFacing,
+    (o) => o.fy === FY_START && o.status === "Overdue" && DEF_BY_CODE[o.defCode].clientFacing,
   ).slice(0, 22);
   manual.forEach((o, i) => {
     const r = h(`${o.id}|manual`);
@@ -1267,10 +1271,14 @@ export interface FiledGroup {
   lastFiledOn: string;
 }
 
-/** `month` is a `yyyy-mm` key. */
+/** `month` is a `yyyy-mm` key. Scoped to the current year, like the
+ *  Dashboard tile this drawer opens from — it has no year selector of its
+ *  own, so silently paging into a retired year's history would be a
+ *  scope change nothing on screen explains. */
 export function filedInMonth(month: string): FiledGroup[] {
   const map = new Map<string, FiledGroup>();
   for (const o of allObligations()) {
+    if (o.fy !== FY_START) continue;
     if (o.status !== "Filed" || !o.filedOn) continue;
     if (o.filedOn.slice(0, 7) !== month) continue;
     let g = map.get(o.runId);
@@ -1310,7 +1318,7 @@ export function filedInMonth(month: string): FiledGroup[] {
 export function monthsWithFilings(): string[] {
   const set = new Set<string>();
   for (const o of allObligations()) {
-    if (o.status === "Filed" && o.filedOn) set.add(o.filedOn.slice(0, 7));
+    if (o.fy === FY_START && o.status === "Filed" && o.filedOn) set.add(o.filedOn.slice(0, 7));
   }
   return [...set].sort().reverse();
 }

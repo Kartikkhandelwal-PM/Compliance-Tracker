@@ -378,7 +378,7 @@ export function App() {
               which is what made this bar read as blank on top-level screens. */}
           <button type="button" className="searchbtn" onClick={() => setPaletteOpen(true)}>
             <Icon name="search" size={15} />
-            <span className="searchbtn__label">Search clients, compliances, PAN or GSTIN</span>
+            <span className="searchbtn__label">Search clients, compliances, PAN, GSTIN or TAN</span>
             <span className="kbd">/</span>
           </button>
 

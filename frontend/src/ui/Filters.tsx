@@ -46,12 +46,18 @@ export interface PillOption {
 
 /** Shared shell: the button, its active styling, and the menu it opens. */
 function Pill({
-  field, summary, active, onClear, children,
+  field, summary, active, onClear, clearable = true, children,
 }: {
   field: string;
   summary: string;
   active: boolean;
   onClear: () => void;
+  /** False for a field that always holds some value — a range with a
+   *  mandatory default, say — where "active" only ever means "set to
+   *  something other than the default", never "unset". Clearing such a
+   *  field back to nothing isn't a state the field is allowed to be in, so
+   *  there is nothing for an × to do here. */
+  clearable?: boolean;
   children: (close: () => void) => ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -76,7 +82,7 @@ function Pill({
         <span className="u-truncate">
           {active ? <><span className="fpill__f">{field}:</span> {summary}</> : field}
         </span>
-        {active ? (
+        {active && clearable ? (
           /* A nested <button> is invalid HTML, so the clear is a span that
              stops the click before it reaches the pill and reopens the menu. */
           <span
@@ -93,7 +99,7 @@ function Pill({
           >
             <Icon name="close" size={11} />
           </span>
-        ) : (
+        ) : active ? null : (
           <Icon name="chevronDown" size={13} className={`fpill__caret${open ? " is-up" : ""}`} />
         )}
       </button>
@@ -285,12 +291,17 @@ export function FilterPillMulti({
  * fields rather than instead of them.
  */
 export function DateRangePill({
-  from, to, onChange, presets,
+  from, to, onChange, presets, clearable = true,
 }: {
   from: string;
   to: string;
   onChange: (from: string, to: string) => void;
   presets: { label: string; from: string; to: string }[];
+  /** False when this range always holds some value — a mandatory default
+   *  window rather than an optional filter — so there is no "unset" state
+   *  for an × to clear it back to. The range can still be changed to any
+   *  preset or custom span; it just can never be removed outright. */
+  clearable?: boolean;
 }) {
   const active = !!(from || to);
   const summary = from && to
@@ -300,7 +311,10 @@ export function DateRangePill({
     : "";
 
   return (
-    <Pill field="Date" summary={summary} active={active} onClear={() => onChange("", "")}>
+    <Pill
+      field="Date" summary={summary} active={active} clearable={clearable}
+      onClear={() => onChange("", "")}
+    >
       {(close) => (
         <div className="drange">
           {presets.map((p) => (

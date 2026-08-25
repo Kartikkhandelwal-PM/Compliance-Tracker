@@ -29,13 +29,13 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { RecordType } from "../domain/types.ts";
-import { useObligations } from "../ui/app-state.tsx";
+import { useApp, useObligations } from "../ui/app-state.tsx";
 import {
   ALL_STATES, CLIENTS, GST_ENTITIES, STAFF, TDS_DEDUCTORS, staffOf,
 } from "../domain/book.ts";
 import { FY_START } from "../domain/catalog.ts";
 import { inr, inrShort } from "../domain/dates.ts";
-import { Avatar, Empty, PageHead, Pbar, initialsOf } from "../ui/bits.tsx";
+import { Avatar, Empty, PageHead, Pbar, Seg, initialsOf } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
 
 type SortKey = "exposure" | "overdue" | "name" | "turnover";
@@ -117,6 +117,7 @@ function rowsFor(type: RecordType): Row[] {
 
 export function ClientsPage() {
   const obligations = useObligations();
+  const { toast } = useApp();
   const nav = useNavigate();
   const [params] = useSearchParams();
   const [type, setType] = useState<RecordType>(() => {
@@ -184,6 +185,17 @@ export function ClientsPage() {
     setLimit(PAGE);
   };
 
+  /* Sync also runs automatically in the background on its own schedule; this
+     button just runs it right now instead of waiting for that. There's no
+     live KDK connection behind this prototype, so there's nothing actually
+     new to pull — the confirmation always reads as up to date. Broken down
+     per module rather than one combined number, since GST, TDS and ITR are
+     three separate feeds and a single figure would hide which one actually
+     changed. */
+  const syncFromKdk = () => {
+    toast("Synced: GST 0 new · TDS 0 new · ITR 0 new");
+  };
+
   return (
     <div className="page page--wide">
       <PageHead
@@ -194,25 +206,25 @@ export function ClientsPage() {
             <b>{filtered.length.toLocaleString("en-IN")}</b> of {total.toLocaleString("en-IN")} {tab.label} records
           </>
         }
+        aside={
+          <div className="u-row">
+            {/* GST / TDS / ITR are unrelated records — no shared ID joins them —
+                so switching tabs is switching which array the whole screen reads,
+                not filtering one list three ways. Placed here, beside the title,
+                the same way Calendar's Calendar/Timeline switch sits in its own
+                header rather than as a separate row: this choice changes what the
+                whole page means, not just one filter within it. */}
+            <Seg<RecordType>
+              value={type}
+              onChange={switchTab}
+              options={TABS.map((t) => ({ value: t.type, label: t.label }))}
+            />
+            <button type="button" className="btn btn--sm" onClick={syncFromKdk}>
+              <Icon name="sync" size={14} /> Sync from KDK
+            </button>
+          </div>
+        }
       />
-
-      {/* GST / TDS / ITR are unrelated records — no shared ID joins them —
-          so switching tabs is switching which array the whole screen reads,
-          not filtering one list three ways. */}
-      <div className="tabs" role="tablist" aria-label="Record type">
-        {TABS.map((t) => (
-          <button
-            key={t.type}
-            type="button"
-            role="tab"
-            aria-selected={type === t.type}
-            className={`tabs__btn${type === t.type ? " is-on" : ""}`}
-            onClick={() => switchTab(t.type)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
 
       {/* This screen is a list, not a report. The aggregate cards that used to
           sit here (entity-type breakdown, arrears totals, ₹ at risk) answered a

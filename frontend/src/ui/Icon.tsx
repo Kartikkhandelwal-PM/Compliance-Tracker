@@ -8,6 +8,7 @@ export type IconName =
   | "collapse" | "expand" | "plus" | "clock" | "send" | "external" | "info"
   | "arrowRight" | "sort" | "user" | "bolt" | "ban" | "history" | "bell"
   | "tick" | "tickDouble" | "menu" | "settings" | "fullscreen" | "fullscreenExit"
+  | "sync"
   /* Chat furniture — only used to make the WhatsApp preview read as a real
      thread rather than a quotation of one. */
   | "phone" | "video" | "dots" | "lock" | "mic" | "attach" | "smile" | "camera";
@@ -45,6 +46,7 @@ const P: Record<IconName, string> = {
   bolt: "M13 2.5 4 13.5h7l-1 8 9-11h-7l1-8Z",
   ban: "M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17ZM6 6l12 12",
   history: "M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3.5 4v5h5M12 7.5V12l3 2",
+  sync: "M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M20 12a8 8 0 0 1-14 5.3M6 21v-4h4",
   bell: "M18 8.5a6 6 0 1 0-12 0c0 5.2-1.6 6.8-2 7.2a.6.6 0 0 0 .4 1h15.2a.6.6 0 0 0 .4-1c-.4-.4-2-2-2-7.2ZM9.8 20a2.4 2.4 0 0 0 4.4 0",
   /* WhatsApp receipts. One tick = sent to the server, two = on the handset;
      the colour, not the count, is what says "read". */
