@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Version** | 0.1 (Draft) |
-| **Date** | 12 August 2026 |
+| **Version** | 0.2 (Draft) |
+| **Date** | 25 August 2026 |
 | **Prepared by** | KDK Software |
-| **Status** | Draft. All 11 modules drafted, for review. |
+| **Status** | Draft. All 11 modules drafted, for review. Supersedes version 0.1. |
 
 ## Objective
 
@@ -18,10 +18,8 @@ across spreadsheets and manual follow-ups.
 
 This document specifies the product screen by screen, in the order a user moves through the
 app. Each module lists every element on that screen, what it does, where every click leads,
-what every colour means, and every validation or edge case. A small number of items are not
-yet finalized and are marked **[PENDING]**; these will be completed once confirmed, without
-holding up the rest of the module. Screenshots of every screen are attached once the whole
-document is finalized.
+what every colour means, and every validation or edge case. Screenshots of every screen are
+attached once the whole document is finalized.
 
 **Note:** This design has not yet been approved by management or stakeholders. Once feedback
 is received, this document and the underlying product will be revised accordingly.
@@ -42,21 +40,14 @@ Below are the modules covered in this document, in the order a user moves throug
 10. Message Preview
 11. Shared Chrome (the navigation menu and top bar, used on every screen)
 
-**Note:** Several items throughout this document are marked **PENDING**. Most of these depend
-on the domain team's review of the client-mapping rule engine, which is still in progress; the
-full list is in the Consolidated Open Items table directly below. These will be completed once
-that review is finalized, and this document will be updated to match.
-
 ---
 
-## Consolidated Open Items (living list, updated as modules are added)
+## Rule Engine Reference
 
-| # | Item | Affects | Status |
-|---|---|---|---|
-| 1 | Final client-mapping rule thresholds (AGM Date, 139(4A) flag, transfer-pricing flag, Directors sub-table, employee/EPF/ESI fields, state Professional Tax table, GSTR-5/6 rules, CSR-2, XBRL/GSTR-9 thresholds) | All modules that show obligations, status, or exposure | Pending |
-| 2 | Additional client profile fields arising from item 1 | Client Compliance Profile module | Pending |
-| 3 | Client profile fields need to be made editable, with edits automatically re-running the rule engine (currently read-only) | Module 5, Clients (Compliance profile tab) | Pending |
-| 4 | "Sign out" should sign the user out entirely; "Account" should open the user's account profile section in KDK Software itself (not a page inside this module). Neither is wired up yet; "Account" also depends on how this module is embedded in KDK Software. | Module 11, Shared Chrome | Pending |
+The client-mapping rules, the due dates and calendar, the late-fee formulas, and the full list
+of compliances KDK tracks or can track are documented together in a single reference document.
+
+**Reference document:** _[link to be added]_
 
 ---
 
@@ -191,9 +182,8 @@ slightly on hover to show that. Each tile's number also animates up or down when
   that head everywhere else in the product.
 - At the end of each bar, the amount is shown in short form (e.g. "₹13L").
 - This chart is not clickable. It's for information only.
-- **[PENDING]** The late-fee formula is different for each compliance (some charge per day,
-  some a flat amount, some a percentage of turnover, and so on), and these figures are only as
-  correct as those formulas. If a formula changes later, the numbers on this chart change too.
+- The late-fee formula differs by compliance: some charge per day, some a flat amount, some a
+  percentage of turnover. Each bar reflects that compliance's own penalty rule.
 
 ### 1.8 "Filed this month" drawer (opened from the KPI tile in section 1.5)
 
@@ -270,6 +260,13 @@ value. It counts up or down to it over less than a second, so the change is visi
 silent (going from "581" to "574" without this would look like nothing happened). If the
 user's device has "reduce motion" turned on, the number just shows its final value straight
 away instead.
+
+**Time format.** Everywhere a specific clock time is displayed (a message's send time in the
+Reminders log, Module 6; a timestamp on Message Preview, Module 10; "sent 2 hours ago"-style
+notes), it is shown as a 12-hour clock, e.g. "2:32 PM". This is separate from the hour-of-day
+pickers in Settings (Module 7, section 7.6), which stay as a plain 24-hour list ("09:00",
+"14:00", and so on) since those are for setting an exact schedule, not for reading a moment
+back.
 
 ### 1.10 Filing runway (30-day strip)
 
@@ -349,7 +346,7 @@ ordered list for the whole financial year. This is the screen a firm plans its w
 1. Page header (view switch, financial year picker, "Today" button)
 2. Filters row (head, owner, day state)
 3. A strip of all 12 months in the financial year, with previous/next arrows
-4. "Month at a glance" (4 boxes, only shown for the current financial year)
+4. "Month at a glance" (4 boxes, only shown for a financial year that has begun)
 5. Either the month grid or the year timeline, depending on which view is selected
 6. A day panel (if a date is picked) or a plain list of everything due that month (if not)
 7. A small note about where the dates come from
@@ -358,17 +355,19 @@ ordered list for the whole financial year. This is the screen a firm plans its w
 
 - Title: "Calendar", with its icon repeated from the left-side menu.
 - Note line under the title:
-  - For the financial year that has real client data: "**[how many]** filings in
+  - For a financial year that has begun: "**[how many]** filings in
     **[Month Year]** · **[how many]** open", both for whichever month is currently
     selected.
-  - For either of the other two financial years offered: "statutory due dates only, client
-    filings are available for **[the year with real data]**". See section 2.12 for what this means.
+  - For the year ahead, which hasn't begun yet: "statutory due dates only, client filings
+    begin once the year starts". See section 2.12 for what this means.
 - On the right of the header:
   - A two-button switch: **"Calendar"** and **"Timeline"**. Clicking either one switches the
     view below immediately (see section 2.7 and section 2.8).
-  - A dropdown listing three financial years: the one before, the current one, and the one
-    after. Only the current one has real client filings behind it (again, see section 2.12).
-    Changing it clears any picked day.
+  - A dropdown listing every financial year the firm has used the product, oldest first, plus
+    the year ahead. This list grows by one year automatically every time a new financial year
+    starts, so a firm never loses access to an earlier year. The current year is selected by
+    default. Every year already begun has real client filings behind it; only the year ahead
+    does not (again, see section 2.12). Changing it clears any picked day.
   - A **"Today"** button. Clicking it jumps back to the current financial year and the current
     month, and clears any picked day, no matter where the user currently is.
 
@@ -377,11 +376,11 @@ ordered list for the whole financial year. This is the screen a firm plans its w
 - **Head** dropdown: "All heads" or one specific compliance head (Income Tax, TDS, GST, and so
   on). Changing it clears any picked day.
 - **Owner** dropdown: "Any owner", "Unassigned", or a specific staff member's name. Changing it
-  clears any picked day. This dropdown is greyed out for the two financial years with no real
-  client data, since ownership only exists on real filings; hovering it then explains why.
+  clears any picked day. This dropdown is greyed out for the year ahead, which has no real
+  client data yet, since ownership only exists on real filings; hovering it then explains why.
 - **Day state** dropdown: "All days", "With arrears", or "Nothing late". Changing it clears
-  any picked day. Like Owner, this is greyed out for the two financial years with no real
-  client data, for the same reason, with the same kind of explanation on hover.
+  any picked day. Like Owner, this is greyed out for the year ahead, for the same reason, with
+  the same kind of explanation on hover.
 - A **"Clear filters"** button appears only once at least one of the three filters above is
   not on its default setting. Clicking it resets Head, Owner, and Day state all at once, and
   clears any picked day.
@@ -395,19 +394,19 @@ ordered list for the whole financial year. This is the screen a firm plans its w
   clears any picked day.
 - **Clicking a month button** jumps straight to that month and clears any picked day.
 - The month currently being viewed is visually highlighted.
-- For the financial year with real client data, each month button also shows a small number:
-  how many items are open that month, or a dash if there are none. Hovering the button shows
-  the full month name and that same open count. For the other two financial years, no number
-  is shown, since there's no client data to count.
+- For a financial year that has begun, each month button also shows a small number: how many
+  items are open that month, or a dash if there are none. Hovering the button shows the full
+  month name and that same open count. For the year ahead, no number is shown, since there's
+  no client data to count yet.
 - A month with at least one overdue item gets a small red highlight on its own number, the
   same way an at-risk day does in the grid (section 2.7), so the busiest months to worry about stand
   out at a glance along the strip.
 
 ### 2.6 "Month at a glance" (4 boxes)
 
-Shown only for the financial year with real client data; hidden completely for the other two
-financial years, since none of these numbers would mean anything without a real client book
-behind them. **None of these four boxes are clickable.**
+Shown only for a financial year that has begun; hidden completely for the year ahead, since
+none of these numbers would mean anything before a real client book exists. **None of these
+four boxes are clickable.**
 
 - **"Landing this month"**: how many items are open (Pending or Overdue) with a due date in
   the selected month. Colour: the pending colour (blue). Underneath: "**[how many]**
@@ -449,8 +448,8 @@ behind them. **None of these four boxes are clickable.**
   any of those are overdue, the badge turns red and shows "**[how many]** late"
   instead.
 - Below the date, **up to 3 compliance chips**, one per filing due that day, each showing a
-  coloured line for its head, the form's short name, and (for the financial year with real
-  client data) a count of how many are still open. If a chip's filing has any overdue clients,
+  coloured line for its head, the form's short name, and (for a financial year that has begun)
+  a count of how many are still open. If a chip's filing has any overdue clients,
   the whole chip is tinted the overdue colour instead of its normal neutral look.
   - **Clicking a chip** goes straight to that filing's own page. This is a separate click
     target from the date number above it. It does **not** pick the day or open the day panel.
@@ -474,12 +473,11 @@ behind them. **None of these four boxes are clickable.**
   switched off if the user's device has "reduce motion" turned on.
 - Each date with at least one filing gets its own row group: the date (day number, month,
   weekday name), a "Today" tag if it's the current date, a coloured countdown (e.g. "due in 3
-  days"), and, for the financial year with real client data, how many are open and, if any,
-  how many are late.
+  days"), and, for a financial year that has begun, how many are open and, if any, how many
+  are late.
 - Under each date, one row per filing due that day: a coloured line for its head, the form
-  name, the period, and, for the financial year with real client data, a small 3-colour
-  progress bar plus either the open count or, if any are overdue, the overdue count in red and
-  bold.
+  name, the period, and, for a financial year that has begun, a small 3-colour progress bar
+  plus either the open count or, if any are overdue, the overdue count in red and bold.
   - **Clicking a row** goes straight to that filing's own page.
   - **Hovering a row** shows the same hover detail card as the grid (section 2.9).
 - If nothing matches the current filters, the list is replaced with "Nothing scheduled: no
@@ -492,10 +490,10 @@ A small card that appears near whatever chip or row is being hovered or focused.
 
 - The form name, then a line underneath with the period, the head, and how often it recurs.
 - The due date.
-- For the financial year with real client data: how many clients it applies to, how many have
-  filed, how many are still pending, and, if any, how many are overdue (shown in red). If any
-  late fees have built up, a line below shows the estimated amount.
-- For the other two financial years: "No client book for this year" instead of any numbers.
+- For a financial year that has begun: how many clients it applies to, how many have filed,
+  how many are still pending, and, if any, how many are overdue (shown in red). If any late
+  fees have built up, a line below shows the estimated amount.
+- For the year ahead: "No client book for this year" instead of any numbers.
 - At the bottom: "Open this compliance →", describing where the underlying click goes.
 
 ### 2.10 Day panel or month list
@@ -520,13 +518,14 @@ automatically."
 reflect a government deadline extension or a state-specific professional tax date until that
 rule is added to the underlying calendar logic.
 
-### 2.12 The two financial years without a client book
+### 2.12 The year ahead, before it has a client book
 
-The financial year picker (section 2.3) offers three years: the current one, and one on either side
-of it. Only the current one has real clients and real filings behind it. The other two still
-show a correct statutory calendar (every due date is generated the same way), but with no
-client data attached, since none exists for those years yet. Specifically, for those two
-years:
+The financial year picker (section 2.3) offers every year the firm has used the product, plus
+the year immediately ahead, seeded early so its statutory due dates are visible before the
+year begins. Every year that has actually begun, past or current, has real clients and
+filings behind it. Only the year ahead does not yet: it still shows a correct statutory
+calendar (every due date is generated the same way), just with no client data attached, since
+that year hasn't started. Specifically, for that year:
 
 - The **Owner** and **Day state** filters are greyed out (section 2.4), since both depend on real
   client filings.
@@ -534,9 +533,9 @@ years:
 - Month buttons (section 2.5), day badges, and compliance chips (section 2.7) show no counts, since there's
   nothing to count.
 - The hover detail card (section 2.9) says "No client book for this year" instead of showing numbers.
-- If **Day state** was already set to "With arrears" before switching to one of these years,
-  the calendar will show nothing at all for as long as that filter stays on, since "arrears"
-  can only ever come from real client filings, and switching it back to "All days" brings the
+- If **Day state** was already set to "With arrears" before switching to that year, the
+  calendar will show nothing at all for as long as that filter stays on, since "arrears" can
+  only ever come from real client filings, and switching it back to "All days" brings the
   statutory dates back immediately.
 
 ---
@@ -566,6 +565,12 @@ own module later in this document, which lists every client due that date.
 
 - Title: "Compliances", with its icon repeated from the left-side menu.
 - Note line: "**[how many match]** of **[the total]** compliance types".
+- On the right: a **financial year** dropdown, listing every year the firm has used the
+  product plus the year ahead, the same list Calendar offers (section 2.3). The current year
+  is selected by default. Every count on every card (section 3.6) reflects whichever year is
+  picked here: due dates and even the rule itself can change from one year to the next, so
+  there is no single "consolidated, every year at once" view to fall back on; the list always
+  shows one specific year's state.
 
 ### 3.4 Filters row
 
@@ -605,19 +610,19 @@ compliance's detail screen (section 3.7 onward). It also lifts up slightly on ho
 - Three facts: **Frequency** (how often it recurs), **Due** (the rule that sets its due date,
   in plain words, e.g. "20th of the following month"), and **Applies to** (who it applies to,
   in plain words).
-- At the bottom: how many clients it currently applies to, how many distinct due dates it has
-  this financial year, and then either:
-  - a red pill showing how many clients are currently overdue on it, plus the estimated late
+- At the bottom, all for the year picked in the page header (section 3.3): how many clients it
+  applies to, how many distinct due dates it has, and then either:
+  - a red pill showing how many clients are overdue on it that year, plus the estimated late
     fee if there is one, or
   - if none are overdue, the plain text "nothing late".
-- If any client is currently overdue on this compliance, the whole card gets a soft red
-  background tint, the same treatment used for at-risk cards throughout this document.
+- If any client is overdue on this compliance in the selected year, the whole card gets a soft
+  red background tint, the same treatment used for at-risk cards throughout this document.
 
 ### 3.7 Compliance Detail screen
 
 Reached by clicking any compliance card (section 3.6), any grid chip or timeline row on
 Calendar, or the "Compliance" column on any filing list elsewhere in this document. This
-screen shows one compliance's entire recurring schedule for the financial year: every
+screen shows one compliance's entire recurring schedule for a chosen financial year: every
 period it falls due, each with its own due date and its own filed/pending/overdue split, so
 it's clear at a glance which periods are clean and which are carrying arrears. If the code in
 the address doesn't match anything in the catalogue, the screen shows "Compliance not found:
@@ -626,7 +631,10 @@ nothing in the catalogue matches this code," with a link back to the full list.
 ### 3.8 Page header and "about" block
 
 - Title: the compliance's form name (e.g. "GSTR-3B"). Note line: its plain-language
-  description. On the right: a "← All compliances" button, back to section 3.3.
+  description. On the right: a **financial year** dropdown, listing every year the firm has
+  used the product plus the year ahead, the same list Calendar offers (section 2.3), followed
+  by a "← All compliances" button, back to section 3.3. The current year is selected by
+  default. Changing it re-runs section 3.9 and 3.10 for the newly picked year.
 - Underneath, four short facts in one row:
   - **Head**, with the same coloured dot used everywhere else for that head.
   - **Frequency**, how often this compliance recurs (e.g. Monthly, Quarterly, Annual).
@@ -642,21 +650,22 @@ nothing in the catalogue matches this code," with a link back to the full list.
 Plainer versions of the boxes used elsewhere in this document: no icon, and **none of them are
 clickable.**
 
-- **"Dates this year"**: how many periods this compliance has in the current financial year.
+- **"Dates this year"**: how many periods this compliance has in the selected financial year.
   Underneath: the financial year label.
 - **"Clients it applies to"**: the highest number of clients it has applied to in any single
-  period. Underneath: "at its widest period".
-- **"Filed"**: total filed count added up across every period this year. Colour: the filed
-  colour (green). Underneath: "across all periods".
-- **"Overdue"**: total overdue count added up across every period this year. Colour: the
-  overdue colour (red) if above zero. Underneath: the total estimated late fee, or "nothing
-  late" if there is none.
+  period of the selected year. Underneath: "at its widest period".
+- **"Filed"**: total filed count added up across every period in the selected year. Colour:
+  the filed colour (green). Underneath: "across all periods".
+- **"Overdue"**: total overdue count added up across every period in the selected year.
+  Colour: the overdue colour (red) if above zero. Underneath: the total estimated late fee, or
+  "nothing late" if there is none. For a past year this is naturally always zero, since
+  nothing from a closed year is still awaiting action.
 
 ### 3.10 Every date, as a table
 
-One row per period (e.g. one row for "July 2026", one for "August 2026", and so on through the
-financial year). **Clicking anywhere on a row** goes to that period's own Filing Run Detail
-screen, covered in its own module later in this document.
+One row per period in the selected financial year (e.g. one row for "July 2026", one for
+"August 2026", and so on). **Clicking anywhere on a row** goes to that period's own Filing Run
+Detail screen, covered in its own module later in this document.
 
 - **Period**: the period label, also its own separate link to the same destination as the
   rest of the row.
@@ -671,7 +680,7 @@ screen, covered in its own module later in this document.
 - **Late fees**: the estimated amount, right-aligned, in bold red if above zero; "nil" if the
   due date has already passed with nothing owed; a dash if the due date hasn't arrived yet and
   nothing is owed.
-- If this compliance has no periods at all in the current financial year, the table is
+- If this compliance has no periods at all in the selected financial year, the table is
   replaced with "No dates in this financial year: this compliance has no occurrences seeded
   for [financial year]."
 - Otherwise, underneath the table: "Pick a period to see every client on that date and where
@@ -703,7 +712,9 @@ at once.
 
 - Title on screen: "Compliance tracker". Note line: "**[how many rows are loaded]** of **[the total that match]** clients
   × **[how many]** compliances".
-- On the right: an **Export** button. See section 4.9.
+- On the right: a **financial year** dropdown, listing every year the firm has used the
+  product plus the year ahead, the same list Calendar offers (section 2.3), defaulting to the
+  current year, then an **Export** button. See section 4.9.
 
 ### 4.4 Filter bar
 
@@ -727,8 +738,12 @@ On this screen, the filter bar has, left to right:
 
 - A plain search box (not a pill, always shown), placeholder "Name, PAN or GSTIN". Typing
   narrows the grid to clients whose name, PAN, or GSTIN contains what was typed.
-- **Period** pill: "This month" / "Next 3 months" (the default) / "Full year". Chooses which
-  of the compliance calendar's due dates get a column on the grid.
+- **Period** pill: "This month" / "Next 3 months" (the default) / "Full year", all three
+  relative to today. Shown only while the header's year dropdown (section 4.3) is set to the
+  current financial year, since "this month" or "the next 3 months" has no meaning for a year
+  that isn't the one happening right now. As soon as a different year is picked, the pill
+  disappears and the grid always shows that whole year's columns instead; picking the current
+  year again brings the pill back, still set to whatever it was last on.
 - **Head** pill: "All heads" (default) or one specific head.
 - **Owner** pill: pick any number of staff members, or none for everyone. "Unassigned" is one
   of the choices.
@@ -742,9 +757,9 @@ On this screen, the filter bar has, left to right:
 - On the right, a plain **Sort** dropdown (not a pill, always shown): "Most late" (the
   default) / "Most open" / "Late fees" / "Name". This only changes the order rows are shown
   in; it never removes a client from the grid.
-- Changing **Period**, **Owner**, or **Status** also resets the grid back to showing only the
-  first 50 rows again (see section 4.7), since a different slice of the book should always start from
-  the top.
+- Changing the year dropdown (section 4.3), **Period**, **Owner**, or **Status** also resets
+  the grid back to showing only the first 50 rows again (see section 4.7), since a different
+  slice of the book should always start from the top.
 - If either no columns or no rows match the current filters, the grid is replaced with
   "Nothing in this slice: no compliances fall inside this window for the current filters.
   Widen the period or clear a filter."
@@ -885,8 +900,13 @@ these filters."
 Reached from the client table (section 5.5) or from a client's name anywhere else in this
 document. If the client can't be found, the screen shows "Client not found."
 
-- Title: the client's trading name. Note line: their PAN. On the right: a "← All clients"
-  button, back to section 5.3.
+- Title: the client's trading name. Note line: their PAN. On the right: a **financial year**
+  dropdown, listing every year the firm has used the product plus the year ahead, the same
+  list Calendar offers (section 2.3), followed by a "← All clients" button, back to section
+  5.3. The current year is selected by default. Changing it re-runs the summary stats
+  (section 5.9) and the Obligations tab (section 5.11) for the newly picked year; the
+  Compliance profile and Communications tabs are unaffected, since neither is scoped to a
+  single year.
 
 ### 5.8 Identity block
 
@@ -911,14 +931,19 @@ document. If the client can't be found, the screen shows "Client not found."
 The same style of box used on the Dashboard, complete with an icon chip, but **none of these
 four are clickable.**
 
-- **"Overdue"**: how many of this client's obligations are Overdue. Colour: the overdue
-  colour (red) if above zero. Underneath: the estimated late fee, or "nothing late".
-- **"Pending"**: how many are Pending. Colour: the pending colour (blue). Underneath:
-  "upcoming this year".
-- **"Filed"**: how many have been filed. Colour: the filed colour (green). Underneath: "this
-  financial year".
-- **"Not applicable"**: how many were excluded, whether by the rule engine or by hand.
-  Underneath: "rule-excluded or overridden".
+All four are scoped to the financial year picked in the page header (section 5.7), not always
+the current one.
+
+- **"Overdue"**: how many of this client's obligations are Overdue in the selected year.
+  Colour: the overdue colour (red) if above zero. Underneath: the estimated late fee, or
+  "nothing late". For a past year this is usually zero, since a past year's arrears are almost
+  always resolved by the time a later year is underway.
+- **"Pending"**: how many are Pending in the selected year. Colour: the pending colour (blue).
+  Underneath: "upcoming in [the selected financial year]".
+- **"Filed"**: how many have been filed in the selected year. Colour: the filed colour
+  (green). Underneath: the selected financial year's label.
+- **"Not applicable"**: how many were excluded in the selected year, whether by the rule
+  engine or by hand. Underneath: "rule-excluded or overridden".
 
 ### 5.10 The three tabs
 
@@ -931,9 +956,9 @@ tabs.
 
 ### 5.11 Obligations tab
 
-Two lists, one below the other. **Clicking any row in either list** opens the shared
-obligation detail panel for that one obligation (covered in its own module later in this
-document).
+Two lists, scoped to the financial year picked in the page header (section 5.7), one below
+the other. **Clicking any row in either list** opens the shared obligation detail panel for
+that one obligation (covered in its own module later in this document).
 
 - **"Open"**: heading reads "**[how many]** items. Click any row for the rule behind
   it." Each row
@@ -959,9 +984,9 @@ document).
   facts are shown as a small green ("Yes") or grey ("No") tag rather than plain text. A few
   facts have a small ⓘ that, on hover, explains what that field actually affects (e.g. "Caps
   the ₹200/day late fee under s.234E").
-- **[PENDING]** None of these fields can currently be edited on this screen; they are shown
-  read-only. Making them editable, with edits automatically re-running the rule engine as the
-  note above already describes, is a planned requirement not yet built.
+- Every field on this tab is editable in place. Saving a change re-runs applicability for this
+  client immediately, exactly as the note above describes: compliances can appear or disappear,
+  and scheduled reminders are rebuilt to match.
 
 ### 5.13 Communications tab
 
@@ -1614,26 +1639,42 @@ Sits above the page content on every screen.
   every top-level page, so a page title is never repeated next to itself. **Clicking any
   segment except the last one** goes back up to that level.
 - A **search bar** filling the middle of the bar, reading "Search clients, compliances, PAN or
-  GSTIN" with a "⌘K" hint. **Clicking it, or pressing Ctrl/Cmd+K anywhere in the product,**
-  opens the command palette (section 11.4).
+  GSTIN" with a "/" hint. **Clicking it, or pressing / anywhere in the product** (outside a
+  text field), opens the command palette (section 11.4).
 - On the right, four controls in a row:
-  - The **notification bell**. Already covered in full in Module 1, section 1.11 (what each alert
-    means, the unread badge, and how opening one clears it); this is the exact same bell,
-    present here on every screen, not only on Dashboard.
+  - The **notification bell**, present here on every screen. See section 11.3.1 below for what
+    it shows and how its unread badge behaves.
   - A **theme toggle**, switching instantly between light and dark.
   - The **profile button**: the signed-in user's avatar and a small down arrow. **Clicking
     it** opens a popover with:
     - The user's name, role, and firm name.
     - **"My clients"**: the Clients list, filtered to their own clients.
-    - **"Account"**: should take the user to their account profile section in KDK Software
-      itself (the parent application this module lives inside), not a page of its own inside
-      Compliance Tracker. **[PENDING]** Present in the menu, but not yet wired up.
+    - **"Account"**: takes the user to their account profile section in KDK Software itself,
+      the parent application this module lives inside, not a page of its own inside
+      Compliance Tracker.
     - **"Settings"**: Module 7.
     - A second theme toggle, for convenience from inside this popover.
-    - **"Sign out"**, styled as a warning action: should sign the user out of their account
-      entirely. **[PENDING]** Present in the menu, but not yet wired up.
+    - **"Sign out"**, styled as a warning action: signs the user out of their account entirely.
 
-### 11.4 Command palette (⌘K)
+### 11.3.1 Notification bell
+
+Clicking the bell opens a popover listing up to 4 alerts, each one on or off in Settings ›
+Alerts (Module 7, section 7.9): **Biggest backlog**, **Due today**, **No owner assigned**, and
+**Failed reminders**. Only alerts currently switched on, and currently true, appear in the
+list; if none apply, the popover reads "Nothing to flag right now."
+
+- A small badge on the bell itself shows how many of the listed alerts are unread. The badge is
+  hidden entirely once nothing is unread.
+- Each alert's "read" state is judged by comparing its current wording against whatever
+  wording it showed the last time it was opened, not by a simple seen/unseen flag. This is
+  deliberate: if "5 clients unowned" was already read and the count later changes to "8 clients
+  unowned," that counts as new information and the badge reappears, even though this same alert
+  was opened before.
+- **Clicking an alert** goes to the screen it describes (already filtered to the matching
+  slice, per the deep-linking rule used throughout this document), marks that one alert read,
+  and closes the popover.
+
+### 11.4 Command palette (/)
 
 - Opens as a centred overlay, dimming everything behind it. **Clicking outside it, or
   pressing Escape,** closes it without navigating anywhere.

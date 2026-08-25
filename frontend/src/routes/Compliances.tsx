@@ -18,7 +18,7 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useEngine, useObligations } from "../ui/app-state.tsx";
 import { untrackedCodes } from "../domain/engine.ts";
-import { DEFS, HEADS, headClass } from "../domain/catalog.ts";
+import { DEFS, FY_OPTIONS, FY_START, HEADS, fyLabel, headClass } from "../domain/catalog.ts";
 import { inrShort } from "../domain/dates.ts";
 import { Empty, PageHead } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
@@ -31,6 +31,7 @@ export function CompliancesPage() {
   const [q, setQ] = useState("");
   const [head, setHead] = useState("all");
   const [group, setGroup] = useState<GroupBy>("head");
+  const [fy, setFy] = useState(FY_START);
 
   /* The group headers park directly under the filter bar, which is itself
      sticky. Its height is not a constant — it wraps to a second line on a
@@ -55,6 +56,7 @@ export function CompliancesPage() {
   const stats = useMemo(() => {
     const m = new Map<string, { clients: Set<string>; open: number; overdue: number; fees: number; dates: Set<string> }>();
     for (const o of obligations) {
+      if (o.fy !== fy) continue;
       let s = m.get(o.defCode);
       if (!s) {
         s = { clients: new Set(), open: 0, overdue: 0, fees: 0, dates: new Set() };
@@ -67,7 +69,7 @@ export function CompliancesPage() {
       if (o.status === "Overdue") { s.overdue++; s.fees += o.exposure; }
     }
     return m;
-  }, [obligations]);
+  }, [obligations, fy]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -106,6 +108,18 @@ export function CompliancesPage() {
         title="Compliances"
         icon="rules"
         note={<><b>{filtered.length}</b> of {DEFS.length} compliance types</>}
+        aside={
+          <select
+            className="plain"
+            value={fy}
+            onChange={(e) => setFy(Number(e.target.value))}
+            aria-label="Financial year"
+          >
+            {FY_OPTIONS.map((y) => (
+              <option key={y} value={y}>{fyLabel(y)}</option>
+            ))}
+          </select>
+        }
       />
 
       <div className="filters" ref={filtersRef}>

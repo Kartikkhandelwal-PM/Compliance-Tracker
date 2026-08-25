@@ -3,20 +3,29 @@
    ----------------------------------------------------------------------------
    Two jobs, kept strictly separate:
 
-     1. APPLICABILITY — which compliances attach to a client, and *why*.
+     1. APPLICABILITY — which compliances attach to a record, and *why*.
         Every decision returns a RuleHit carrying the rule reference, the
         condition text, and the profile fields that actually fired. Nothing in
         this engine is allowed to reach the UI without an explanation attached;
         staff will not trust an ITR-4-vs-ITR-1 call they cannot audit.
 
+        Split into three functions — one per unlinked record — because
+        Client, GstEntity and TdsDeductor no longer share one profile:
+        `applicableClientCompliances` (ITR + ROC/MCA), `applicableGstCompliances`
+        (GST), `applicableDeductorCompliances` (TDS + payroll).
+
      2. EXPOSURE — what a missed deadline costs per day, from the late-fee
-        model on each compliance definition.
+        model on each compliance definition. Takes the handful of numbers it
+        actually needs rather than a whole record, since no one record type
+        carries every field every late-fee model might read.
 
    Ordering follows the "Applicability & Status Rules" workbook: the ITR ladder
    is priority-ordered, first match wins.
    ========================================================================== */
 
-import type { Client, ClientProfile, ComplianceDef, RuleHit } from "./types.ts";
+import type {
+  Client, ClientProfile, ComplianceDef, GstEntity, RuleHit, TdsDeductor,
+} from "./types.ts";
 import { DEF_BY_CODE } from "./catalog.ts";
 import { inr } from "./dates.ts";
 
@@ -194,7 +203,8 @@ export interface Applicable {
   hit: RuleHit;
 }
 
-export function applicableCompliances(c: Client): Applicable[] {
+/** Income Tax (return + audit route) and ROC/MCA — the `Client` (PAN) bucket. */
+export function applicableClientCompliances(c: Client): Applicable[] {
   const p = c.profile;
   const out: Applicable[] = [];
   const add = (defCode: string, hit: RuleHit, form?: string) => {
@@ -241,162 +251,6 @@ export function applicableCompliances(c: Client): Applicable[] {
       ruleRef: "Income Tax · s.208",
       condition: "Advance tax is payable where the estimated tax liability for the year is ₹10,000 or more.",
       facts: [f("Estimated tax liability", money(estTax)), f("Total income", money(p.totalIncome))],
-    });
-  }
-
-  /* ---- GST ------------------------------------------------------------- */
-  const gstFacts = [
-    f("GST registration", p.gstRegType),
-    f("Turnover (preceding FY)", money(p.turnover)),
-    f("QRMP opted", p.gstQrmpOpted),
-    f("State category", p.gstStateCategory),
-  ];
-
-  if (p.gstRegType === "Regular") {
-    if (p.turnover > 5 * CR) {
-      add("GSTR-1", {
-        ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
-        condition: "Regular taxpayer with turnover above ₹5 crore. Monthly filing is mandatory; the QRMP option is not available.",
-        facts: gstFacts,
-      });
-      add("GSTR-3B", {
-        ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
-        condition: "Regular taxpayer with turnover above ₹5 crore. Monthly filing is mandatory; the QRMP option is not available.",
-        facts: gstFacts,
-      });
-      add("GSTR-9C", {
-        ruleRef: "GST Return Type Mapping · GSTR-9C",
-        condition: "Self-certified reconciliation statement is required where turnover exceeds ₹5 crore.",
-        facts: gstFacts,
-      });
-    } else if (p.gstQrmpOpted) {
-      add("GSTR-1-QRMP", {
-        ruleRef: "GST Return Type Mapping · QRMP",
-        condition: "Regular taxpayer with turnover up to ₹5 crore who has opted into QRMP: quarterly GSTR-1 with optional monthly IFF.",
-        facts: gstFacts,
-      });
-      /* Applied to every QRMP client, not gated behind a per-client opt-in —
-         the profile has no field recording who actually uses IFF month to
-         month, and it costs nothing to show it on a client who never files
-         it: the flat ₹0 fee means it never contributes a penalty figure. */
-      add("IFF", {
-        ruleRef: "GST Return Type Mapping · QRMP",
-        condition: "QRMP taxpayer. IFF lets B2B invoices for month 1 and month 2 of the quarter reach the recipient early, instead of waiting for the quarterly GSTR-1.",
-        facts: gstFacts,
-      });
-      add(p.gstStateCategory === "Category A" ? "GSTR-3B-QRMP-A" : "GSTR-3B-QRMP-B", {
-        ruleRef: `GST Return Type Mapping · QRMP ${p.gstStateCategory}`,
-        condition: `QRMP taxpayer in a ${p.gstStateCategory} state. Quarterly GSTR-3B due on the ${p.gstStateCategory === "Category A" ? "22nd" : "24th"} of the month following the quarter.`,
-        facts: [...gstFacts, f("State", c.state)],
-      });
-    } else {
-      add("GSTR-1", {
-        ruleRef: "GST Return Type Mapping · Regular ≤ ₹5cr",
-        condition: "Regular taxpayer with turnover up to ₹5 crore that has not opted into QRMP: monthly GSTR-1 and GSTR-3B.",
-        facts: gstFacts,
-      });
-      add("GSTR-3B", {
-        ruleRef: "GST Return Type Mapping · Regular ≤ ₹5cr",
-        condition: "Regular taxpayer with turnover up to ₹5 crore that has not opted into QRMP: monthly GSTR-1 and GSTR-3B.",
-        facts: gstFacts,
-      });
-    }
-
-    if (p.turnover > 2 * CR) {
-      add("GSTR-9", {
-        ruleRef: "GST Return Type Mapping · GSTR-9",
-        condition: "Annual return is mandatory for regular taxpayers with turnover above the notified threshold of ₹2 crore.",
-        facts: gstFacts,
-      });
-    }
-  } else if (p.gstRegType === "Composition") {
-    add("CMP-08", {
-      ruleRef: "GST Return Type Mapping · Composition",
-      condition: "Composition scheme taxpayer: quarterly tax payment through CMP-08 and an annual return in GSTR-4.",
-      facts: gstFacts,
-    });
-    add("GSTR-4", {
-      ruleRef: "GST Return Type Mapping · Composition",
-      condition: "Composition scheme taxpayer: quarterly tax payment through CMP-08 and an annual return in GSTR-4.",
-      facts: gstFacts,
-    });
-  } else if (p.gstRegType === "TDS Deductor") {
-    add("GSTR-7", {
-      ruleRef: "GST Return Type Mapping · s.51",
-      condition: "TDS deductor registered under GST (section 51): monthly GSTR-7.",
-      facts: gstFacts,
-    });
-  } else if (p.gstRegType === "E-commerce Operator") {
-    add("GSTR-8", {
-      ruleRef: "GST Return Type Mapping · s.52",
-      condition: "E-commerce operator (section 52): monthly TCS return in GSTR-8.",
-      facts: gstFacts,
-    });
-    if (p.turnover > 5 * CR) {
-      add("GSTR-3B", {
-        ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
-        condition: "The operator also holds a regular registration with turnover above ₹5 crore. Monthly GSTR-3B applies.",
-        facts: gstFacts,
-      });
-      add("GSTR-1", {
-        ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
-        condition: "The operator also holds a regular registration with turnover above ₹5 crore. Monthly GSTR-1 applies.",
-        facts: gstFacts,
-      });
-    }
-  }
-
-  /* ---- TDS / TCS ------------------------------------------------------- */
-  const entityAlwaysDeducts =
-    p.entityType === "Company" || p.entityType === "Firm" || p.entityType === "LLP" || p.entityType === "Trust";
-  const deductorLiable = entityAlwaysDeducts || p.taxAuditApplicable;
-
-  const deductorFacts = [
-    f("Entity type", p.entityType),
-    f("Tax audit applicable (preceding FY)", p.taxAuditApplicable),
-    f("Payments made", p.paymentNatures.join(", ") || "—"),
-  ];
-
-  if (deductorLiable && p.paymentNatures.includes("Salary")) {
-    add("24Q", {
-      ruleRef: "TDS Return Form Mapping · 24Q",
-      condition: "Every employer paying salary that, after deductions, exceeds the basic exemption limit must deduct under section 192 and file Form 24Q quarterly.",
-      facts: deductorFacts,
-    });
-  }
-
-  const nonSalary: string[] = ["Contractor", "Rent", "Professional Fees", "Interest", "Commission"];
-  if (deductorLiable && p.paymentNatures.some((n) => nonSalary.includes(n))) {
-    add("26Q", {
-      ruleRef: "TDS Return Form Mapping · 26Q",
-      condition: entityAlwaysDeducts
-        ? "Companies, firms and LLPs are always liable to deduct on non-salary payments above the section thresholds. Form 26Q quarterly."
-        : "An individual or HUF subject to tax audit in the preceding financial year is liable to deduct on non-salary payments. Form 26Q quarterly.",
-      facts: deductorFacts,
-    });
-  }
-
-  if (p.paymentNatures.includes("Non-Resident")) {
-    add("27Q", {
-      ruleRef: "TDS Return Form Mapping · 27Q",
-      condition: "Any person making a payment to a non-resident, other than salary, must deduct under section 195 and file Form 27Q quarterly.",
-      facts: deductorFacts,
-    });
-  }
-
-  if (p.turnover > 10 * CR) {
-    add("27EQ", {
-      ruleRef: "TDS Return Form Mapping · 27EQ",
-      condition: "A seller is liable to collect tax at source under section 206C(1H) where turnover in the preceding year exceeds ₹10 crore.",
-      facts: [f("Turnover (preceding FY)", money(p.turnover))],
-    });
-  }
-
-  if (out.some((o) => ["24Q", "26Q", "27Q", "27EQ"].includes(o.defCode))) {
-    add("TDS-CHALLAN", {
-      ruleRef: "Income Tax · s.200(1) r/w Rule 30",
-      condition: "Tax deducted or collected must be deposited by the 7th of the following month (30 April for deductions made in March).",
-      facts: [f("Quarterly TDS deducted (est.)", money(p.tdsPerQuarter))],
     });
   }
 
@@ -455,7 +309,188 @@ export function applicableCompliances(c: Client): Applicable[] {
     });
   }
 
-  /* ---- Other statutory -------------------------------------------------- */
+  return out;
+}
+
+/** GST — the `GstEntity` (GSTIN) bucket, labelled "Firm" in the UI. */
+export function applicableGstCompliances(entity: GstEntity): Applicable[] {
+  const p = entity.profile;
+  const out: Applicable[] = [];
+  const add = (defCode: string, hit: RuleHit, form?: string) => {
+    const def = DEF_BY_CODE[defCode];
+    if (def) out.push({ defCode, form: form ?? def.form, hit });
+  };
+
+  const gstFacts = [
+    f("GST registration", p.gstRegType),
+    f("Turnover (preceding FY)", money(p.turnover)),
+    f("QRMP opted", p.gstQrmpOpted),
+    f("State category", p.gstStateCategory),
+  ];
+
+  if (p.gstRegType === "Regular") {
+    if (p.turnover > 5 * CR) {
+      add("GSTR-1", {
+        ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
+        condition: "Regular taxpayer with turnover above ₹5 crore. Monthly filing is mandatory; the QRMP option is not available.",
+        facts: gstFacts,
+      });
+      add("GSTR-3B", {
+        ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
+        condition: "Regular taxpayer with turnover above ₹5 crore. Monthly filing is mandatory; the QRMP option is not available.",
+        facts: gstFacts,
+      });
+      add("GSTR-9C", {
+        ruleRef: "GST Return Type Mapping · GSTR-9C",
+        condition: "Self-certified reconciliation statement is required where turnover exceeds ₹5 crore.",
+        facts: gstFacts,
+      });
+    } else if (p.gstQrmpOpted) {
+      add("GSTR-1-QRMP", {
+        ruleRef: "GST Return Type Mapping · QRMP",
+        condition: "Regular taxpayer with turnover up to ₹5 crore who has opted into QRMP: quarterly GSTR-1 with optional monthly IFF.",
+        facts: gstFacts,
+      });
+      /* Applied to every QRMP entity, not gated behind a per-entity opt-in —
+         the profile has no field recording who actually uses IFF month to
+         month, and it costs nothing to show it on one that never files it:
+         the flat ₹0 fee means it never contributes a penalty figure. */
+      add("IFF", {
+        ruleRef: "GST Return Type Mapping · QRMP",
+        condition: "QRMP taxpayer. IFF lets B2B invoices for month 1 and month 2 of the quarter reach the recipient early, instead of waiting for the quarterly GSTR-1.",
+        facts: gstFacts,
+      });
+      add(p.gstStateCategory === "Category A" ? "GSTR-3B-QRMP-A" : "GSTR-3B-QRMP-B", {
+        ruleRef: `GST Return Type Mapping · QRMP ${p.gstStateCategory}`,
+        condition: `QRMP taxpayer in a ${p.gstStateCategory} state. Quarterly GSTR-3B due on the ${p.gstStateCategory === "Category A" ? "22nd" : "24th"} of the month following the quarter.`,
+        facts: [...gstFacts, f("State", entity.state)],
+      });
+    } else {
+      add("GSTR-1", {
+        ruleRef: "GST Return Type Mapping · Regular ≤ ₹5cr",
+        condition: "Regular taxpayer with turnover up to ₹5 crore that has not opted into QRMP: monthly GSTR-1 and GSTR-3B.",
+        facts: gstFacts,
+      });
+      add("GSTR-3B", {
+        ruleRef: "GST Return Type Mapping · Regular ≤ ₹5cr",
+        condition: "Regular taxpayer with turnover up to ₹5 crore that has not opted into QRMP: monthly GSTR-1 and GSTR-3B.",
+        facts: gstFacts,
+      });
+    }
+
+    if (p.turnover > 2 * CR) {
+      add("GSTR-9", {
+        ruleRef: "GST Return Type Mapping · GSTR-9",
+        condition: "Annual return is mandatory for regular taxpayers with turnover above the notified threshold of ₹2 crore.",
+        facts: gstFacts,
+      });
+    }
+  } else if (p.gstRegType === "Composition") {
+    add("CMP-08", {
+      ruleRef: "GST Return Type Mapping · Composition",
+      condition: "Composition scheme taxpayer: quarterly tax payment through CMP-08 and an annual return in GSTR-4.",
+      facts: gstFacts,
+    });
+    add("GSTR-4", {
+      ruleRef: "GST Return Type Mapping · Composition",
+      condition: "Composition scheme taxpayer: quarterly tax payment through CMP-08 and an annual return in GSTR-4.",
+      facts: gstFacts,
+    });
+  } else if (p.gstRegType === "TDS Deductor") {
+    add("GSTR-7", {
+      ruleRef: "GST Return Type Mapping · s.51",
+      condition: "TDS deductor registered under GST (section 51): monthly GSTR-7.",
+      facts: gstFacts,
+    });
+  } else if (p.gstRegType === "E-commerce Operator") {
+    add("GSTR-8", {
+      ruleRef: "GST Return Type Mapping · s.52",
+      condition: "E-commerce operator (section 52): monthly TCS return in GSTR-8.",
+      facts: gstFacts,
+    });
+    if (p.turnover > 5 * CR) {
+      add("GSTR-3B", {
+        ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
+        condition: "The operator also holds a regular registration with turnover above ₹5 crore. Monthly GSTR-3B applies.",
+        facts: gstFacts,
+      });
+      add("GSTR-1", {
+        ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
+        condition: "The operator also holds a regular registration with turnover above ₹5 crore. Monthly GSTR-1 applies.",
+        facts: gstFacts,
+      });
+    }
+  }
+
+  return out;
+}
+
+/** TDS/TCS returns plus payroll-linked filings (PF, ESI, professional tax) —
+ *  the `TdsDeductor` (TAN) bucket, grouped together because all of them
+ *  exist for the same reason: the entity runs payroll. */
+export function applicableDeductorCompliances(d: TdsDeductor): Applicable[] {
+  const p = d.profile;
+  const out: Applicable[] = [];
+  const add = (defCode: string, hit: RuleHit, form?: string) => {
+    const def = DEF_BY_CODE[defCode];
+    if (def) out.push({ defCode, form: form ?? def.form, hit });
+  };
+
+  /* ---- TDS / TCS ------------------------------------------------------- */
+  const entityAlwaysDeducts =
+    p.entityType === "Company" || p.entityType === "Firm" || p.entityType === "LLP" || p.entityType === "Trust";
+  const deductorLiable = entityAlwaysDeducts || p.taxAuditApplicable;
+
+  const deductorFacts = [
+    f("Entity type", p.entityType),
+    f("Tax audit applicable (preceding FY)", p.taxAuditApplicable),
+    f("Payments made", p.paymentNatures.join(", ") || "—"),
+  ];
+
+  if (deductorLiable && p.paymentNatures.includes("Salary")) {
+    add("24Q", {
+      ruleRef: "TDS Return Form Mapping · 24Q",
+      condition: "Every employer paying salary that, after deductions, exceeds the basic exemption limit must deduct under section 192 and file Form 24Q quarterly.",
+      facts: deductorFacts,
+    });
+  }
+
+  const nonSalary: string[] = ["Contractor", "Rent", "Professional Fees", "Interest", "Commission"];
+  if (deductorLiable && p.paymentNatures.some((n) => nonSalary.includes(n))) {
+    add("26Q", {
+      ruleRef: "TDS Return Form Mapping · 26Q",
+      condition: entityAlwaysDeducts
+        ? "Companies, firms and LLPs are always liable to deduct on non-salary payments above the section thresholds. Form 26Q quarterly."
+        : "An individual or HUF subject to tax audit in the preceding financial year is liable to deduct on non-salary payments. Form 26Q quarterly.",
+      facts: deductorFacts,
+    });
+  }
+
+  if (p.paymentNatures.includes("Non-Resident")) {
+    add("27Q", {
+      ruleRef: "TDS Return Form Mapping · 27Q",
+      condition: "Any person making a payment to a non-resident, other than salary, must deduct under section 195 and file Form 27Q quarterly.",
+      facts: deductorFacts,
+    });
+  }
+
+  if (p.turnover > 10 * CR) {
+    add("27EQ", {
+      ruleRef: "TDS Return Form Mapping · 27EQ",
+      condition: "A seller is liable to collect tax at source under section 206C(1H) where turnover in the preceding year exceeds ₹10 crore.",
+      facts: [f("Turnover (preceding FY)", money(p.turnover))],
+    });
+  }
+
+  if (out.some((o) => ["24Q", "26Q", "27Q", "27EQ"].includes(o.defCode))) {
+    add("TDS-CHALLAN", {
+      ruleRef: "Income Tax · s.200(1) r/w Rule 30",
+      condition: "Tax deducted or collected must be deposited by the 7th of the following month (30 April for deductions made in March).",
+      facts: [f("Quarterly TDS deducted (est.)", money(p.tdsPerQuarter))],
+    });
+  }
+
+  /* ---- Payroll-linked: PF, ESI, professional tax ------------------------ */
   if (p.epfCovered) {
     add("PF-ECR", {
       ruleRef: "Other Statutory · EPF Act",
@@ -499,18 +534,36 @@ export interface Exposure {
   perDay: number;
 }
 
-export function estimateExposure(def: ComplianceDef, daysOverdue: number, c: Client): Exposure {
+/** The handful of numbers a late-fee model might read, from whichever of the
+ *  three records owns the obligation. Not every record carries every field
+ *  (a GstEntity has no `totalIncome`, a Client has no `tdsPerQuarter`) — the
+ *  caller supplies 0 for whatever its own record doesn't have, which is safe
+ *  because no late-fee model on a compliance that bucket doesn't own ever
+ *  reads the field it left as 0. */
+export interface ExposureContext {
+  turnover: number;
+  totalIncome: number;
+  tdsPerQuarter: number;
+  monthlyPayroll: number;
+  /** Pre-computed via `estimatedTax()` on the owning Client's profile — s234f
+   *  and the "taxDue"-basis interest model read this rather than
+   *  recomputing a cruder approximation with fewer fields than that
+   *  function actually uses (entity type, slab rates). 0 where the owner
+   *  isn't a Client and neither late-fee model can apply anyway. */
+  estimatedTax: number;
+}
+
+export function estimateExposure(def: ComplianceDef, daysOverdue: number, ctx: ExposureContext): Exposure {
   if (daysOverdue <= 0) return { amount: 0, formula: "Not yet due. No penalty accruing.", perDay: 0 };
-  const p = c.profile;
   const lf = def.lateFee;
 
   switch (lf.kind) {
     case "perDay": {
       let cap: number | undefined;
       if (typeof lf.cap === "number") cap = lf.cap;
-      else if (lf.cap === "tdsAmount") cap = Math.max(p.tdsPerQuarter, 1000);
+      else if (lf.cap === "tdsAmount") cap = Math.max(ctx.tdsPerQuarter, 1000);
       else if (lf.cap === "turnoverPct") {
-        cap = lf.capPct && lf.capPct > 0 ? Math.round(p.turnover * lf.capPct) : gstSlabCap(p.turnover);
+        cap = lf.capPct && lf.capPct > 0 ? Math.round(ctx.turnover * lf.capPct) : gstSlabCap(ctx.turnover);
       }
       const raw = lf.amount * daysOverdue;
       const amount = cap != null ? Math.min(raw, cap) : raw;
@@ -531,20 +584,20 @@ export function estimateExposure(def: ComplianceDef, daysOverdue: number, c: Cli
         : { amount: lf.amount, perDay: 0, formula: `Flat penalty ₹${inr(lf.amount)} once the due date passes.` };
 
     case "s234f": {
-      const fee = p.totalIncome > 500000 ? 5000 : 1000;
+      const fee = ctx.totalIncome > 500000 ? 5000 : 1000;
       const months = Math.ceil(daysOverdue / 30);
-      const interest = Math.round(estimatedTax(p) * 0.01 * months);
+      const interest = Math.round(ctx.estimatedTax * 0.01 * months);
       return {
         amount: fee + interest,
         perDay: 0,
-        formula: `s.234F late fee ₹${inr(fee)} (total income ${p.totalIncome > 500000 ? "above" : "up to"} ₹5,00,000) + s.234A interest ₹${inr(interest)} at 1%/month × ${months} on estimated tax of ₹${inr(estimatedTax(p))}.`,
+        formula: `s.234F late fee ₹${inr(fee)} (total income ${ctx.totalIncome > 500000 ? "above" : "up to"} ₹5,00,000) + s.234A interest ₹${inr(interest)} at 1%/month × ${months} on estimated tax of ₹${inr(ctx.estimatedTax)}.`,
       };
     }
     case "interest": {
       const base =
-        lf.basis === "tdsPerQuarter" ? Math.round(p.tdsPerQuarter / 3)
-          : lf.basis === "contribution" ? Math.round(p.monthlyPayroll * (lf.basisPct ?? 0.24))
-            : Math.round(estimatedTax(p) * 0.15);
+        lf.basis === "tdsPerQuarter" ? Math.round(ctx.tdsPerQuarter / 3)
+          : lf.basis === "contribution" ? Math.round(ctx.monthlyPayroll * (lf.basisPct ?? 0.24))
+            : Math.round(ctx.estimatedTax * 0.15);
       const months = Math.ceil(daysOverdue / 30);
       const amount = Math.round(base * (lf.monthlyPct / 100) * months);
       return {
@@ -554,12 +607,12 @@ export function estimateExposure(def: ComplianceDef, daysOverdue: number, c: Cli
       };
     }
     case "turnoverPct": {
-      const raw = Math.round(p.turnover * lf.pct);
+      const raw = Math.round(ctx.turnover * lf.pct);
       const amount = Math.min(raw, lf.cap);
       return {
         amount,
         perDay: 0,
-        formula: `${(lf.pct * 100).toFixed(2)}% of turnover ₹${inr(p.turnover)} = ₹${inr(raw)}${raw > lf.cap ? ` (capped at ₹${inr(lf.cap)})` : ""}.`,
+        formula: `${(lf.pct * 100).toFixed(2)}% of turnover ₹${inr(ctx.turnover)} = ₹${inr(raw)}${raw > lf.cap ? ` (capped at ₹${inr(lf.cap)})` : ""}.`,
       };
     }
   }

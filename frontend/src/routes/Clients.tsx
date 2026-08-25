@@ -1,5 +1,5 @@
 /* ============================================================================
-   CLIENTS
+   CLIENTS — the GST / TDS / ITR book, as one list
    ----------------------------------------------------------------------------
    The book, as a list. That is the whole job.
 
@@ -8,14 +8,32 @@
    fold. Nobody arriving at "Clients" wants a report; they want to find a client
    or scan the book. Aggregate analysis moved to the Dashboard where it belongs.
 
-   640 clients here, 10,000 in production, so the table is paged and every
-   narrowing question is a filter rather than a separate view.
+   THREE UNLINKED RECORDS, ONE SCREEN. GST, TDS and Income-Tax/ROC come from
+   three separate KDK modules with no shared ID — a TDS record carries a TAN,
+   never a PAN — so the GST bucket (GstEntity, GSTIN), the TDS bucket
+   (TdsDeductor, TAN) and the ITR bucket (Client, PAN — also carrying ROC/MCA,
+   Advance Tax and Tax Audit for that PAN) are genuinely different, unrelated
+   record types, not three views of one client. The tabs are labelled by
+   source module (GST/TDS/ITR) rather than by record shape, since that is the
+   vocabulary staff already use. Rather than three separate pages, they share
+   this one list and one detail page (see ClientDetail.tsx) behind a type
+   tab — chosen over separate screens because most of what a person does here
+   (search, filter by owner/state, scan compliance health) is identical across
+   the three; only the identifying number and a couple of profile columns
+   differ.
+
+   640 ITR rows, 490 GST, 381 TDS here, 10,000+ in production, so the table is
+   paged and every narrowing question is a filter rather than a separate view.
    ========================================================================== */
 
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import type { RecordType } from "../domain/types.ts";
 import { useObligations } from "../ui/app-state.tsx";
-import { ALL_STATES, CLIENTS, STAFF, staffOf } from "../domain/book.ts";
+import {
+  ALL_STATES, CLIENTS, GST_ENTITIES, STAFF, TDS_DEDUCTORS, staffOf,
+} from "../domain/book.ts";
+import { FY_START } from "../domain/catalog.ts";
 import { inr, inrShort } from "../domain/dates.ts";
 import { Avatar, Empty, PageHead, Pbar, initialsOf } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
@@ -29,15 +47,32 @@ type SortKey = "exposure" | "overdue" | "name" | "turnover";
 type Health = "all" | "arrears" | "clear";
 const PAGE = 40;
 
-/** Entity types offered as a filter, in book order. */
-const ENTITY_TYPES = ["Individual", "Company", "LLP", "Firm", "Trust", "AOP/BOI", "HUF"];
+/* Labelled by source module (GST / TDS / ITR), not by record shape — matches
+   how staff already talk about these, since that is the vocabulary the three
+   upstream KDK modules use. "ITR" is a stand-in for the whole PAN bucket: it
+   also carries ROC/MCA, Advance Tax and Tax Audit, everything that keys off
+   the same PAN as the return itself. */
+const TABS: { type: RecordType; label: string; idLabel: string; detailLabel: string }[] = [
+  { type: "GstEntity", label: "GST", idLabel: "GSTIN", detailLabel: "Registration" },
+  { type: "TdsDeductor", label: "TDS", idLabel: "TAN", detailLabel: "Entity" },
+  { type: "Client", label: "ITR", idLabel: "PAN", detailLabel: "Entity" },
+];
+
+/** The "detail" filter's own option list, per tab — an entity type for
+ *  Client/Deductor, a GST registration type for Firm. Different vocabularies,
+ *  same slot in the filter row. */
+const DETAIL_OPTIONS: Record<RecordType, string[]> = {
+  Client: ["Individual", "Company", "LLP", "Firm", "Trust", "AOP/BOI", "HUF"],
+  GstEntity: ["Regular", "Composition", "TDS Deductor", "E-commerce Operator", "ISD", "Non-Resident Taxable"],
+  TdsDeductor: ["Individual", "Company", "LLP", "Firm", "Trust", "AOP/BOI", "HUF"],
+};
 
 interface Row {
   id: string;
+  type: RecordType;
   name: string;
-  pan: string;
-  gstin?: string;
-  entity: string;
+  idValue: string;
+  detail: string;
   state: string;
   assigneeId: string;
   turnover: number;
@@ -47,14 +82,51 @@ interface Row {
   exposure: number;
 }
 
+function rowsFor(type: RecordType): Row[] {
+  const map = new Map<string, Row>();
+  if (type === "Client") {
+    for (const c of CLIENTS) {
+      map.set(c.id, {
+        id: c.id, type, name: c.name, idValue: c.pan,
+        detail: c.profile.entityType === "Company" ? `Company · ${c.profile.companyType}` : c.profile.entityType,
+        state: c.state, assigneeId: c.assigneeId, turnover: c.profile.turnover,
+        filed: 0, pending: 0, overdue: 0, exposure: 0,
+      });
+    }
+  } else if (type === "GstEntity") {
+    for (const f of GST_ENTITIES) {
+      map.set(f.id, {
+        id: f.id, type, name: f.name, idValue: f.gstin,
+        detail: f.profile.gstQrmpOpted ? `${f.profile.gstRegType} · QRMP` : f.profile.gstRegType,
+        state: f.state, assigneeId: f.assigneeId, turnover: f.profile.turnover,
+        filed: 0, pending: 0, overdue: 0, exposure: 0,
+      });
+    }
+  } else {
+    for (const d of TDS_DEDUCTORS) {
+      map.set(d.id, {
+        id: d.id, type, name: d.name, idValue: d.tan,
+        detail: d.profile.entityType === "Company" ? "Company" : d.profile.entityType,
+        state: d.state, assigneeId: d.assigneeId, turnover: d.profile.turnover,
+        filed: 0, pending: 0, overdue: 0, exposure: 0,
+      });
+    }
+  }
+  return [...map.values()];
+}
+
 export function ClientsPage() {
   const obligations = useObligations();
   const nav = useNavigate();
+  const [params] = useSearchParams();
+  const [type, setType] = useState<RecordType>(() => {
+    const t = params.get("type");
+    return t === "Client" || t === "TdsDeductor" ? t : "GstEntity";
+  });
   const [q, setQ] = useState("");
-  const [entity, setEntity] = useState("all");
+  const [detailFilter, setDetailFilter] = useState("all");
   const [state, setState] = useState("all");
   /* Team → "Open" deep-links here with ?owner=<staffId>. */
-  const [params] = useSearchParams();
   const [owner, setOwner] = useState(() => params.get("owner") ?? "all");
   const [health, setHealth] = useState<Health>(() =>
     params.get("health") === "arrears" ? "arrears" : "all",
@@ -65,22 +137,13 @@ export function ClientsPage() {
   const [sort, setSort] = useState<SortKey>("name");
   const [limit, setLimit] = useState(PAGE);
 
-  const rows = useMemo<Row[]>(() => {
-    const map = new Map<string, Row>();
-    for (const c of CLIENTS) {
-      map.set(c.id, {
-        id: c.id,
-        name: c.name,
-        pan: c.pan,
-        gstin: c.gstin,
-        entity: c.profile.entityType === "Company" ? `Company · ${c.profile.companyType}` : c.profile.entityType,
-        state: c.state,
-        assigneeId: c.assigneeId,
-        turnover: c.profile.turnover,
-        filed: 0, pending: 0, overdue: 0, exposure: 0,
-      });
-    }
+  const tab = TABS.find((t) => t.type === type)!;
+
+  const rows = useMemo(() => {
+    const list = rowsFor(type);
+    const map = new Map(list.map((r) => [r.id, r]));
     for (const o of obligations) {
+      if (o.fy !== FY_START || o.ownerType !== type) continue;
       const r = map.get(o.clientId);
       if (!r) continue;
       if (o.status === "Filed") r.filed++;
@@ -88,19 +151,17 @@ export function ClientsPage() {
       else if (o.status === "Pending") r.pending++;
     }
     return [...map.values()];
-  }, [obligations]);
+  }, [obligations, type]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     let list = rows;
     if (needle) {
       list = list.filter(
-        (r) => r.name.toLowerCase().includes(needle) ||
-          r.pan.toLowerCase().includes(needle) ||
-          (r.gstin ?? "").toLowerCase().includes(needle),
+        (r) => r.name.toLowerCase().includes(needle) || r.idValue.toLowerCase().includes(needle),
       );
     }
-    if (entity !== "all") list = list.filter((r) => r.entity.startsWith(entity));
+    if (detailFilter !== "all") list = list.filter((r) => r.detail.startsWith(detailFilter));
     if (state !== "all") list = list.filter((r) => r.state === state);
     if (owner !== "all") list = list.filter((r) => r.assigneeId === owner);
     if (health === "arrears") list = list.filter((r) => r.overdue > 0);
@@ -112,9 +173,16 @@ export function ClientsPage() {
     else if (sort === "turnover") sorted.sort((a, b) => b.turnover - a.turnover);
     else sorted.sort((a, b) => a.name.localeCompare(b.name));
     return sorted;
-  }, [rows, q, entity, state, owner, health, sort]);
+  }, [rows, q, detailFilter, state, owner, health, sort]);
 
   const visible = filtered.slice(0, limit);
+  const total = type === "Client" ? CLIENTS.length : type === "GstEntity" ? GST_ENTITIES.length : TDS_DEDUCTORS.length;
+
+  const switchTab = (t: RecordType) => {
+    setType(t);
+    setDetailFilter("all");
+    setLimit(PAGE);
+  };
 
   return (
     <div className="page page--wide">
@@ -123,10 +191,28 @@ export function ClientsPage() {
         icon="clients"
         note={
           <>
-            <b>{filtered.length.toLocaleString("en-IN")}</b> of {CLIENTS.length.toLocaleString("en-IN")} clients
+            <b>{filtered.length.toLocaleString("en-IN")}</b> of {total.toLocaleString("en-IN")} {tab.label} records
           </>
         }
       />
+
+      {/* GST / TDS / ITR are unrelated records — no shared ID joins them —
+          so switching tabs is switching which array the whole screen reads,
+          not filtering one list three ways. */}
+      <div className="tabs" role="tablist" aria-label="Record type">
+        {TABS.map((t) => (
+          <button
+            key={t.type}
+            type="button"
+            role="tab"
+            aria-selected={type === t.type}
+            className={`tabs__btn${type === t.type ? " is-on" : ""}`}
+            onClick={() => switchTab(t.type)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
       {/* This screen is a list, not a report. The aggregate cards that used to
           sit here (entity-type breakdown, arrears totals, ₹ at risk) answered a
@@ -138,12 +224,12 @@ export function ClientsPage() {
           <input
             value={q}
             onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }}
-            placeholder="Name, PAN or GSTIN"
+            placeholder={`Name or ${tab.idLabel}`}
           />
         </div>
-        <select className="plain" value={entity} onChange={(e) => { setEntity(e.target.value); setLimit(PAGE); }}>
-          <option value="all">All entities</option>
-          {ENTITY_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+        <select className="plain" value={detailFilter} onChange={(e) => { setDetailFilter(e.target.value); setLimit(PAGE); }}>
+          <option value="all">All {tab.detailLabel.toLowerCase()} types</option>
+          {DETAIL_OPTIONS[type].map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
         <select className="plain" value={state} onChange={(e) => { setState(e.target.value); setLimit(PAGE); }}>
           <option value="all">All states</option>
@@ -159,7 +245,7 @@ export function ClientsPage() {
           value={health}
           onChange={(e) => { setHealth(e.target.value as Health); setLimit(PAGE); }}
         >
-          <option value="all">All clients</option>
+          <option value="all">All records</option>
           <option value="arrears">In arrears</option>
           <option value="clear">Up to date</option>
         </select>
@@ -176,8 +262,8 @@ export function ClientsPage() {
         <table className="ltable">
           <thead>
             <tr>
-              <th>Client</th>
-              <th>Entity</th>
+              <th>{tab.label}</th>
+              <th>{tab.detailLabel}</th>
               <th>State</th>
               <th>Owner</th>
               <th className="u-right">Turnover</th>
@@ -189,13 +275,13 @@ export function ClientsPage() {
           </thead>
           <tbody>
             {visible.map((r) => (
-              <tr key={r.id} className="is-clickable" onClick={() => nav(`/clients/${r.id}`)}>
+              <tr key={r.id} className="is-clickable" onClick={() => nav(`/clients/${r.id}?type=${r.type}`)}>
                 <td>
                   {/* A face on the row: down 640 rows a client is recognised by
                       its mark before its name is read, the same way staff are
                       in the Owner column. */}
                   <Link
-                    to={`/clients/${r.id}`}
+                    to={`/clients/${r.id}?type=${r.type}`}
                     onClick={(e) => e.stopPropagation()}
                     className="u-row"
                     style={{ gap: "var(--s3)" }}
@@ -204,12 +290,12 @@ export function ClientsPage() {
                     <span style={{ minWidth: 0 }}>
                       <div className="u-strong u-truncate" style={{ maxWidth: 230 }}>{r.name}</div>
                       <div className="num u-mute" style={{ fontSize: "var(--t-11)", marginTop: 2 }}>
-                        {r.pan}{r.gstin ? ` · ${r.gstin}` : ""}
+                        {r.idValue}
                       </div>
                     </span>
                   </Link>
                 </td>
-                <td className="u-mute" style={{ fontSize: "var(--t-12)" }}>{r.entity}</td>
+                <td className="u-mute" style={{ fontSize: "var(--t-12)" }}>{r.detail}</td>
                 <td className="u-mute">{r.state}</td>
                 <td>
                   <span className="u-row">
@@ -228,7 +314,7 @@ export function ClientsPage() {
             ))}
           </tbody>
         </table>
-        {filtered.length === 0 ? <Empty title="No clients match these filters" /> : null}
+        {filtered.length === 0 ? <Empty title={`No ${tab.label} records match these filters`} /> : null}
         {limit < filtered.length ? (
           <div className="sheet__foot u-row" style={{ justifyContent: "center" }}>
             <button type="button" className="btn btn--sm" onClick={() => setLimit((l) => l + PAGE * 2)}>
@@ -236,7 +322,7 @@ export function ClientsPage() {
             </button>
           </div>
         ) : (
-          <div className="sheet__foot u-center">Showing all {filtered.length} matching clients</div>
+          <div className="sheet__foot u-center">Showing all {filtered.length} matching {tab.label} records</div>
         )}
       </div>
     </div>

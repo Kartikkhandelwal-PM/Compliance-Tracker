@@ -1,21 +1,38 @@
 /* ============================================================================
-   THE CLIENT BOOK
+   THE BOOK — three unlinked feeds: Client (PAN/ITR), GstEntity (GSTIN/GST,
+   labelled "Firm"), TdsDeductor (TAN/TDS + payroll)
    ----------------------------------------------------------------------------
-   In production these records come from KDK — this module exists only to stand
-   in for that feed. Two things matter about it:
+   In production these come from three separate KDK modules that share no
+   common ID — the TDS module never carries a PAN, only a TAN — so this seed
+   generates three genuinely independent arrays rather than one client with
+   three sub-records.
+
+   To keep the simulated book believable, one generation pass still walks the
+   same weighted archetypes as before (a "salaried individual", a "private
+   company", ...) and decides, per pass, whether that pass ALSO produces a
+   GstEntity and/or a TdsDeductor row — exactly as a real business might have
+   an ITR filing, a GST registration, both, or neither. But each row that
+   comes out the other end gets its own fresh id and its own independently
+   generated registration number; nothing stores a link back to the others.
+   Shared display names across the three arrays are a seeding convenience for
+   a believable demo, not a structural relationship — nowhere does the code
+   read one array to affect another.
 
    • The ten named archetypes are the exact profiles from the "Client Mapping
      Worked Examples" workbook, so a domain reviewer can look up a client they
      already argued about and check what the engine now says.
 
    • The remaining book is generated at a size that forces honest design. At
-     640 clients no screen can afford one row per client at the top level, which
-     is the constraint the real 10,000-client book will impose.
+     640 Client rows no screen can afford one row per client at the top level,
+     which is the constraint the real 10,000-client book will impose.
 
    Everything is seeded, so the same book is produced on every load.
    ========================================================================== */
 
-import type { Client, ClientProfile, PaymentNature, Staff } from "./types.ts";
+import type {
+  Client, ClientProfile, CompanyType, DeductorProfile, EntityType, GstEntity,
+  GstProfile, GstRegType, PaymentNature, Residential, Staff, StateCategory, TdsDeductor,
+} from "./types.ts";
 
 /* ---- Seeded PRNG (mulberry32) ------------------------------------------- */
 function rng(seed: number) {
@@ -118,8 +135,21 @@ function makePan(r: () => number, fourth: string, surname: string): string {
   return `${l()}${l()}${l()}${fourth}${surname[0].toUpperCase()}${d()}${d()}${d()}${d()}${l()}`;
 }
 
-function makeGstin(r: () => number, stateCode: string, pan: string): string {
-  return `${stateCode}${pan}1Z${PAN_LETTERS[Math.floor(r() * 26)]}`;
+/** A GSTIN always structurally embeds a PAN, but a `GstEntity` has none of
+ *  its own to embed — there is no Client record it is allowed to borrow one
+ *  from. So this fabricates a plausible-looking, independently-random
+ *  pseudo-PAN purely to shape the GSTIN, and never stores or exposes it. */
+function makeGstin(r: () => number, stateCode: string): string {
+  const pseudoPan = makePan(r, pick(r, ["P", "C", "F"]), pick(r, LAST));
+  return `${stateCode}${pseudoPan}1Z${PAN_LETTERS[Math.floor(r() * 26)]}`;
+}
+
+/** TAN: 4 letters (jurisdiction + deductor initial) + 5 digits + 1 check letter. */
+function makeTan(r: () => number, name: string): string {
+  const l = () => PAN_LETTERS[Math.floor(r() * 26)];
+  const d = () => String(Math.floor(r() * 10));
+  const initial = /[A-Za-z]/.test(name) ? name.match(/[A-Za-z]/)![0].toUpperCase() : "X";
+  return `${l()}${l()}${l()}${initial}${d()}${d()}${d()}${d()}${d()}${l()}`;
 }
 
 function makeCin(r: () => number, stateCode: string): string {
@@ -129,17 +159,90 @@ function makeCin(r: () => number, stateCode: string): string {
 
 /* =========================================================================
    ARCHETYPES — the ten worked examples, profile-for-profile
+
+   Each archetype still generates ONE combined `SeedProfile` — every field
+   that used to live on one `ClientProfile` before the split. That combined
+   shape is generation-only: `splitProfile()` below carves it into the three
+   real, exported profile shapes, and whether a GstEntity/TdsDeductor row
+   gets emitted at all is decided from its own fields (`gstRegType`,
+   `paymentNatures`), never from anything about the Client row.
    ========================================================================= */
+
+interface SeedProfile {
+  entityType: EntityType;
+  companyType?: CompanyType;
+  residential: Residential;
+  totalIncome: number;
+  turnover: number;
+  housePropertyCount: number;
+  agriculturalIncome: number;
+  hasCapitalGains: boolean;
+  isDirector: boolean;
+  holdsUnlistedShares: boolean;
+  hasForeignAssets: boolean;
+  hasBusinessIncome: boolean;
+  presumptiveOpted: boolean;
+  isPartnerInFirm: boolean;
+  taxAuditApplicable: boolean;
+  paymentNatures: PaymentNature[];
+  gstRegType: GstRegType;
+  gstQrmpOpted: boolean;
+  gstStateCategory: StateCategory;
+  isLlp: boolean;
+  isDinHolder: boolean;
+  hasDeposits: boolean;
+  msmeDuesOverdue: boolean;
+  section139Special: boolean;
+  claimsSection11: boolean;
+  hasTransferPricing: boolean;
+  epfCovered: boolean;
+  esiCovered: boolean;
+  professionalTaxState?: string;
+  tdsPerQuarter: number;
+  monthlyPayroll: number;
+  discipline: number;
+}
+
+function toClientProfile(p: SeedProfile): ClientProfile {
+  return {
+    entityType: p.entityType, companyType: p.companyType, residential: p.residential,
+    totalIncome: p.totalIncome, turnover: p.turnover, housePropertyCount: p.housePropertyCount,
+    agriculturalIncome: p.agriculturalIncome, hasCapitalGains: p.hasCapitalGains,
+    isDirector: p.isDirector, holdsUnlistedShares: p.holdsUnlistedShares,
+    hasForeignAssets: p.hasForeignAssets, hasBusinessIncome: p.hasBusinessIncome,
+    presumptiveOpted: p.presumptiveOpted, isPartnerInFirm: p.isPartnerInFirm,
+    taxAuditApplicable: p.taxAuditApplicable, isLlp: p.isLlp, isDinHolder: p.isDinHolder,
+    hasDeposits: p.hasDeposits, msmeDuesOverdue: p.msmeDuesOverdue,
+    section139Special: p.section139Special, claimsSection11: p.claimsSection11,
+    hasTransferPricing: p.hasTransferPricing, discipline: p.discipline,
+  };
+}
+
+function toGstProfile(p: SeedProfile): GstProfile {
+  return {
+    gstRegType: p.gstRegType, gstQrmpOpted: p.gstQrmpOpted,
+    gstStateCategory: p.gstStateCategory, turnover: p.turnover, discipline: p.discipline,
+  };
+}
+
+function toDeductorProfile(p: SeedProfile): DeductorProfile {
+  return {
+    entityType: p.entityType, taxAuditApplicable: p.taxAuditApplicable, turnover: p.turnover,
+    paymentNatures: p.paymentNatures, epfCovered: p.epfCovered, esiCovered: p.esiCovered,
+    professionalTaxState: p.professionalTaxState, tdsPerQuarter: p.tdsPerQuarter,
+    monthlyPayroll: p.monthlyPayroll, discipline: p.discipline,
+  };
+}
 
 interface Archetype {
   key: string;
   label: string;
   weight: number;
-  profile: (r: () => number, stateCat: "Category A" | "Category B", state: string) => ClientProfile;
+  profile: (r: () => number, stateCat: "Category A" | "Category B", state: string) => SeedProfile;
   naming: "person" | "prop" | "company" | "llp" | "firm" | "trust";
 }
 
-const base = (over: Partial<ClientProfile>): ClientProfile => ({
+const base = (over: Partial<SeedProfile>): SeedProfile => ({
   entityType: "Individual",
   residential: "Resident",
   totalIncome: 800000,
@@ -477,7 +580,7 @@ const ARCHETYPES: Archetype[] = [
    THE TEN WORKED EXAMPLES — verbatim from the domain review workbook
    ========================================================================= */
 
-const WORKED: { name: string; legalName: string; archetype: string; state: string; staff: string; over: Partial<ClientProfile> }[] = [
+const WORKED: { name: string; legalName: string; archetype: string; state: string; staff: string; over: Partial<SeedProfile> }[] = [
   {
     name: "Ramesh Sharma", legalName: "Ramesh Sharma", archetype: "salaried",
     state: "Maharashtra", staff: "s3",
@@ -531,41 +634,74 @@ const WORKED: { name: string; legalName: string; archetype: string; state: strin
 ];
 
 /* =========================================================================
-   BUILD
+   BUILD — one pass, three independent output arrays
    ========================================================================= */
 
-const CLIENT_COUNT = 640;
+const PASS_COUNT = 640;
 
-function buildClients(): Client[] {
+function buildBook(): { clients: Client[]; gstEntities: GstEntity[]; tdsDeductors: TdsDeductor[] } {
   const r = rng(20260806);
-  const out: Client[] = [];
+  const clients: Client[] = [];
+  const gstEntities: GstEntity[] = [];
+  const tdsDeductors: TdsDeductor[] = [];
+  let gstSeq = 0;
+  let tdsSeq = 0;
 
   const stateOf = (name: string) => STATES.find((s) => s.name === name) ?? STATES[0];
   const arcOf = (key: string) => ARCHETYPES.find((a) => a.key === key)!;
+
+  /** Every pass always yields a Client row (the entity's own ITR/ROC filing
+   *  is universal), and independently yields a GstEntity row when the
+   *  simulated profile carries a GST registration, and a TdsDeductor row
+   *  when it carries any TDS-liable payment nature — the same two signals
+   *  `rules.ts` used to gate GST/TDS applicability before the split. */
+  function emit(
+    id: string, name: string, legalName: string, state: string, staff: string,
+    archetypeLabel: string, profile: SeedProfile, pan: string,
+    whatsapp: boolean, email: string, phone: string,
+  ) {
+    const st = stateOf(state);
+    clients.push({
+      id, name, legalName, pan,
+      cin: profile.entityType === "Company" ? makeCin(r, st.code) : undefined,
+      state, assigneeId: staff, archetype: archetypeLabel, profile: toClientProfile(profile),
+      whatsapp, email, phone,
+    });
+
+    if (profile.gstRegType !== "Unregistered") {
+      gstSeq++;
+      const gid = `G${String(gstSeq).padStart(3, "0")}`;
+      gstEntities.push({
+        id: gid, name, legalName, state, assigneeId: staff, archetype: archetypeLabel,
+        gstin: makeGstin(r, st.code), profile: toGstProfile(profile),
+        whatsapp, email, phone,
+      });
+    }
+
+    if (profile.paymentNatures.length > 0) {
+      tdsSeq++;
+      const did = `D${String(tdsSeq).padStart(3, "0")}`;
+      tdsDeductors.push({
+        id: did, name, legalName, state, assigneeId: staff, archetype: archetypeLabel,
+        tan: makeTan(r, legalName), profile: toDeductorProfile(profile),
+        whatsapp, email, phone,
+      });
+    }
+  }
 
   /* --- the ten worked examples, in order, as C001…C010 ------------------ */
   WORKED.forEach((w, i) => {
     const st = stateOf(w.state);
     const arc = arcOf(w.archetype);
-    const profile: ClientProfile = { ...arc.profile(r, st.cat, st.name), ...w.over, gstStateCategory: (w.over.gstStateCategory ?? st.cat) };
+    const profile: SeedProfile = { ...arc.profile(r, st.cat, st.name), ...w.over, gstStateCategory: (w.over.gstStateCategory ?? st.cat) };
     const surname = w.legalName.split(" ").pop() || "X";
     const fourth = profile.entityType === "Company" ? "C" : profile.entityType === "Firm" ? "F" : profile.entityType === "LLP" ? "F" : profile.entityType === "Trust" ? "T" : "P";
     const pan = makePan(r, fourth, surname);
-    out.push({
-      id: `C${String(i + 1).padStart(3, "0")}`,
-      name: w.name,
-      legalName: w.legalName,
-      pan,
-      gstin: profile.gstRegType === "Unregistered" ? undefined : makeGstin(r, st.code, pan),
-      cin: profile.entityType === "Company" ? makeCin(r, st.code) : undefined,
-      state: st.name,
-      assigneeId: w.staff,
-      archetype: arc.label,
-      profile,
-      whatsapp: true,
-      email: `${w.legalName.toLowerCase().replace(/[^a-z]+/g, ".")}@example.in`,
-      phone: `+91 9${String(Math.floor(r() * 900000000) + 100000000)}`,
-    });
+    emit(
+      `C${String(i + 1).padStart(3, "0")}`, w.name, w.legalName, st.name, w.staff, arc.label, profile, pan,
+      true, `${w.legalName.toLowerCase().replace(/[^a-z]+/g, ".")}@example.in`,
+      `+91 9${String(Math.floor(r() * 900000000) + 100000000)}`,
+    );
   });
 
   /* --- the rest of the book -------------------------------------------- */
@@ -574,10 +710,10 @@ function buildClients(): Client[] {
     for (let i = 0; i < a.weight; i++) pool.push(a);
   });
 
-  for (let i = WORKED.length; i < CLIENT_COUNT; i++) {
+  for (let i = WORKED.length; i < PASS_COUNT; i++) {
     const arc = pick(r, pool);
     const st = pick(r, STATES);
-    const profile = arc.profile(r, st.cat, st.name);
+    const profile: SeedProfile = { ...arc.profile(r, st.cat, st.name), gstStateCategory: st.cat };
     const first = pick(r, FIRST);
     const last = pick(r, LAST);
 
@@ -620,29 +756,31 @@ function buildClients(): Client[] {
        surface, not hide. */
     const assigneeId = r() < 0.06 ? "none" : pick(r, STAFF).id;
 
-    out.push({
-      id: `C${String(i + 1).padStart(3, "0")}`,
-      name,
-      legalName,
-      pan,
-      gstin: profile.gstRegType === "Unregistered" ? undefined : makeGstin(r, st.code, pan),
-      cin: profile.entityType === "Company" ? makeCin(r, st.code) : undefined,
-      state: st.name,
-      assigneeId,
-      archetype: arc.label,
-      profile: { ...profile, gstStateCategory: st.cat },
-      whatsapp: r() < 0.88,
-      email: `${legalName.toLowerCase().replace(/[^a-z]+/g, ".").slice(0, 26)}@example.in`,
-      phone: `+91 9${String(Math.floor(r() * 900000000) + 100000000)}`,
-    });
+    emit(
+      `C${String(i + 1).padStart(3, "0")}`, name, legalName, st.name, assigneeId, arc.label, profile, pan,
+      r() < 0.88, `${legalName.toLowerCase().replace(/[^a-z]+/g, ".").slice(0, 26)}@example.in`,
+      `+91 9${String(Math.floor(r() * 900000000) + 100000000)}`,
+    );
   }
 
-  return out;
+  return { clients, gstEntities, tdsDeductors };
 }
 
-export const CLIENTS: Client[] = buildClients();
+const BOOK = buildBook();
+
+export const CLIENTS: Client[] = BOOK.clients;
+export const GST_ENTITIES: GstEntity[] = BOOK.gstEntities;
+export const TDS_DEDUCTORS: TdsDeductor[] = BOOK.tdsDeductors;
+
 export const CLIENT_BY_ID: Record<string, Client> = Object.fromEntries(
   CLIENTS.map((c) => [c.id, c]),
 );
+export const GST_ENTITY_BY_ID: Record<string, GstEntity> = Object.fromEntries(
+  GST_ENTITIES.map((f) => [f.id, f]),
+);
+export const TDS_DEDUCTOR_BY_ID: Record<string, TdsDeductor> = Object.fromEntries(
+  TDS_DEDUCTORS.map((d) => [d.id, d]),
+);
+
 export const WORKED_EXAMPLE_IDS = WORKED.map((_, i) => `C${String(i + 1).padStart(3, "0")}`);
 export const ALL_STATES = STATES.map((s) => s.name);

@@ -1,5 +1,5 @@
 /* ============================================================================
-   CLIENT DETAIL
+   CLIENT / FIRM / DEDUCTOR DETAIL
    ----------------------------------------------------------------------------
    Three things a CA needs on one screen:
 
@@ -8,19 +8,27 @@
      • the full obligation timeline for the year, with status and why
      • what has been said to this client, and when
 
+   ONE PAGE, THREE RECORD TYPES. The `type` query param (set by the Clients
+   list) says whether `id` is a Client (PAN), a GstEntity (GSTIN, labelled
+   "Firm") or a TdsDeductor (TAN) — three unlinked records, never the same
+   underlying business by anything the code can verify. The identity header,
+   the profile cards and even the ITR-form line only render for the record
+   type that actually has them; nothing here assumes the other two exist for
+   the business shown.
+
    The profile panel is placed first and shown as the engine reads it, because
    a wrong turnover slab or a stale QRMP flag is the single most common cause
    of a wrong compliance list.
    ========================================================================== */
 
 import { useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import type { Obligation } from "../domain/types.ts";
+import { Link, useParams, useSearchParams } from "react-router-dom";
+import type { RecordType, Obligation } from "../domain/types.ts";
 import { useObligations, useOutbox } from "../ui/app-state.tsx";
-import { CLIENT_BY_ID, staffOf } from "../domain/book.ts";
+import { CLIENT_BY_ID, GST_ENTITY_BY_ID, TDS_DEDUCTOR_BY_ID, staffOf } from "../domain/book.ts";
 import { decideItrForm, estimatedTax } from "../domain/rules.ts";
-import { updateClient } from "../domain/engine.ts";
-import { HEADS } from "../domain/catalog.ts";
+import { updateParty } from "../domain/engine.ts";
+import { FY_LABEL, FY_OPTIONS, FY_START, HEADS, fyLabel } from "../domain/catalog.ts";
 import { TODAY, fmtDate, inr, inrShort } from "../domain/dates.ts";
 import {
   Avatar, Countdown, Empty, HeadName, PageHead, SectionHead, Seg, Stat, StatusTag,
@@ -30,20 +38,38 @@ import { ObligationDrawer } from "../ui/ObligationDrawer.tsx";
 
 type Tab = "obligations" | "profile" | "comms";
 
+/** IDs carry no type marker of their own (C/G/D prefixes are a seeding
+ *  convenience, not a contract), so a direct visit without `?type=` — a
+ *  bookmark, a typed URL — falls back to checking all three maps. The
+ *  Clients list always passes `?type=`, so this path is the exception. */
+function resolveType(id: string, param: string | null): RecordType {
+  if (param === "GstEntity" || param === "TdsDeductor" || param === "Client") return param;
+  if (GST_ENTITY_BY_ID[id]) return "GstEntity";
+  if (TDS_DEDUCTOR_BY_ID[id]) return "TdsDeductor";
+  return "Client";
+}
 
 export function ClientDetailPage() {
   const { id = "" } = useParams();
+  const [params] = useSearchParams();
+  const ownerType = resolveType(id, params.get("type"));
   const all = useObligations();
   const outbox = useOutbox();
   const [tab, setTab] = useState<Tab>("obligations");
   const [head, setHead] = useState("all");
   const [peek, setPeek] = useState<Obligation | null>(null);
+  const [fy, setFy] = useState(FY_START);
 
-  const client = CLIENT_BY_ID[id];
+  const client = ownerType === "Client" ? CLIENT_BY_ID[id] : undefined;
+  const gstEntity = ownerType === "GstEntity" ? GST_ENTITY_BY_ID[id] : undefined;
+  const deductor = ownerType === "TdsDeductor" ? TDS_DEDUCTOR_BY_ID[id] : undefined;
+  const record = client ?? gstEntity ?? deductor;
 
   const items = useMemo(
-    () => all.filter((o) => o.clientId === id).sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
-    [all, id],
+    () => all
+      .filter((o) => o.clientId === id && o.fy === fy)
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate)),
+    [all, id, fy],
   );
 
   const comms = useMemo(() => outbox.filter((e) => e.clientId === id), [outbox, id]);
@@ -59,12 +85,16 @@ export function ClientDetailPage() {
     return { filed, pending, overdue, na, exposure };
   }, [items]);
 
-  if (!client) {
-    return <div className="page"><Empty title="Client not found" /></div>;
+  if (!record) {
+    return <div className="page"><Empty title="Record not found" /></div>;
   }
 
-  const p = client.profile;
-  const itr = decideItrForm(p);
+  const itr = client ? decideItrForm(client.profile) : null;
+  const idLabel = ownerType === "GstEntity" ? "GSTIN" : ownerType === "TdsDeductor" ? "TAN" : "PAN";
+  const idValue = gstEntity ? gstEntity.gstin : deductor ? deductor.tan : (client?.pan ?? "");
+  const turnover = client?.profile.turnover ?? gstEntity?.profile.turnover ?? deductor?.profile.turnover ?? 0;
+  const typeLabel = ownerType === "GstEntity" ? "GST" : ownerType === "TdsDeductor" ? "TDS" : "ITR";
+
   const shown = head === "all" ? items : items.filter((o) => o.head === head);
 
   const upcoming = shown.filter((o) => o.status !== "Filed" && o.status !== "Not Applicable");
@@ -73,13 +103,25 @@ export function ClientDetailPage() {
   return (
     <div className="page">
       <PageHead
-        title={client.name}
+        title={record.name}
         icon="clients"
-        note={<span className="num">{client.pan}</span>}
+        note={<><span className="num">{idValue}</span> · {typeLabel}</>}
         aside={
-          <Link to="/clients" className="btn btn--sm">
-            <Icon name="chevronLeft" size={14} /> All clients
-          </Link>
+          <div className="u-row">
+            <select
+              className="plain"
+              value={fy}
+              onChange={(e) => setFy(Number(e.target.value))}
+              aria-label="Financial year"
+            >
+              {FY_OPTIONS.map((y) => (
+                <option key={y} value={y}>{fyLabel(y)}</option>
+              ))}
+            </select>
+            <Link to={`/clients?type=${ownerType}`} className="btn btn--sm">
+              <Icon name="chevronLeft" size={14} /> All {typeLabel} records
+            </Link>
+          </div>
         }
       />
 
@@ -90,46 +132,47 @@ export function ClientDetailPage() {
            profile tab, and the client's own ID was not shown anywhere at all. */}
       <div className="cprofile">
         <div className="cprofile__id">
-          <span className="cprofile__mono">{client.name.slice(0, 2).toUpperCase()}</span>
+          <span className="cprofile__mono">{record.name.slice(0, 2).toUpperCase()}</span>
           <div className="cprofile__names">
-            <b>{client.legalName}</b>
-            <span>{client.archetype}</span>
+            <b>{record.legalName}</b>
+            <span>{record.archetype}</span>
             <span className="u-row" style={{ gap: 6, marginTop: 4 }}>
-              <span className="tag tag--neutral">{p.entityType}</span>
-              {p.companyType ? <span className="tag tag--outline">{p.companyType}</span> : null}
-              <span className="tag tag--outline">{client.state}</span>
+              <span className="tag tag--neutral">
+                {client ? client.profile.entityType : gstEntity ? gstEntity.profile.gstRegType : "Deductor"}
+              </span>
+              {client?.profile.companyType ? <span className="tag tag--outline">{client.profile.companyType}</span> : null}
+              <span className="tag tag--outline">{record.state}</span>
             </span>
           </div>
         </div>
 
         <dl className="cprofile__facts">
-          <div><dt>PAN</dt><dd className="num">{client.pan}</dd></div>
-          <div><dt>GSTIN</dt><dd className="num">{client.gstin ?? "Not registered"}</dd></div>
-          {client.cin ? <div><dt>CIN</dt><dd className="num">{client.cin}</dd></div> : null}
-          <div><dt>ITR form</dt><dd className="num">{itr.form}</dd></div>
-          <div><dt>Turnover</dt><dd className="num">₹{inr(p.turnover)}</dd></div>
+          <div><dt>{idLabel}</dt><dd className="num">{idValue}</dd></div>
+          {client?.cin ? <div><dt>CIN</dt><dd className="num">{client.cin}</dd></div> : null}
+          {itr ? <div><dt>ITR form</dt><dd className="num">{itr.form}</dd></div> : null}
+          <div><dt>Turnover</dt><dd className="num">₹{inr(turnover)}</dd></div>
         </dl>
 
         <div className="cprofile__side">
           <div className="cprofile__owner">
             <span className="cprofile__k">Owner</span>
             <span className="u-row">
-              <Avatar initials={staffOf(client.assigneeId).initials} />
+              <Avatar initials={staffOf(record.assigneeId).initials} />
               <span className="u-col" style={{ lineHeight: 1.2 }}>
-                <b style={{ fontSize: "var(--t-13)" }}>{staffOf(client.assigneeId).name}</b>
-                <span className="u-mute" style={{ fontSize: "var(--t-11)" }}>{staffOf(client.assigneeId).role}</span>
+                <b style={{ fontSize: "var(--t-13)" }}>{staffOf(record.assigneeId).name}</b>
+                <span className="u-mute" style={{ fontSize: "var(--t-11)" }}>{staffOf(record.assigneeId).role}</span>
               </span>
             </span>
           </div>
           <div className="cprofile__contact">
             <span className="cprofile__k">Reachable on</span>
-            <a href={`mailto:${client.email}`} className="cprofile__ch">
+            <a href={`mailto:${record.email}`} className="cprofile__ch">
               <BrandIcon name="email" size={14} />
-              <span className="u-truncate">{client.email}</span>
+              <span className="u-truncate">{record.email}</span>
             </a>
             <span className="cprofile__ch">
               <BrandIcon name="whatsapp" size={14} />
-              <span className="num">{client.phone}</span>
+              <span className="num">{record.phone}</span>
               {/* A tag reporting a fact nobody could change was a dead end —
                   the only way to fix a client wrongly marked opted in (or to
                   record that they've now agreed to it) was to edit the seed
@@ -139,15 +182,15 @@ export function ClientDetailPage() {
                   status label, not as something to act on. */}
               <span className="u-row" style={{ marginLeft: "auto", gap: 6 }}>
                 <span className="u-mute" style={{ fontSize: "var(--t-11)" }}>
-                  {client.whatsapp ? "Opted in" : "Email only"}
+                  {record.whatsapp ? "Opted in" : "Email only"}
                 </span>
                 <button
                   type="button"
-                  className={`switch${client.whatsapp ? " is-on" : ""}`}
-                  onClick={() => updateClient(client.id, { whatsapp: !client.whatsapp })}
-                  aria-pressed={client.whatsapp}
+                  className={`switch${record.whatsapp ? " is-on" : ""}`}
+                  onClick={() => updateParty(ownerType, record.id, { whatsapp: !record.whatsapp })}
+                  aria-pressed={record.whatsapp}
                   aria-label="WhatsApp opt-in"
-                  title={client.whatsapp
+                  title={record.whatsapp
                     ? "Opted in to WhatsApp. Click to switch this client to email only"
                     : "Email only. Click if this client has agreed to WhatsApp"}
                 />
@@ -159,8 +202,8 @@ export function ClientDetailPage() {
 
       <div className="stats" style={{ margin: "var(--s4) 0" }}>
         <Stat label="Overdue" value={counts.overdue} tone={counts.overdue ? "overdue" : undefined} icon="alert" sub={counts.exposure ? `${inrShort(counts.exposure)} late fees` : "nothing late"} />
-        <Stat label="Pending" value={counts.pending} tone="cool" icon="clock" sub="upcoming this year" />
-        <Stat label="Filed" value={counts.filed} tone="filed" icon="check" sub="this financial year" />
+        <Stat label="Pending" value={counts.pending} tone="cool" icon="clock" sub={`upcoming in ${fyLabel(fy)}`} />
+        <Stat label="Filed" value={counts.filed} tone="filed" icon="check" sub={fyLabel(fy)} />
         <Stat label="Not applicable" value={counts.na} icon="ban" sub="rule-excluded or overridden" />
       </div>
 
@@ -252,60 +295,79 @@ export function ClientDetailPage() {
         <>
           <div className="note" style={{ marginBottom: "var(--s5)" }}>
             These are the fields the rule engine reads. <b>Changing any of them re-runs applicability
-            for this client</b>. Compliances can appear or disappear, and scheduled reminders are
-            rebuilt to match.
+            for this record</b>. Compliances can appear or disappear, and scheduled
+            reminders are rebuilt to match.
           </div>
 
           <div className="grid2">
-            <ProfileCard title="Identity & status">
-              <Row k="Entity / assessee type" v={p.entityType} />
-              {p.companyType ? <Row k="Company type" v={p.companyType} /> : null}
-              <Row k="Residential status" v={p.residential} />
-              <Row k="Is LLP" v={p.isLlp} />
-              <Row k="Holds a DIN" v={p.isDinHolder} />
-              <Row k="Is a director" v={p.isDirector} />
-              <Row k="s.139(4A)–(4D) applies" v={p.section139Special} />
-            </ProfileCard>
+            {client ? (
+              <>
+                <ProfileCard title="Identity & status">
+                  <Row k="Entity / assessee type" v={client.profile.entityType} />
+                  {client.profile.companyType ? <Row k="Company type" v={client.profile.companyType} /> : null}
+                  <Row k="Residential status" v={client.profile.residential} />
+                  <Row k="Is LLP" v={client.profile.isLlp} />
+                  <Row k="Holds a DIN" v={client.profile.isDinHolder} />
+                  <Row k="Is a director" v={client.profile.isDirector} />
+                  <Row k="s.139(4A)–(4D) applies" v={client.profile.section139Special} />
+                </ProfileCard>
 
-            <ProfileCard title="Income & audit">
-              <Row k="Estimated total income" v={`₹${inr(p.totalIncome)}`} mono />
-              <Row k="Turnover (preceding FY)" v={`₹${inr(p.turnover)}`} mono />
-              <Row k="Estimated tax liability" v={`₹${inr(estimatedTax(p))}`} mono hint="Approximate. Drives advance-tax applicability and 234A/234C exposure." />
-              <Row k="Tax audit applicable" v={p.taxAuditApplicable} />
-              <Row k="Business / profession income" v={p.hasBusinessIncome} />
-              <Row k="Presumptive scheme opted" v={p.presumptiveOpted} />
-              <Row k="Transfer pricing" v={p.hasTransferPricing} />
-            </ProfileCard>
+                <ProfileCard title="Income & audit">
+                  <Row k="Estimated total income" v={`₹${inr(client.profile.totalIncome)}`} mono />
+                  <Row k="Turnover (preceding FY)" v={`₹${inr(client.profile.turnover)}`} mono />
+                  <Row k="Estimated tax liability" v={`₹${inr(estimatedTax(client.profile))}`} mono hint="Approximate. Drives advance-tax applicability and 234A/234C exposure." />
+                  <Row k="Tax audit applicable" v={client.profile.taxAuditApplicable} />
+                  <Row k="Business / profession income" v={client.profile.hasBusinessIncome} />
+                  <Row k="Presumptive scheme opted" v={client.profile.presumptiveOpted} />
+                  <Row k="Transfer pricing" v={client.profile.hasTransferPricing} />
+                </ProfileCard>
 
-            <ProfileCard title="Income sources">
-              <Row k="House properties" v={p.housePropertyCount} mono />
-              <Row k="Capital gains" v={p.hasCapitalGains} />
-              <Row k="Agricultural income" v={`₹${inr(p.agriculturalIncome)}`} mono />
-              <Row k="Unlisted equity shares" v={p.holdsUnlistedShares} />
-              <Row k="Foreign assets / income" v={p.hasForeignAssets} />
-              <Row k="Partner in a firm" v={p.isPartnerInFirm} />
-            </ProfileCard>
+                <ProfileCard title="Income sources">
+                  <Row k="House properties" v={client.profile.housePropertyCount} mono />
+                  <Row k="Capital gains" v={client.profile.hasCapitalGains} />
+                  <Row k="Agricultural income" v={`₹${inr(client.profile.agriculturalIncome)}`} mono />
+                  <Row k="Unlisted equity shares" v={client.profile.holdsUnlistedShares} />
+                  <Row k="Foreign assets / income" v={client.profile.hasForeignAssets} />
+                  <Row k="Partner in a firm" v={client.profile.isPartnerInFirm} />
+                </ProfileCard>
 
-            <ProfileCard title="GST">
-              <Row k="Registration type" v={p.gstRegType} />
-              <Row k="QRMP opted" v={p.gstQrmpOpted} />
-              <Row k="State category (QRMP)" v={p.gstStateCategory} hint="Decides whether quarterly GSTR-3B is due on the 22nd or the 24th" />
-              <Row k="GSTIN" v={client.gstin ?? "—"} mono />
-            </ProfileCard>
+                <ProfileCard title="ROC / MCA">
+                  <Row k="Deposits / exempt receipts" v={client.profile.hasDeposits} />
+                  <Row k="MSME dues beyond 45 days" v={client.profile.msmeDuesOverdue} />
+                  <Row k="Claims s.11 exemption" v={client.profile.claimsSection11} />
+                </ProfileCard>
+              </>
+            ) : null}
 
-            <ProfileCard title="TDS / TCS">
-              <Row k="Nature of payments made" v={p.paymentNatures.join(", ") || "—"} />
-              <Row k="TDS deducted per quarter" v={`₹${inr(p.tdsPerQuarter)}`} mono hint="Caps the ₹200/day late fee under s.234E" />
-            </ProfileCard>
+            {gstEntity ? (
+              <ProfileCard title="GST registration">
+                <Row k="GSTIN" v={gstEntity.gstin} mono />
+                <Row k="Registration type" v={gstEntity.profile.gstRegType} />
+                <Row k="QRMP opted" v={gstEntity.profile.gstQrmpOpted} />
+                <Row k="State category (QRMP)" v={gstEntity.profile.gstStateCategory} hint="Decides whether quarterly GSTR-3B is due on the 22nd or the 24th" />
+                <Row k="Turnover (preceding FY)" v={`₹${inr(gstEntity.profile.turnover)}`} mono />
+              </ProfileCard>
+            ) : null}
 
-            <ProfileCard title="Other statutory">
-              <Row k="EPF covered" v={p.epfCovered} />
-              <Row k="ESI covered" v={p.esiCovered} />
-              <Row k="Monthly payroll" v={`₹${inr(p.monthlyPayroll)}`} mono />
-              <Row k="Professional tax state" v={p.professionalTaxState ?? "Not applicable"} />
-              <Row k="MSME dues beyond 45 days" v={p.msmeDuesOverdue} />
-              <Row k="Deposits / exempt receipts" v={p.hasDeposits} />
-            </ProfileCard>
+            {deductor ? (
+              <>
+                <ProfileCard title="TDS / TCS">
+                  <Row k="TAN" v={deductor.tan} mono />
+                  <Row k="Entity type" v={deductor.profile.entityType} />
+                  <Row k="Tax audit applicable (preceding FY)" v={deductor.profile.taxAuditApplicable} />
+                  <Row k="Nature of payments made" v={deductor.profile.paymentNatures.join(", ") || "—"} />
+                  <Row k="TDS deducted per quarter" v={`₹${inr(deductor.profile.tdsPerQuarter)}`} mono hint="Caps the ₹200/day late fee under s.234E" />
+                  <Row k="Turnover (preceding FY)" v={`₹${inr(deductor.profile.turnover)}`} mono hint="Drives the 27EQ (TCS) turnover threshold" />
+                </ProfileCard>
+
+                <ProfileCard title="Payroll & other statutory">
+                  <Row k="EPF covered" v={deductor.profile.epfCovered} />
+                  <Row k="ESI covered" v={deductor.profile.esiCovered} />
+                  <Row k="Monthly payroll" v={`₹${inr(deductor.profile.monthlyPayroll)}`} mono />
+                  <Row k="Professional tax state" v={deductor.profile.professionalTaxState ?? "Not applicable"} />
+                </ProfileCard>
+              </>
+            ) : null}
           </div>
 
         </>
@@ -358,7 +420,7 @@ export function ClientDetailPage() {
       <ObligationDrawer obligation={peek} onClose={() => setPeek(null)} />
 
       <p className="u-faint" style={{ fontSize: "var(--t-11)", marginTop: "var(--s8)" }}>
-        Applicability last evaluated {fmtDate(TODAY)} against the FY 2026-27 statutory calendar.
+        Applicability last evaluated {fmtDate(TODAY)} against the {FY_LABEL} statutory calendar.
       </p>
     </div>
   );

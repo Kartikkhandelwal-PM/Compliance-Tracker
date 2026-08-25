@@ -39,8 +39,10 @@ import { useApp, useEngine, useObligations, useOutbox } from "./ui/app-state.tsx
 import {
   getFirm, getNotificationSettings, getViewedNotifs, markNotifViewed, summarise,
 } from "./domain/engine.ts";
-import { CLIENTS, CLIENT_BY_ID } from "./domain/book.ts";
-import { DEFS } from "./domain/catalog.ts";
+import {
+  CLIENTS, CLIENT_BY_ID, GST_ENTITIES, GST_ENTITY_BY_ID, TDS_DEDUCTORS, TDS_DEDUCTOR_BY_ID,
+} from "./domain/book.ts";
+import { DEFS, FY_START } from "./domain/catalog.ts";
 import { TODAY, addDays, fmtDate } from "./domain/dates.ts";
 import { Avatar } from "./ui/bits.tsx";
 import { Logo } from "./ui/Logo.tsx";
@@ -70,7 +72,15 @@ interface NavItem {
 
 export function App() {
   const { theme, toggleTheme, me } = useApp();
-  const obligations = useObligations();
+  /* The shell — Dashboard's own stats and the notification bell — is about
+     right now, not the client book's whole history. Scoped to the current
+     year so a resolved arrear from a retired financial year can't inflate
+     "in arrears" or win "biggest backlog" years after it was actually filed. */
+  const allObligations = useObligations();
+  const obligations = useMemo(
+    () => allObligations.filter((o) => o.fy === FY_START),
+    [allObligations],
+  );
   const outbox = useOutbox();
   const notifSettings = useEngine(getNotificationSettings);
   const viewedNotifs = useEngine(getViewedNotifs);
@@ -138,10 +148,12 @@ export function App() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setPaletteOpen((v) => !v);
-      }
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      e.preventDefault();
+      setPaletteOpen((v) => !v);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -154,7 +166,10 @@ export function App() {
     { to: "/calendar", label: "Calendar", icon: "calendar", count: dueSoonRuns },
     { to: "/compliances", label: "Compliances", icon: "rules", count: DEFS.length },
     { to: "/tracker", label: "Tracker", icon: "matrix", count: summary.overdueCount, alarm: summary.overdueCount > 0 },
-    { to: "/clients", label: "Clients", icon: "clients", count: CLIENTS.length },
+    /* The badge covers all three record types the page opens on (GST/TDS/
+       ITR), not just the ITR bucket — CLIENTS.length alone under-reported
+       what "Clients" actually holds once the other two tabs exist. */
+    { to: "/clients", label: "Clients", icon: "clients", count: CLIENTS.length + GST_ENTITIES.length + TDS_DEDUCTORS.length },
     { to: "/reminders", label: "Reminders", icon: "outbox" },
     { to: "/settings", label: "Settings", icon: "settings" },
   ];
@@ -364,7 +379,7 @@ export function App() {
           <button type="button" className="searchbtn" onClick={() => setPaletteOpen(true)}>
             <Icon name="search" size={15} />
             <span className="searchbtn__label">Search clients, compliances, PAN or GSTIN</span>
-            <span className="kbd">⌘K</span>
+            <span className="kbd">/</span>
           </button>
 
           <div className="topline__tools">
@@ -581,6 +596,11 @@ function breadcrumbs(path: string): { label: string; to?: string }[] {
   /* Resolve a client's internal id to their name. Internal ids are never shown
      to users, and the URL segment would otherwise surface one here. */
   const child = decodeURIComponent(seg[1]);
-  const label = first === "clients" ? (CLIENT_BY_ID[child]?.name ?? "Client") : child;
+  /* The path alone doesn't say which of the three unlinked records this id
+     belongs to (that lives in the `?type=` query string, not the pathname),
+     so this checks all three id-spaces — they never overlap. */
+  const label = first === "clients"
+    ? (CLIENT_BY_ID[child]?.name ?? GST_ENTITY_BY_ID[child]?.name ?? TDS_DEDUCTOR_BY_ID[child]?.name ?? "Client")
+    : child;
   return [head, { label }];
 }

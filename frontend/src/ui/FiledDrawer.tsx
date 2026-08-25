@@ -15,9 +15,8 @@
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CLIENT_BY_ID } from "../domain/book.ts";
 import { headClass } from "../domain/catalog.ts";
-import { filedInMonth, monthsWithFilings } from "../domain/engine.ts";
+import { filedInMonth, monthsWithFilings, ownerIdOf, ownerOf } from "../domain/engine.ts";
 import { MONTHS_LONG, TODAY, fmtShort } from "../domain/dates.ts";
 import { useApp, useEngine } from "./app-state.tsx";
 import { Drawer } from "./Drawer.tsx";
@@ -64,15 +63,15 @@ export function FiledDrawer({ open, onClose }: { open: boolean; onClose: () => v
 
   const exportXlsxFile = async () => {
     const headers = [
-      "Compliance", "Head", "Period", "Due date", "Client", "PAN",
+      "Compliance", "Head", "Period", "Due date", "Client", "Id",
       "Filed on", "Status source", "Acknowledgement", "Recorded by",
     ];
     const rows: (string | number)[][] = [];
     for (const g of groups) {
       for (const r of g.rows) {
-        const c = CLIENT_BY_ID[r.clientId];
+        const c = ownerOf(r);
         rows.push([
-          g.form, g.head, g.periodLabel, g.dueDate, c?.name ?? r.clientId, c?.pan ?? "",
+          g.form, g.head, g.periodLabel, g.dueDate, c?.name ?? r.clientId, ownerIdOf(r).value,
           r.filedOn, r.basis, r.arn ?? "", r.filedBy ?? "",
         ]);
       }
@@ -159,9 +158,9 @@ export function FiledDrawer({ open, onClose }: { open: boolean; onClose: () => v
                         for a readable number of them; the full set is the
                         export's job. */}
                     {g.rows.slice(0, 40).map((r) => {
-                      const c = CLIENT_BY_ID[r.clientId];
+                      const c = ownerOf(r);
                       return (
-                        <Link key={r.clientId} to={`/clients/${r.clientId}`} className="filedcli" onClick={onClose}>
+                        <Link key={r.clientId} to={`/clients/${r.clientId}?type=${r.ownerType}`} className="filedcli" onClick={onClose}>
                           <span className="u-truncate">{c?.name ?? r.clientId}</span>
                           {r.arn
                             ? <span className="u-faint num">{r.arn}</span>

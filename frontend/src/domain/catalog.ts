@@ -37,12 +37,15 @@ function fyMonths(fyStart: number): [number, number][] {
   ];
 }
 
+/* `key` embeds `fyStart` so a quarter's runId stays unique once occurrences
+   from more than one financial year sit in the same store — otherwise
+   "CMP-08::Q1" from FY 2025-26 and FY 2026-27 would collide. */
 function fyQuarters(fyStart: number): { key: string; label: string; endY: number; endM: number }[] {
   return [
-    { key: "Q1", label: `Q1 · Apr–Jun ${fyStart}`, endY: fyStart, endM: 6 },
-    { key: "Q2", label: `Q2 · Jul–Sep ${fyStart}`, endY: fyStart, endM: 9 },
-    { key: "Q3", label: `Q3 · Oct–Dec ${fyStart}`, endY: fyStart, endM: 12 },
-    { key: "Q4", label: `Q4 · Jan–Mar ${fyStart + 1}`, endY: fyStart + 1, endM: 3 },
+    { key: `Q1-${fyStart}`, label: `Q1 · Apr–Jun ${fyStart}`, endY: fyStart, endM: 6 },
+    { key: `Q2-${fyStart}`, label: `Q2 · Jul–Sep ${fyStart}`, endY: fyStart, endM: 9 },
+    { key: `Q3-${fyStart}`, label: `Q3 · Oct–Dec ${fyStart}`, endY: fyStart, endM: 12 },
+    { key: `Q4-${fyStart}`, label: `Q4 · Jan–Mar ${fyStart + 1}`, endY: fyStart + 1, endM: 3 },
   ];
 }
 
@@ -66,6 +69,7 @@ function monthlyFollowing(
       periodKey: `${y}-${String(m).padStart(2, "0")}`,
       periodLabel: monthLabel(y, m),
       dueDate: custom ?? iso(ny, nm, day),
+      fy: fyStart,
     };
   });
 }
@@ -84,6 +88,7 @@ function iffMonths(fyStart: number, code: string, day: number): Occurrence[] {
         periodKey: `${y}-${String(m).padStart(2, "0")}`,
         periodLabel: monthLabel(y, m),
         dueDate: iso(ny, nm, day),
+        fy: fyStart,
       };
     });
 }
@@ -103,6 +108,7 @@ function quarterlyFollowing(fyStart: number, code: string, day: number, offset =
       periodKey: q.key,
       periodLabel: q.label,
       dueDate: iso(y, m, day),
+      fy: fyStart,
     };
   });
 }
@@ -117,6 +123,7 @@ function quarterlyFixed(fyStart: number, code: string, dates: [number, number, n
       periodKey: q.key,
       periodLabel: q.label,
       dueDate: iso(y, m, d),
+      fy: fyStart,
     };
   });
 }
@@ -128,6 +135,7 @@ function once(
   d: number,
   periodKey: string,
   periodLabel: string,
+  fy: number,
 ): Occurrence {
   return {
     runId: `${code}::${periodKey}`,
@@ -135,6 +143,7 @@ function once(
     periodKey,
     periodLabel,
     dueDate: iso(y, m, d),
+    fy,
   };
 }
 
@@ -292,8 +301,12 @@ export const DEFS: ComplianceDef[] = [
 
   /* ---- Income Tax ------------------------------------------------------- */
   {
+    /* Filed and owned by the deductor, not the ITR client — this is the
+       deposit for the 24Q/26Q/27Q/27EQ returns below, so it belongs with
+       them under head "TDS", not "Income Tax". (It's still an Income Tax
+       Act provision, s.200(1) — that's a legal fact, not a grouping.) */
     code: "TDS-CHALLAN",
-    head: "Income Tax",
+    head: "TDS",
     form: "TDS/TCS Payment (Challan)",
     description: "Deposit of tax deducted/collected at source",
     frequency: "Monthly",
@@ -538,6 +551,24 @@ export const DEF_BY_CODE: Record<string, ComplianceDef> = Object.fromEntries(
   DEFS.map((d) => [d.code, d]),
 );
 
+/** Which of the three unlinked records (`Client`/`GstEntity`/`TdsDeductor`)
+ *  owns a compliance's obligations. Mostly `def.head` — "GST" is always a
+ *  GstEntity, "TDS" is always a TdsDeductor (this now includes `TDS-CHALLAN`,
+ *  the deposit for the 24Q/26Q/27Q/27EQ returns, moved out of head "Income
+ *  Tax" for exactly this reason) — with one remaining deliberate override:
+ *  `PF-ECR`/`ESI`/`PTAX` sit under "Other Statutory" but are payroll/employer
+ *  obligations that exist for the same reason 24Q does — the entity runs
+ *  payroll — so they belong to the deductor too, not the ITR/ROC client. */
+const DEDUCTOR_OVERRIDE = new Set(["PF-ECR", "ESI", "PTAX"]);
+
+export function recordTypeForDef(code: string): "Client" | "GstEntity" | "TdsDeductor" {
+  if (DEDUCTOR_OVERRIDE.has(code)) return "TdsDeductor";
+  const def = DEF_BY_CODE[code];
+  if (def?.head === "GST") return "GstEntity";
+  if (def?.head === "TDS") return "TdsDeductor";
+  return "Client";
+}
+
 /* ==========================================================================
    OCCURRENCES — the statutory calendar, generated from the rules above
    ========================================================================== */
@@ -570,10 +601,10 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
     ...quarterlyFollowing(fyStart, "GSTR-3B-QRMP-A", 22),
     ...quarterlyFollowing(fyStart, "GSTR-3B-QRMP-B", 24),
     ...quarterlyFollowing(fyStart, "CMP-08", 18),
-    once("GSTR-4", fyStart, 4, 30, prevKey, prevFY),
-    once("GSTR-4", fyStart + 1, 4, 30, thisKey, fyLabel(fyStart)),
-    once("GSTR-9", fyStart, 12, 31, prevKey, prevFY),
-    once("GSTR-9C", fyStart, 12, 31, prevKey, prevFY),
+    once("GSTR-4", fyStart, 4, 30, prevKey, prevFY, fyStart),
+    once("GSTR-4", fyStart + 1, 4, 30, thisKey, fyLabel(fyStart), fyStart),
+    once("GSTR-9", fyStart, 12, 31, prevKey, prevFY, fyStart),
+    once("GSTR-9C", fyStart, 12, 31, prevKey, prevFY, fyStart),
 
     ...monthlyFollowing(fyStart, "TDS-CHALLAN", 7, marchChallanOverride),
     ...monthlyFollowing(fyStart, "PF-ECR", 15),
@@ -581,26 +612,26 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
 
     {
       runId: "ADV-TAX::I1", defCode: "ADV-TAX", periodKey: "I1",
-      periodLabel: "1st instalment · 15%", dueDate: iso(fyStart, 6, 15),
+      periodLabel: "1st instalment · 15%", dueDate: iso(fyStart, 6, 15), fy: fyStart,
     },
     {
       runId: "ADV-TAX::I2", defCode: "ADV-TAX", periodKey: "I2",
-      periodLabel: "2nd instalment · 45%", dueDate: iso(fyStart, 9, 15),
+      periodLabel: "2nd instalment · 45%", dueDate: iso(fyStart, 9, 15), fy: fyStart,
     },
     {
       runId: "ADV-TAX::I3", defCode: "ADV-TAX", periodKey: "I3",
-      periodLabel: "3rd instalment · 75%", dueDate: iso(fyStart, 12, 15),
+      periodLabel: "3rd instalment · 75%", dueDate: iso(fyStart, 12, 15), fy: fyStart,
     },
     {
       runId: "ADV-TAX::I4", defCode: "ADV-TAX", periodKey: "I4",
-      periodLabel: "4th instalment · 100%", dueDate: iso(fyStart + 1, 3, 15),
+      periodLabel: "4th instalment · 100%", dueDate: iso(fyStart + 1, 3, 15), fy: fyStart,
     },
 
-    once("ITR-NONAUDIT", fyStart, 7, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart)),
-    once("ITR-NONAUDIT-BIZ", fyStart, 8, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart)),
-    once("TAX-AUDIT", fyStart, 9, 30, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart)),
-    once("ITR-AUDIT", fyStart, 10, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart)),
-    once("ITR-TP", fyStart, 11, 30, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart)),
+    once("ITR-NONAUDIT", fyStart, 7, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),
+    once("ITR-NONAUDIT-BIZ", fyStart, 8, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),
+    once("TAX-AUDIT", fyStart, 9, 30, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),
+    once("ITR-AUDIT", fyStart, 10, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),
+    once("ITR-TP", fyStart, 11, 30, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),
 
     ...(["24Q", "26Q", "27Q", "27EQ"] as const).flatMap((code) =>
       quarterlyFixed(fyStart, code, [
@@ -608,23 +639,49 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
       ]),
     ),
 
-    once("AOC-4", fyStart, 10, 29, prevKey, prevFY),
-    once("MGT-7", fyStart, 11, 29, prevKey, prevFY),
-    once("DPT-3", fyStart, 6, 30, prevKey, prevFY),
-    once("MSME-1", fyStart, 4, 30, `H2${prevKey}`, `Oct ${fyStart - 1} – Mar ${fyStart}`),
-    once("MSME-1", fyStart, 10, 31, `H1${thisKey}`, `Apr – Sep ${fyStart}`),
-    once("DIR-3-KYC", fyStart, 9, 30, thisKey, fyLabel(fyStart)),
-    once("LLP-11", fyStart, 5, 30, prevKey, prevFY),
-    once("LLP-8", fyStart, 10, 30, prevKey, prevFY),
-    once("PTAX", fyStart, 6, 30, thisKey, fyLabel(fyStart)),
+    once("AOC-4", fyStart, 10, 29, prevKey, prevFY, fyStart),
+    once("MGT-7", fyStart, 11, 29, prevKey, prevFY, fyStart),
+    once("DPT-3", fyStart, 6, 30, prevKey, prevFY, fyStart),
+    once("MSME-1", fyStart, 4, 30, `H2${prevKey}`, `Oct ${fyStart - 1} – Mar ${fyStart}`, fyStart),
+    once("MSME-1", fyStart, 10, 31, `H1${thisKey}`, `Apr – Sep ${fyStart}`, fyStart),
+    once("DIR-3-KYC", fyStart, 9, 30, thisKey, fyLabel(fyStart), fyStart),
+    once("LLP-11", fyStart, 5, 30, prevKey, prevFY, fyStart),
+    once("LLP-8", fyStart, 10, 30, prevKey, prevFY, fyStart),
+    once("PTAX", fyStart, 6, 30, thisKey, fyLabel(fyStart), fyStart),
   ].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 
-/** The seeded year's calendar — what the client book is built against. */
-export const OCCURRENCES: Occurrence[] = occurrencesForFY(FY_START);
+/** How many financial years before FY_START carry a seeded client book, so
+ *  the year picker (Calendar, Compliance Detail, Client Detail, Tracker) can
+ *  offer real history rather than only the current year. Grows every year:
+ *  bump this, not the years themselves, once another year has passed. */
+export const HISTORY_YEARS = 2;
+
+/** Every financial year with a real client book behind it, oldest first. */
+export const SEEDED_FYS: number[] = Array.from(
+  { length: HISTORY_YEARS + 1 },
+  (_, i) => FY_START - HISTORY_YEARS + i,
+);
+
+/** The year immediately ahead — seeded with a statutory calendar so its due
+ *  dates are visible early, but never with client data, since it hasn't
+ *  started. */
+export const YEAR_AHEAD = FY_START + 1;
+
+/** The full year-picker list offered throughout the product, oldest first. */
+export const FY_OPTIONS: number[] = [...SEEDED_FYS, YEAR_AHEAD];
+
+/** Every offered year's statutory calendar, precomputed once. */
+export const OCCURRENCES_BY_FY: Record<number, Occurrence[]> = Object.fromEntries(
+  FY_OPTIONS.map((fy) => [fy, occurrencesForFY(fy)]),
+);
+
+/** The current year's calendar — what most of the seeded client book reads
+ *  by default. Kept for call sites that only ever care about "now". */
+export const OCCURRENCES: Occurrence[] = OCCURRENCES_BY_FY[FY_START];
 
 export const OCC_BY_RUN: Record<string, Occurrence> = Object.fromEntries(
-  OCCURRENCES.map((o) => [o.runId, o]),
+  Object.values(OCCURRENCES_BY_FY).flat().map((o) => [o.runId, o]),
 );
 
 /** CSS class for a head's identity spine. */

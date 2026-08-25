@@ -23,10 +23,11 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import type { Obligation } from "../domain/types.ts";
+import type { Obligation, RecordType } from "../domain/types.ts";
 import { useApp, useObligations } from "../ui/app-state.tsx";
-import { CLIENT_BY_ID, STAFF, staffOf } from "../domain/book.ts";
-import { HEADS, headClass } from "../domain/catalog.ts";
+import { STAFF, staffOf } from "../domain/book.ts";
+import { ownerOf, ownerIdOf } from "../domain/engine.ts";
+import { FY_OPTIONS, FY_START, HEADS, fyLabel, headClass } from "../domain/catalog.ts";
 import { MONTHS, TODAY, addDays, fmtShort, inrShort, monthLabelLong, parts } from "../domain/dates.ts";
 import { Empty, PageHead } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
@@ -83,7 +84,9 @@ export function MatrixPage() {
     const o = params.get("owner");
     if (o) setOwners([o]);
   }, [params]);
-  const [win, setWin] = useState<Window>("quarter");
+  const [fy, setFy] = useState(FY_START);
+  const isCurrentYear = fy === FY_START;
+  const [win, setWin] = useState<Window>("year");
   const [group, setGroup] = useState<GroupBy>("month");
   const [sort, setSort] = useState<SortKey>("late");
   const [q, setQ] = useState("");
@@ -108,13 +111,28 @@ export function MatrixPage() {
     };
   }, [expanded]);
 
-  /* ---- Columns: every compliance due inside the chosen window ------------ */
+  /* ---- Columns: every compliance due inside the chosen window ------------
+     The Period pill (This month / Next 3 months / Full year) only applies to
+     the current year — it's a rolling slice around today, and a past year
+     has no "today" inside it to roll around. So it's hidden entirely once a
+     past year is picked, and that year always shows its whole Apr–Mar span. */
   const columns = useMemo<Column[]>(() => {
-    const days = win === "month" ? 31 : win === "quarter" ? 92 : 365;
-    const from = addDays(TODAY, win === "year" ? -120 : -31);
-    const to = addDays(TODAY, days);
+    let from: string, to: string;
+    if (isCurrentYear) {
+      /* A week of trailing grace so something due yesterday and still unresolved
+         doesn't vanish from the grid the moment its due date passes — same
+         "a week of arrears behind" pattern as Calendar's own runway strip.
+         "This month" and "Next 3 months" both use it; only "Full year" needs a
+         longer look back, since it's meant to read as the whole year at once. */
+      from = addDays(TODAY, win === "year" ? -120 : -7);
+      to = addDays(TODAY, win === "month" ? 31 : win === "quarter" ? 92 : 365);
+    } else {
+      from = `${fy}-04-01`;
+      to = `${fy + 1}-03-31`;
+    }
     const seen = new Map<string, Column>();
     for (const o of obligations) {
+      if (o.fy !== fy) continue;
       if (o.dueDate < from || o.dueDate > to) continue;
       if (head !== "all" && o.head !== head) continue;
       if (!seen.has(o.runId)) {
@@ -134,7 +152,7 @@ export function MatrixPage() {
       list.sort((a, b) => a.due.localeCompare(b.due) || a.form.localeCompare(b.form));
     }
     return list;
-  }, [obligations, head, win, group]);
+  }, [obligations, head, win, group, fy, isCurrentYear]);
 
   const colIndex = useMemo(() => new Map(columns.map((c, i) => [c.runId, i])), [columns]);
 
@@ -156,18 +174,25 @@ export function MatrixPage() {
 
   /* ---- Rows ------------------------------------------------------------- */
   const rows = useMemo(() => {
+    /* No type tab here — GST, TDS and ITR rows sit in one table, narrowed by
+       the existing Head filter instead. A GST-only slice (Head = GST) and an
+       everything slice (Head = all) are both this same table; keeping each
+       row's own `ownerType` (ids never collide across the three) is what
+       lets a mixed row list still resolve the right name/PAN-or-GSTIN-or-TAN
+       per row rather than assuming one type for the whole page. */
     const map = new Map<string, {
-      clientId: string; cells: (Obligation | null)[];
+      clientId: string; ownerType: RecordType; cells: (Obligation | null)[];
       fees: number; open: number; late: number; filed: number;
     }>();
     for (const o of obligations) {
+      if (o.fy !== fy) continue;
       const ci = colIndex.get(o.runId);
       if (ci === undefined) continue;
       if (owners.length > 0 && !owners.includes(o.assigneeId)) continue;
       let row = map.get(o.clientId);
       if (!row) {
         row = {
-          clientId: o.clientId, cells: Array(columns.length).fill(null),
+          clientId: o.clientId, ownerType: o.ownerType, cells: Array(columns.length).fill(null),
           fees: 0, open: 0, late: 0, filed: 0,
         };
         map.set(o.clientId, row);
@@ -188,27 +213,27 @@ export function MatrixPage() {
     const needle = q.trim().toLowerCase();
     if (needle) {
       list = list.filter((r) => {
-        const c = CLIENT_BY_ID[r.clientId];
-        return c.name.toLowerCase().includes(needle)
-          || c.pan.toLowerCase().includes(needle)
-          || (c.gstin ?? "").toLowerCase().includes(needle);
+        const c = ownerOf(r);
+        const idValue = ownerIdOf(r).value;
+        return c.name.toLowerCase().includes(needle) || idValue.toLowerCase().includes(needle);
       });
     }
 
     if (sort === "late") list.sort((a, b) => b.late - a.late || b.open - a.open);
     else if (sort === "open") list.sort((a, b) => b.open - a.open || b.late - a.late);
     else if (sort === "fees") list.sort((a, b) => b.fees - a.fees);
-    else list.sort((a, b) => CLIENT_BY_ID[a.clientId].name.localeCompare(CLIENT_BY_ID[b.clientId].name));
+    else list.sort((a, b) => ownerOf(a).name.localeCompare(ownerOf(b).name));
 
     return list;
-  }, [obligations, colIndex, columns.length, owners, q, sort, status]);
+  }, [obligations, fy, colIndex, columns.length, owners, q, sort, status]);
 
   const exportXlsxFile = async () => {
-    const headers = ["Client", "PAN", "GSTIN", "Owner", ...columns.map((c) => `${c.form} ${c.period} (due ${c.due})`)];
+    const headers = ["Client", "Id", "Owner", ...columns.map((c) => `${c.form} ${c.period} (due ${c.due})`)];
     const dataRows = rows.map((r) => {
-      const c = CLIENT_BY_ID[r.clientId];
+      const c = ownerOf(r);
+      const idValue = ownerIdOf(r).value;
       return [
-        c.name, c.pan, c.gstin ?? "", staffOf(c.assigneeId).name,
+        c.name, idValue, staffOf(c.assigneeId).name,
         ...r.cells.map((cell) => (cell ? cell.status : "—")),
       ];
     });
@@ -272,21 +297,23 @@ export function MatrixPage() {
         <input
           value={q}
           onChange={(e) => { setQ(e.target.value); setLimit(ROWS); }}
-          placeholder="Name, PAN or GSTIN"
+          placeholder="Name, PAN, GSTIN or TAN"
           aria-label="Search clients"
         />
       </div>
-      <FilterPill<Window>
-        field="Period"
-        value={win}
-        none={"quarter" as Window}
-        onChange={setWin}
-        options={[
-          { value: "month", label: "This month" },
-          { value: "quarter", label: "Next 3 months" },
-          { value: "year", label: "Full year" },
-        ]}
-      />
+      {isCurrentYear ? (
+        <FilterPill<Window>
+          field="Period"
+          value={win}
+          none={"year" as Window}
+          onChange={setWin}
+          options={[
+            { value: "month", label: "This month" },
+            { value: "quarter", label: "Next 3 months" },
+            { value: "year", label: "Full year" },
+          ]}
+        />
+      ) : null}
       <FilterPill<string>
         field="Head"
         value={head}
@@ -329,10 +356,10 @@ export function MatrixPage() {
       />
       <ClearFilters
         count={(head !== "all" ? 1 : 0) + (owners.length > 0 ? 1 : 0) + (status !== "all" ? 1 : 0)
-          + (win !== "quarter" ? 1 : 0) + (group !== "month" ? 1 : 0)}
+          + (isCurrentYear && win !== "year" ? 1 : 0) + (group !== "month" ? 1 : 0)}
         onClear={() => {
           setHead("all"); setOwners([]); setStatus("all");
-          setWin("quarter"); setGroup("month"); setLimit(ROWS);
+          setWin("year"); setGroup("month"); setLimit(ROWS);
         }}
       />
       <span className="u-spacer" />
@@ -357,9 +384,21 @@ export function MatrixPage() {
           </>
         }
         aside={
-          <button type="button" className="btn btn--sm" onClick={exportXlsxFile}>
-            <Icon name="download" size={14} /> Export
-          </button>
+          <div className="u-row">
+            <select
+              className="plain"
+              value={fy}
+              onChange={(e) => { setFy(Number(e.target.value)); setLimit(ROWS); }}
+              aria-label="Financial year"
+            >
+              {FY_OPTIONS.map((y) => (
+                <option key={y} value={y}>{fyLabel(y)}</option>
+              ))}
+            </select>
+            <button type="button" className="btn btn--sm" onClick={exportXlsxFile}>
+              <Icon name="download" size={14} /> Export
+            </button>
+          </div>
         }
       />
 
@@ -441,14 +480,15 @@ export function MatrixPage() {
               </thead>
               <tbody>
                 {visible.map((r) => {
-                  const c = CLIENT_BY_ID[r.clientId];
+                  const c = ownerOf(r);
+                  const idValue = ownerIdOf(r).value;
                   return (
                     <tr key={r.clientId}>
                       <td className="trk__name">
-                        <button type="button" onClick={() => nav(`/clients/${c.id}`)}>
+                        <button type="button" onClick={() => nav(`/clients/${c.id}?type=${r.ownerType}`)}>
                           <span className="trk__cname">{c.name}</span>
                           <span className="trk__cmeta num">
-                            {c.pan}
+                            {idValue}
                             {r.late > 0 ? <em className="trk__late">{r.late} late</em> : null}
                           </span>
                         </button>
@@ -504,7 +544,9 @@ export function MatrixPage() {
           </div>
 
           <p className="u-faint" style={{ fontSize: "var(--t-11)", marginTop: "var(--s4)" }}>
-            {win === "year" ? "Full financial year" : win === "quarter" ? "Next three months" : monthLabelLong(parts(TODAY).y, parts(TODAY).m)}
+            {!isCurrentYear || win === "year"
+              ? "Full financial year"
+              : win === "quarter" ? "Next three months" : monthLabelLong(parts(TODAY).y, parts(TODAY).m)}
             {" "}· click a column header to open that compliance, a row to open the client, a cell to see why it applies
             {rows.reduce((a, r) => a + r.fees, 0) > 0
               ? ` · ${inrShort(rows.reduce((a, r) => a + r.fees, 0))} late fees in this slice`

@@ -1,10 +1,11 @@
-/* ⌘K. Search by name, PAN or GSTIN is a stated Phase-1 requirement; putting it
+/* "/" to open. Search by name, PAN or GSTIN is a stated Phase-1 requirement; putting it
    in a palette rather than a permanent search field keeps the work surface
    free for data, and gives navigation and search one entry point. */
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { CLIENTS, staffOf } from "../domain/book.ts";
+import type { RecordType } from "../domain/types.ts";
+import { CLIENTS, GST_ENTITIES, TDS_DEDUCTORS, staffOf } from "../domain/book.ts";
 import { DEFS } from "../domain/catalog.ts";
 import { untrackedCodes } from "../domain/engine.ts";
 import { useEngine } from "./app-state.tsx";
@@ -60,23 +61,34 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
     const out: Item[] = NAV.filter((n) => n.label.toLowerCase().includes(needle));
 
-    for (const c of CLIENTS) {
-      if (out.length > 40) break;
-      if (
-        c.name.toLowerCase().includes(needle) ||
-        c.legalName.toLowerCase().includes(needle) ||
-        c.pan.toLowerCase().includes(needle) ||
-        (c.gstin ?? "").toLowerCase().includes(needle)
-      ) {
-        out.push({
-          group: "Clients",
-          label: c.name,
-          sub: c.pan,
-          icon: "clients",
-          avatar: initialsOf(c.name),
-          owner: staffOf(c.assigneeId).initials,
-          to: `/clients/${c.id}`,
-        });
+    /* Client, Firm and Deductor are unrelated records with their own id
+       (PAN/GSTIN/TAN) — searched together here since the palette's job is
+       "find the record", not "find it within one bucket", but each result
+       still links to its own type so the detail page opens on the right one. */
+    const books: [RecordType, { id: string; name: string; legalName: string; assigneeId: string }[], string][] = [
+      ["Client", CLIENTS, "pan"],
+      ["GstEntity", GST_ENTITIES, "gstin"],
+      ["TdsDeductor", TDS_DEDUCTORS, "tan"],
+    ];
+    for (const [type, list, idField] of books) {
+      for (const c of list as (typeof list[number] & Record<string, string>)[]) {
+        if (out.length > 40) break;
+        const idValue: string = c[idField] ?? "";
+        if (
+          c.name.toLowerCase().includes(needle) ||
+          c.legalName.toLowerCase().includes(needle) ||
+          idValue.toLowerCase().includes(needle)
+        ) {
+          out.push({
+            group: "Clients",
+            label: c.name,
+            sub: idValue,
+            icon: "clients",
+            avatar: initialsOf(c.name),
+            owner: staffOf(c.assigneeId).initials,
+            to: `/clients/${c.id}?type=${type}`,
+          });
+        }
       }
     }
 

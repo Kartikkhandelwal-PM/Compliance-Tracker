@@ -12,9 +12,11 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { FilingStatus, Obligation } from "../domain/types.ts";
 import { useApp, useObligations } from "../ui/app-state.tsx";
-import { CLIENT_BY_ID, STAFF, staffOf } from "../domain/book.ts";
+import { STAFF, staffOf } from "../domain/book.ts";
 import { DEF_BY_CODE } from "../domain/catalog.ts";
-import { markFiled, reassign, sendReminders, unmarkFiled } from "../domain/engine.ts";
+import {
+  markFiled, ownerIdOf, ownerOf, reassign, sendReminders, unmarkFiled,
+} from "../domain/engine.ts";
 import { fmtLong, inr, inrShort } from "../domain/dates.ts";
 import {
   Avatar, Check, Countdown, Empty, HeadName, PageHead, Pbar, Stat, StatusTag,
@@ -64,11 +66,10 @@ export function RunDetailPage() {
     const needle = q.trim().toLowerCase();
     if (needle) {
       list = list.filter((o) => {
-        const c = CLIENT_BY_ID[o.clientId];
+        const c = ownerOf(o);
         return (
           c.name.toLowerCase().includes(needle) ||
-          c.pan.toLowerCase().includes(needle) ||
-          (c.gstin ?? "").toLowerCase().includes(needle)
+          ownerIdOf(o).value.toLowerCase().includes(needle)
         );
       });
     }
@@ -77,7 +78,7 @@ export function RunDetailPage() {
     return [...list].sort(
       (a, b) => order[a.status] - order[b.status] ||
         b.exposure - a.exposure ||
-        CLIENT_BY_ID[a.clientId].name.localeCompare(CLIENT_BY_ID[b.clientId].name),
+        ownerOf(a).name.localeCompare(ownerOf(b).name),
     );
   }, [items, filter, owner, q]);
 
@@ -116,12 +117,14 @@ export function RunDetailPage() {
 
   const selectedIds = [...selected];
 
+  const idLabel = ownerIdOf(first).label;
+
   const exportXlsxFile = async () => {
-    const headers = ["Client", "PAN", "GSTIN", "State", "Form", "Period", "Due date", "Status", "Status source", "Acknowledgement", "Filed on", "Recorded by", "Days overdue", "Estimated penalty", "Owner"];
+    const headers = ["Client", idLabel, "State", "Form", "Period", "Due date", "Status", "Status source", "Acknowledgement", "Filed on", "Recorded by", "Days overdue", "Estimated penalty", "Owner"];
     const dataRows = rows.map((o) => {
-      const c = CLIENT_BY_ID[o.clientId];
+      const c = ownerOf(o);
       return [
-        c.name, c.pan, c.gstin ?? "", c.state, o.form, o.periodLabel, o.dueDate,
+        c.name, ownerIdOf(o).value, c.state, o.form, o.periodLabel, o.dueDate,
         o.status, o.basis, o.arn ?? "", o.filedOn ?? "", o.filedBy ?? "",
         o.daysOverdue, o.exposure, staffOf(o.assigneeId).name,
       ];
@@ -178,7 +181,7 @@ export function RunDetailPage() {
       <div className="filters">
         <div className="field" style={{ width: 260 }}>
           <Icon name="search" size={15} />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a client by name, PAN or GSTIN" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={`Find a client by name or ${idLabel}`} />
         </div>
         <div className="seg">
           {([["open", "Open"], ["overdue", "Overdue"], ["filed", "Filed"], ["all", "Everyone"], ["na", "Not applicable"]] as [Filter, string][]).map(
@@ -220,7 +223,7 @@ export function RunDetailPage() {
           </thead>
           <tbody>
             {rows.map((o) => {
-              const c = CLIENT_BY_ID[o.clientId];
+              const c = ownerOf(o);
               const on = selected.has(o.id);
               return (
                 <tr key={o.id} className={`is-clickable${on ? " is-selected" : ""}`} onClick={() => setPeek(o)}>
@@ -230,7 +233,7 @@ export function RunDetailPage() {
                   <td>
                     <div className="u-strong u-truncate" style={{ maxWidth: 280 }}>{c.name}</div>
                     <div className="num u-mute" style={{ fontSize: "var(--t-11)" }}>
-                      {c.pan}{c.gstin ? ` · ${c.gstin}` : ""}
+                      {ownerIdOf(o).value}
                     </div>
                   </td>
                   <td className="u-mute">{c.state}</td>

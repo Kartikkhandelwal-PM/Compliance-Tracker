@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useObligations } from "../ui/app-state.tsx";
 import { buildRuns } from "../domain/engine.ts";
-import { HEADS } from "../domain/catalog.ts";
+import { FY_START, HEADS } from "../domain/catalog.ts";
 import { TODAY, addDays, monthLabelLong, parts } from "../domain/dates.ts";
 import { PageHead, Seg } from "../ui/bits.tsx";
 import { RunList } from "../ui/RunList.tsx";
@@ -15,7 +15,8 @@ type Window = "open" | "overdue" | "30d" | "all";
 type SortKey = "date" | "exposure" | "open";
 
 export function RunsPage() {
-  const obligations = useObligations();
+  const all = useObligations();
+  const obligations = useMemo(() => all.filter((o) => o.fy === FY_START), [all]);
   const [params, setParams] = useSearchParams();
   const [head, setHead] = useState<string>("all");
   const [sort, setSort] = useState<SortKey>("date");

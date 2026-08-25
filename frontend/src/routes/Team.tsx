@@ -5,7 +5,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useObligations } from "../ui/app-state.tsx";
-import { CLIENTS, STAFF, UNASSIGNED } from "../domain/book.ts";
+import { CLIENTS, GST_ENTITIES, STAFF, TDS_DEDUCTORS, UNASSIGNED } from "../domain/book.ts";
+import { FY_START } from "../domain/catalog.ts";
 import { TODAY, addDays, inr, inrShort } from "../domain/dates.ts";
 import { Avatar, PageHead, SectionHead, Seg, Stat } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
@@ -39,13 +40,17 @@ export function TeamPage() {
       }]),
     );
 
-    for (const c of CLIENTS) {
+    /* A staff member's book spans all three unlinked records — a Client, a
+       Firm and a Deductor with the same owner are three separate assignments,
+       not one client counted three ways. */
+    for (const c of [...CLIENTS, ...GST_ENTITIES, ...TDS_DEDUCTORS]) {
       const row = map.get(c.assigneeId);
       if (row) row.clients++;
     }
 
     const weekEnd = addDays(TODAY, 7);
     for (const o of obligations) {
+      if (o.fy !== FY_START) continue;
       const row = map.get(o.assigneeId);
       if (!row) continue;
       if (o.status === "Filed") row.filed++;
@@ -97,7 +102,7 @@ export function TeamPage() {
 
       <div className="stats" style={{ marginBottom: "var(--s4)" }}>
         <Stat label="People" value={STAFF.length} sub="with an active book" />
-        <Stat label="Clients" value={CLIENTS.length} sub="assigned across the team" />
+        <Stat label="Records" value={CLIENTS.length + GST_ENTITIES.length + TDS_DEDUCTORS.length} sub="clients, firms and deductors" />
         <Stat label="Overdue" value={totals.overdue} tone={totals.overdue ? "overdue" : undefined} sub="across all owners" />
         <Stat label="Due in 7 days" value={totals.week} tone="soon" sub="team-wide" />
         <Stat

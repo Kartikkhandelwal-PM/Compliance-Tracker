@@ -1184,6 +1184,39 @@ a.railbtn {
   margin-bottom: var(--s1);
 }
 
+/* --- Record-type tabs (Client / Firm / Deductor) --------------------------
+   A segmented control, not a filter pill — switching tabs swaps which
+   unlinked array the whole screen reads, so it reads as a bigger decision
+   than narrowing a list. */
+.tabs {
+  display: inline-flex;
+  gap: 3px;
+  background: var(--sunk);
+  border-radius: var(--radius);
+  padding: 3px;
+  margin-bottom: var(--s3);
+}
+.tabs__btn {
+  font: inherit;
+  font-size: var(--t-13);
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.tabs__btn:hover {
+  color: var(--ink);
+}
+.tabs__btn.is-on {
+  background: var(--sheet);
+  color: var(--ink);
+  box-shadow: var(--shadow-1);
+}
+
 /* --- Page header: one compact band, not a title page ---------------------- */
 .phead {
   display: flex;
@@ -5761,7 +5794,7 @@ a.calpill.p-overdue:hover {
     white-space: nowrap;
     max-width: 32vw;
   }
-  /* The ⌘K hint names a keyboard shortcut a touch device does not have. */
+  /* The "/" hint names a keyboard shortcut a touch device does not have. */
   .searchbtn .kbd {
     display: none;
   }

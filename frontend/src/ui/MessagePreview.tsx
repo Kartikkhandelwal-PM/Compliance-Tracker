@@ -11,9 +11,9 @@
    ========================================================================== */
 
 import type { OutboxEntry } from "../domain/types.ts";
-import { CLIENT_BY_ID, staffOf } from "../domain/book.ts";
+import { staffOf } from "../domain/book.ts";
 import { dateOf, fmtAgoIfFresh, fmtLong, fmtTime } from "../domain/dates.ts";
-import { resendEntries } from "../domain/engine.ts";
+import { ownerOf, resendEntries } from "../domain/engine.ts";
 import { getSender } from "../domain/messages.ts";
 import { useApp, useEngine } from "./app-state.tsx";
 import { Drawer } from "./Drawer.tsx";
@@ -60,7 +60,7 @@ export function MessagePreview({
   const sender = useEngine(getSender);
   if (!entry) return null;
   const e = entry;
-  const client = CLIENT_BY_ID[e.clientId];
+  const client = ownerOf(e);
   const owner = staffOf(client?.assigneeId ?? "none");
   /* The real send time, off the entry. This used to be a hash of the row id
      dressed up as a clock, because the log only carried a date — so the same

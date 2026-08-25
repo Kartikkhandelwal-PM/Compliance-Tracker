@@ -10,13 +10,20 @@
 
 import type {
   Channel, Client, ComplianceOverride, DeliveryStatus, FilingRun, FilingStatus,
-  FirmProfile, Head, NotificationSettings, Obligation, OutboxEntry,
-  ReminderSettings, ReminderStage, ScheduleStep, ScheduledSend, SenderProfile,
-  StatusBasis, StepKind,
+  FirmProfile, Head, NotificationSettings, Obligation, Occurrence, OutboxEntry, Party,
+  RecordType, ReminderSettings, ReminderStage, ScheduleStep, ScheduledSend,
+  SenderProfile, StatusBasis, StepKind,
 } from "./types.ts";
-import { CLIENTS, CLIENT_BY_ID, staffOf } from "./book.ts";
-import { DEF_BY_CODE, OCCURRENCES } from "./catalog.ts";
-import { applicableCompliances, estimateExposure } from "./rules.ts";
+import {
+  CLIENTS, CLIENT_BY_ID, GST_ENTITIES, GST_ENTITY_BY_ID, TDS_DEDUCTORS,
+  TDS_DEDUCTOR_BY_ID, staffOf,
+} from "./book.ts";
+import { DEF_BY_CODE, OCCURRENCES_BY_FY, SEEDED_FYS } from "./catalog.ts";
+import type { Applicable, ExposureContext } from "./rules.ts";
+import {
+  applicableClientCompliances, applicableDeductorCompliances,
+  applicableGstCompliances, estimateExposure, estimatedTax,
+} from "./rules.ts";
 import {
   TODAY, addDays, dateOf, diffDays, inQuietHours, nextSendableAt, stamp,
 } from "./dates.ts";
@@ -32,15 +39,18 @@ function h(s: string): number {
   return (x >>> 0) / 4294967296;
 }
 
-const OCC_BY_DEF = new Map<string, typeof OCCURRENCES>();
-for (const o of OCCURRENCES) {
-  const list = OCC_BY_DEF.get(o.defCode);
-  if (list) list.push(o);
-  else OCC_BY_DEF.set(o.defCode, [o]);
+/** One financial year's occurrences, grouped by compliance code. Built fresh
+ *  per year rather than once globally, now that `build()` walks every seeded
+ *  year rather than only the current one. */
+function occByDefFor(fy: number): Map<string, Occurrence[]> {
+  const map = new Map<string, Occurrence[]>();
+  for (const o of OCCURRENCES_BY_FY[fy]) {
+    const list = map.get(o.defCode);
+    if (list) list.push(o);
+    else map.set(o.defCode, [o]);
+  }
+  return map;
 }
-
-const WINDOW_START = "2026-04-01";
-const WINDOW_END = "2027-03-31";
 
 function reminderStageFor(status: FilingStatus, dueDate: string, clientFacing: boolean): ReminderStage {
   if (status === "Not Applicable") return "N/A";
@@ -74,11 +84,12 @@ function digitRun(id: string, salt: string, len: number): string {
  * GST issues an ARN, the income-tax portal a 15-digit acknowledgement, MCA an
  * SRN — since real numbers arrive from the portal, never from this function.
  */
-function synthAck(id: string, head: Head, client: Client, filedOn: string): string {
+function synthAck(id: string, head: Head, ownerType: RecordType, ownerId: string, filedOn: string): string {
   const [y, m] = filedOn.split("-");
   switch (head) {
     case "GST": {
-      const st = client.gstin?.slice(0, 2) ?? "08";
+      const gstin = ownerType === "GstEntity" ? GST_ENTITY_BY_ID[ownerId]?.gstin : undefined;
+      const st = gstin?.slice(0, 2) ?? "08";
       const check = "ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(h(`${id}|ck`) * 24)];
       return `AA${st}${m}${y.slice(2)}${digitRun(id, "arn", 6)}${check}`;
     }
@@ -93,21 +104,70 @@ function synthAck(id: string, head: Head, client: Client, filedOn: string): stri
   }
 }
 
-function build(): Obligation[] {
+/** The handful of numbers a late-fee model might read, from whichever of the
+ *  three records owns the obligation — see `ExposureContext`'s own note on
+ *  why a field a record doesn't have is safely 0 rather than threaded
+ *  through as optional. */
+function exposureContextFor(ownerType: RecordType, ownerId: string): ExposureContext {
+  if (ownerType === "GstEntity") {
+    const g = GST_ENTITY_BY_ID[ownerId];
+    return { turnover: g.profile.turnover, totalIncome: 0, tdsPerQuarter: 0, monthlyPayroll: 0, estimatedTax: 0 };
+  }
+  if (ownerType === "TdsDeductor") {
+    const d = TDS_DEDUCTOR_BY_ID[ownerId];
+    return {
+      turnover: d.profile.turnover, totalIncome: 0, tdsPerQuarter: d.profile.tdsPerQuarter,
+      monthlyPayroll: d.profile.monthlyPayroll, estimatedTax: 0,
+    };
+  }
+  const c = CLIENT_BY_ID[ownerId];
+  return {
+    turnover: c.profile.turnover, totalIncome: c.profile.totalIncome,
+    tdsPerQuarter: 0, monthlyPayroll: 0, estimatedTax: estimatedTax(c.profile),
+  };
+}
+
+/** Every screen that needs a record's name/contact/owner reaches it through
+ *  this, rather than assuming `clientId` joins into `CLIENT_BY_ID` — it may
+ *  join into `GST_ENTITY_BY_ID` or `TDS_DEDUCTOR_BY_ID` instead, per
+ *  `ownerType`. Returns the shared `Party` shape every UI screen already
+ *  reads (name, whatsapp, email, phone, assigneeId); a screen that also
+ *  needs the type-specific id (PAN/GSTIN/TAN) uses `ownerIdOf` below. */
+export function ownerOf(o: { ownerType: RecordType; clientId: string }): Party {
+  if (o.ownerType === "GstEntity") return GST_ENTITY_BY_ID[o.clientId];
+  if (o.ownerType === "TdsDeductor") return TDS_DEDUCTOR_BY_ID[o.clientId];
+  return CLIENT_BY_ID[o.clientId];
+}
+
+/** The type-specific identifier a record is filed under, labelled. */
+export function ownerIdOf(o: { ownerType: RecordType; clientId: string }): { label: string; value: string } {
+  if (o.ownerType === "GstEntity") return { label: "GSTIN", value: GST_ENTITY_BY_ID[o.clientId]?.gstin ?? "" };
+  if (o.ownerType === "TdsDeductor") return { label: "TAN", value: TDS_DEDUCTOR_BY_ID[o.clientId]?.tan ?? "" };
+  return { label: "PAN", value: CLIENT_BY_ID[o.clientId]?.pan ?? "" };
+}
+
+/** One pass over one of the three unlinked arrays, applying its own
+ *  applicability function and producing `Obligation`s tagged with its
+ *  `ownerType`. The status-simulation logic below is identical for all
+ *  three — it only ever reads `owner.id`, `owner.assigneeId` and
+ *  `owner.profile.discipline`, which every one of `Client`/`GstEntity`/
+ *  `TdsDeductor` carries — so one generic walk replaces what would
+ *  otherwise be three copies differing only in which array and which
+ *  applicability function they call. */
+function buildFor<T extends Party & { profile: { discipline: number } }>(
+  owners: T[], ownerType: RecordType, applicable: (owner: T) => Applicable[],
+  occByDef: Map<string, Occurrence[]>,
+): Obligation[] {
   const out: Obligation[] = [];
 
-  for (const client of CLIENTS) {
-    const applicable = applicableCompliances(client);
-
-    for (const app of applicable) {
+  for (const owner of owners) {
+    for (const app of applicable(owner)) {
       const def = DEF_BY_CODE[app.defCode];
-      const occs = OCC_BY_DEF.get(app.defCode);
+      const occs = occByDef.get(app.defCode);
       if (!def || !occs) continue;
 
       for (const occ of occs) {
-        if (occ.dueDate < WINDOW_START || occ.dueDate > WINDOW_END) continue;
-
-        const id = `${client.id}::${occ.runId}`;
+        const id = `${owner.id}::${occ.runId}`;
         const seed = h(id);
         const daysOverdue = Math.max(0, diffDays(occ.dueDate, TODAY));
         const notYetDue = diffDays(TODAY, occ.dueDate) > 0;
@@ -128,7 +188,7 @@ function build(): Obligation[] {
              "Rule-excluded" contradicted the override recorded alongside it. */
           basis = "Manually excluded";
           override = {
-            by: staffOf(client.assigneeId).name,
+            by: staffOf(owner.assigneeId).name,
             on: addDays(TODAY, -Math.floor(h(id + "|d") * 90) - 5),
             action: "excluded",
             reason: [
@@ -140,7 +200,7 @@ function build(): Obligation[] {
           };
         } else if (notYetDue) {
           const daysToGo = diffDays(TODAY, occ.dueDate);
-          const filesEarly = daysToGo <= 14 && seed < (client.profile.discipline - 0.6) * 0.8;
+          const filesEarly = daysToGo <= 14 && seed < (owner.profile.discipline - 0.6) * 0.8;
           if (filesEarly) {
             status = "Filed";
             basis = h(id + "|b") < 0.55 ? "Filed via KDK" : "Portal verified";
@@ -151,7 +211,7 @@ function build(): Obligation[] {
                that had not happened yet. Something already marked Filed must
                have been filed on or before today. */
             filedOn = addDays(TODAY, -Math.floor(h(id + "|f") * 6));
-            arn = synthAck(id, def.head, client, filedOn);
+            arn = synthAck(id, def.head, ownerType, owner.id, filedOn);
           } else {
             status = "Pending";
             basis = "Due date not passed";
@@ -160,7 +220,7 @@ function build(): Obligation[] {
           /* Old arrears mostly get cleared eventually — real backlogs cluster
              in the last few weeks, not evenly across the year. */
           const ageBonus = Math.min(0.5, (daysOverdue / 60) * 0.5);
-          const pFiled = Math.min(0.985, client.profile.discipline * 0.88 + ageBonus);
+          const pFiled = Math.min(0.985, owner.profile.discipline * 0.88 + ageBonus);
           if (seed < pFiled) {
             status = "Filed";
             const b = h(id + "|b");
@@ -172,8 +232,8 @@ function build(): Obligation[] {
             filedOn = guess > TODAY ? TODAY : guess;
             /* Manually marked filings are left without an acknowledgement on
                purpose — that is the gap, not an oversight in the seed. */
-            if (basis !== "Manually marked") arn = synthAck(id, def.head, client, filedOn);
-            else filedBy = staffOf(client.assigneeId).name;
+            if (basis !== "Manually marked") arn = synthAck(id, def.head, ownerType, owner.id, filedOn);
+            else filedBy = staffOf(owner.assigneeId).name;
           } else {
             status = "Overdue";
             basis = "Due date passed";
@@ -181,13 +241,15 @@ function build(): Obligation[] {
         }
 
         const effOverdue = status === "Overdue" ? daysOverdue : 0;
-        const exp = estimateExposure(def, effOverdue, client);
+        const exp = estimateExposure(def, effOverdue, exposureContextFor(ownerType, owner.id));
 
         out.push({
           id,
-          clientId: client.id,
+          ownerType,
+          clientId: owner.id,
           runId: occ.runId,
           defCode: def.code,
+          fy: occ.fy,
           head: def.head,
           form: app.form,
           periodLabel: occ.periodLabel,
@@ -196,7 +258,7 @@ function build(): Obligation[] {
           basis,
           rule: app.hit,
           override,
-          assigneeId: client.assigneeId,
+          assigneeId: owner.assigneeId,
           daysOverdue: effOverdue,
           exposure: exp.amount,
           exposureFormula: exp.formula,
@@ -209,6 +271,22 @@ function build(): Obligation[] {
     }
   }
 
+  return out;
+}
+
+/** Every seeded financial year, not just the current one — a past year's
+ *  occurrences are all in the past relative to `TODAY`, so the same
+ *  filed-vs-overdue simulation below naturally produces a mostly-closed
+ *  history for them; the year ahead is deliberately left out, since it
+ *  hasn't started and carries no client data at all. */
+function build(): Obligation[] {
+  const out: Obligation[] = [];
+  for (const fy of SEEDED_FYS) {
+    const occByDef = occByDefFor(fy);
+    out.push(...buildFor(CLIENTS, "Client", applicableClientCompliances, occByDef));
+    out.push(...buildFor(GST_ENTITIES, "GstEntity", applicableGstCompliances, occByDef));
+    out.push(...buildFor(TDS_DEDUCTORS, "TdsDeductor", applicableDeductorCompliances, occByDef));
+  }
   return out;
 }
 
@@ -319,10 +397,9 @@ export function unmarkFiled(ids: string[]): number {
   let n = 0;
   OBLIGATIONS = OBLIGATIONS.map((o) => {
     if (!set.has(o.id) || o.status !== "Filed" || o.basis !== "Manually marked") return o;
-    const client = CLIENT_BY_ID[o.clientId];
     const def = DEF_BY_CODE[o.defCode];
     const overdue = Math.max(0, diffDays(o.dueDate, TODAY));
-    const exp = estimateExposure(def, overdue, client);
+    const exp = estimateExposure(def, overdue, exposureContextFor(o.ownerType, o.clientId));
     const status: FilingStatus = overdue > 0 ? "Overdue" : "Pending";
     n++;
     return {
@@ -366,10 +443,9 @@ export function reinstate(ids: string[], reason: string, by: string) {
   const set = new Set(ids);
   OBLIGATIONS = OBLIGATIONS.map((o) => {
     if (!set.has(o.id)) return o;
-    const client = CLIENT_BY_ID[o.clientId];
     const def = DEF_BY_CODE[o.defCode];
     const overdue = Math.max(0, diffDays(o.dueDate, TODAY));
-    const exp = estimateExposure(def, overdue, client);
+    const exp = estimateExposure(def, overdue, exposureContextFor(o.ownerType, o.clientId));
     return {
       ...o,
       status: overdue > 0 ? "Overdue" : "Pending",
@@ -580,17 +656,21 @@ export function resetCompliances() {
 }
 
 /**
- * Flip a client's WhatsApp opt-in.
+ * Flip a record's WhatsApp opt-in (or any other `Party` field) — works on
+ * whichever of the three record types owns it.
  *
- * `Client` records are looked up by id everywhere (`CLIENT_BY_ID[id]`), never
- * held onto across a render, so mutating the record in place and emitting is
- * enough — the next read sees the change, and nothing depends on the object's
- * identity staying stable the way OBLIGATIONS' array-replace pattern does.
+ * Records are looked up by id everywhere (`CLIENT_BY_ID[id]` and its two
+ * counterparts), never held onto across a render, so mutating the record in
+ * place and emitting is enough — the next read sees the change, and nothing
+ * depends on the object's identity staying stable the way OBLIGATIONS'
+ * array-replace pattern does.
  */
-export function updateClient(id: string, patch: Partial<Client>) {
-  const client = CLIENT_BY_ID[id];
-  if (!client) return;
-  Object.assign(client, patch);
+export function updateParty(ownerType: RecordType, id: string, patch: Partial<Party>) {
+  const rec = ownerType === "GstEntity" ? GST_ENTITY_BY_ID[id]
+    : ownerType === "TdsDeductor" ? TDS_DEDUCTOR_BY_ID[id]
+      : CLIENT_BY_ID[id];
+  if (!rec) return;
+  Object.assign(rec, patch);
   emit();
 }
 
@@ -696,7 +776,7 @@ export function updateReminderSettings(patch: Partial<ReminderSettings>) {
 function composeFor(
   o: Obligation, channel: Channel, kind: StepKind,
 ): { preview: string; body: string; subject: string } {
-  const c = compose(o, CLIENT_BY_ID[o.clientId], channel, kind);
+  const c = compose(o, ownerOf(o), channel, kind);
   return { preview: c.line, body: c.body, subject: c.subject };
 }
 
@@ -756,7 +836,7 @@ function bucketRuns(): RunBucket[] {
       map.set(o.runId, b);
     }
     b.obligationIds.push(o.id);
-    if (CLIENT_BY_ID[o.clientId]?.whatsapp) b.whatsapp++;
+    if (ownerOf(o)?.whatsapp) b.whatsapp++;
   }
   return [...map.values()];
 }
@@ -849,6 +929,7 @@ function entryFor(
   const def = DEF_BY_CODE[o.defCode];
   return {
     id: `ob-${serial++}`,
+    ownerType: o.ownerType,
     clientId: o.clientId,
     obligationId: o.id,
     channel: ch,
@@ -874,10 +955,10 @@ function materialise(send: ScheduledSend, at: string, origin: OutboxEntry["origi
     /* Re-checked at send time, not at schedule time: anything filed since the
        batch was computed drops out here. */
     if (!o || !chaseable(o)) continue;
-    const client = CLIENT_BY_ID[o.clientId];
-    if (!client) continue;
+    const owner = ownerOf(o);
+    if (!owner) continue;
     for (const ch of send.step.channels) {
-      if (ch === "WhatsApp" && !client.whatsapp) continue;
+      if (ch === "WhatsApp" && !owner.whatsapp) continue;
       entries.push(entryFor(o, ch, send.step.stage, send.step.id, at, origin, by ? { sentBy: by } : {}));
     }
   }
@@ -919,13 +1000,13 @@ export function sendReminders(
   const entries: OutboxEntry[] = [];
   for (const o of OBLIGATIONS) {
     if (!set.has(o.id) || !chaseable(o)) continue;
-    const client = CLIENT_BY_ID[o.clientId];
-    if (!client) continue;
+    const owner = ownerOf(o);
+    if (!owner) continue;
     const kind = manualKindFor(o);
     const stage: ReminderStage = o.status === "Overdue" ? "Overdue escalation"
       : kind === "t0" ? "Due-date sent" : kind === "t3" ? "T-3 sent" : "T-7 sent";
     for (const ch of channels) {
-      if (ch === "WhatsApp" && !client.whatsapp) continue;
+      if (ch === "WhatsApp" && !owner.whatsapp) continue;
       entries.push(entryFor(o, ch, stage, kind, at, "Manual", { sentBy: by }));
     }
   }
@@ -1065,14 +1146,14 @@ export function getOutbox(): OutboxEntry[] {
     for (const id of send.obligationIds.slice(0, 13)) {
       const o = byId.get(id);
       if (!o) continue;
-      const client = CLIENT_BY_ID[o.clientId];
-      if (!client) continue;
+      const owner = ownerOf(o);
+      if (!owner) continue;
       const r = h(`${id}|${send.step.id}`);
       /* Real sends scatter across the minutes after a batch starts rather
          than all landing on the same second. */
       const at = stamp(dateOf(send.fireAt), send.step.sendAt, Math.floor(r * 58));
       for (const ch of send.step.channels) {
-        if (ch === "WhatsApp" && !client.whatsapp) continue;
+        if (ch === "WhatsApp" && !owner.whatsapp) continue;
         entries.push(entryFor(o, ch, send.step.stage, send.step.id, at, "Automatic"));
       }
     }
@@ -1161,6 +1242,7 @@ export interface FirmSummary {
 
 /** One completed filing inside a group — enough to prove it happened. */
 export interface FiledRow {
+  ownerType: RecordType;
   clientId: string;
   filedOn: string;
   basis: StatusBasis;
@@ -1209,6 +1291,7 @@ export function filedInMonth(month: string): FiledGroup[] {
     }
     g.count++;
     g.rows.push({
+      ownerType: o.ownerType,
       clientId: o.clientId,
       filedOn: o.filedOn,
       basis: o.basis,

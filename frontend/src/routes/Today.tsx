@@ -20,6 +20,7 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp, useObligations } from "../ui/app-state.tsx";
 import { buildRuns, dayLoads, summarise } from "../domain/engine.ts";
+import { FY_START } from "../domain/catalog.ts";
 import { MONTHS, TODAY, addDays, dow, fmtLong, fmtShort, inrShort, urgency } from "../domain/dates.ts";
 import { CountUp, PageHead, Seg, Stat } from "../ui/bits.tsx";
 import { Runway } from "../ui/Runway.tsx";
@@ -82,8 +83,11 @@ export function TodayPage() {
   const [pickedDay, setPickedDay] = useState<string | null>(null);
   const [queue, setQueue] = useState<Queue>("arrears");
 
+  /* The dashboard is "what needs attention now" — scoped to the current
+     financial year so a resolved arrear from a retired year never counts
+     toward this year's arrears or exposure. */
   const obligations = useMemo(
-    () => (scope === "mine" ? all.filter((o) => o.assigneeId === me.id) : all),
+    () => all.filter((o) => o.fy === FY_START && (scope !== "mine" || o.assigneeId === me.id)),
     [all, scope, me.id],
   );
 

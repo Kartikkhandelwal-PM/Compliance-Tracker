@@ -12,10 +12,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Obligation } from "../domain/types.ts";
-import { CLIENT_BY_ID, STAFF } from "../domain/book.ts";
+import { STAFF } from "../domain/book.ts";
 import { DEF_BY_CODE } from "../domain/catalog.ts";
 import {
-  markFiled, markNotApplicable, reassign, reinstate, sendReminders, unmarkFiled,
+  markFiled, markNotApplicable, ownerOf, reassign, reinstate, sendReminders, unmarkFiled,
 } from "../domain/engine.ts";
 import { fmtLong, inr } from "../domain/dates.ts";
 import { Countdown, StatusTag } from "./bits.tsx";
@@ -45,7 +45,7 @@ export function ObligationDrawer({
 
   if (!obligation) return null;
   const o = obligation;
-  const client = CLIENT_BY_ID[o.clientId];
+  const client = ownerOf(o);
   const def = DEF_BY_CODE[o.defCode];
 
   const close = () => {
@@ -62,7 +62,7 @@ export function ObligationDrawer({
       title={<><span className="num">{o.form}</span> · {o.periodLabel}</>}
       subtitle={
         <>
-          <Link to={`/clients/${client.id}`} onClick={close} style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>
+          <Link to={`/clients/${client.id}?type=${o.ownerType}`} onClick={close} style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>
             {client.name}
           </Link>
         </>
@@ -221,7 +221,7 @@ export function ObligationDrawer({
         </div>
       </div>
 
-      <Link to={`/clients/${client.id}`} onClick={close} className="obwhy__link">
+      <Link to={`/clients/${client.id}?type=${o.ownerType}`} onClick={close} className="obwhy__link">
         Open {client.name} <Icon name="chevronRight" size={13} />
       </Link>
 

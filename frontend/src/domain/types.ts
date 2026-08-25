@@ -53,13 +53,48 @@ export type PaymentNature =
   | "Commission"
   | "Non-Resident";
 
+/* --- Three unlinked records ------------------------------------------------
+   GST, TDS and Income-Tax/ROC each come from a different KDK module, and
+   none of them share a common ID — a TDS-module record carries a TAN, never
+   a PAN, so there is no reliable key to join it back to a GST or ITR record.
+   Guessing a link from name/address would sometimes guess wrong, and a wrong
+   merge is worse than none, so these are three separate, unrelated record
+   types: `Client` (PAN, ITR/ROC), `GstEntity` (GSTIN, GST — labelled "Firm"
+   in the UI) and `TdsDeductor` (TAN, TDS + payroll). The same real business
+   may legitimately appear as two or three rows with no code-level tie
+   between them.
+
+   `Party` is only the handful of fields every one of the three needs for
+   messaging, assignment and search — name, contact, owner. It is not a
+   fourth "unified client" concept. */
+export interface Party {
+  id: string;
+  name: string;
+  legalName: string;
+  state: string;
+  assigneeId: string;
+  archetype: string;
+  /** Whether this record accepts WhatsApp — affects reminder channel */
+  whatsapp: boolean;
+  email: string;
+  phone: string;
+}
+
+/** Which of the three records an `Obligation`/`OutboxEntry` belongs to —
+ *  the discriminant that picks which lookup map (`CLIENT_BY_ID`,
+ *  `GST_ENTITY_BY_ID`, `TDS_DEDUCTOR_BY_ID`) `clientId` joins into. */
+export type RecordType = "Client" | "GstEntity" | "TdsDeductor";
+
 export interface ClientProfile {
   entityType: EntityType;
   companyType?: CompanyType;
   residential: Residential;
   /** Estimated total income for the year, ₹ */
   totalIncome: number;
-  /** Turnover / gross receipts of the preceding FY, ₹ */
+  /** Turnover / gross receipts of the preceding FY, ₹ — drives the tax-audit
+   *  threshold. This is the ENTITY's own business turnover for 44AB
+   *  purposes; a GstEntity's `turnover` is that GST registration's own
+   *  figure and is not assumed to be the same number. */
   turnover: number;
   housePropertyCount: number;
   agriculturalIncome: number;
@@ -70,12 +105,8 @@ export interface ClientProfile {
   hasBusinessIncome: boolean;
   presumptiveOpted: boolean;
   isPartnerInFirm: boolean;
-  /** Derived from turnover/receipts — drives TDS deduction liability */
+  /** Derived from turnover/receipts — drives the ITR-AUDIT due-date route */
   taxAuditApplicable: boolean;
-  paymentNatures: PaymentNature[];
-  gstRegType: GstRegType;
-  gstQrmpOpted: boolean;
-  gstStateCategory: StateCategory;
   isLlp: boolean;
   isDinHolder: boolean;
   hasDeposits: boolean;
@@ -83,6 +114,42 @@ export interface ClientProfile {
   section139Special: boolean; /* 139(4A)–(4D): trusts, political parties, institutions */
   claimsSection11: boolean;
   hasTransferPricing: boolean;
+  /** 0–1. How reliably this client files on time. Drives the simulated
+   *  filing history; in production this comes from actual filing records. */
+  discipline: number;
+}
+
+export interface Client extends Party {
+  pan: string;
+  cin?: string;
+  profile: ClientProfile;
+}
+
+/** GST-only profile — what drives `GstEntity`'s return type and frequency. */
+export interface GstProfile {
+  gstRegType: GstRegType;
+  gstQrmpOpted: boolean;
+  gstStateCategory: StateCategory;
+  /** This registration's own turnover — see the note on `ClientProfile.turnover`. */
+  turnover: number;
+  discipline: number;
+}
+
+/** A GST registration. Labelled "Firm" in the UI. */
+export interface GstEntity extends Party {
+  gstin: string;
+  profile: GstProfile;
+}
+
+/** TDS + payroll profile — what drives `TdsDeductor`'s returns (24Q/26Q/27Q/
+ *  27EQ, the TDS challan) and the payroll-linked filings (PF, ESI, PTAX)
+ *  that exist for the same reason: the entity runs payroll. */
+export interface DeductorProfile {
+  entityType: EntityType;
+  /** Gates the "always deducts" / 27EQ-turnover-threshold rules. */
+  taxAuditApplicable: boolean;
+  turnover: number;
+  paymentNatures: PaymentNature[];
   epfCovered: boolean;
   esiCovered: boolean;
   professionalTaxState?: string;
@@ -90,26 +157,13 @@ export interface ClientProfile {
   tdsPerQuarter: number;
   /** Monthly payroll, ₹ — base for PF/ESI interest exposure */
   monthlyPayroll: number;
-  /** 0–1. How reliably this client files on time. Drives the simulated
-   *  filing history; in production this comes from actual filing records. */
   discipline: number;
 }
 
-export interface Client {
-  id: string;
-  name: string;
-  legalName: string;
-  pan: string;
-  gstin?: string;
-  cin?: string;
-  state: string;
-  assigneeId: string;
-  archetype: string;
-  profile: ClientProfile;
-  /** Whether the client accepts WhatsApp — affects reminder channel */
-  whatsapp: boolean;
-  email: string;
-  phone: string;
+/** A TAN-registered deductor. */
+export interface TdsDeductor extends Party {
+  tan: string;
+  profile: DeductorProfile;
 }
 
 export interface Staff {
@@ -159,6 +213,10 @@ export interface Occurrence {
   periodKey: string;
   periodLabel: string;
   dueDate: string; /* ISO yyyy-mm-dd */
+  /** The financial year this occurrence was generated for (its `fyStart`),
+   *  not derived from `dueDate` — an annual return's due date often falls in
+   *  the calendar year *after* the year it reports on. */
+  fy: number;
 }
 
 /* --- Applicability outcome ------------------------------------------------ */
@@ -190,9 +248,16 @@ export type StatusBasis =
 
 export interface Obligation {
   id: string;
+  /** Which record type `clientId` joins into — see `RecordType`. */
+  ownerType: RecordType;
   clientId: string;
   runId: string;
   defCode: string;
+  /** The financial year this obligation's occurrence belongs to — see the
+   *  same note on `Occurrence.fy`. Lets any screen filter to one year without
+   *  re-deriving it from `dueDate`, which would misclassify annual returns
+   *  due the following calendar year. */
+  fy: number;
   head: Head;
   form: string;
   periodLabel: string;
@@ -265,6 +330,8 @@ export type DeliveryStatus =
 
 export interface OutboxEntry {
   id: string;
+  /** Which record type `clientId` joins into — see `RecordType`. */
+  ownerType: RecordType;
   clientId: string;
   obligationId: string;
   channel: Channel;

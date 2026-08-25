@@ -10,10 +10,12 @@
    opens the client list for that date.
    ========================================================================== */
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useObligations } from "../ui/app-state.tsx";
-import { DEF_BY_CODE, FY_LABEL, headClass } from "../domain/catalog.ts";
+import {
+  DEF_BY_CODE, FY_OPTIONS, FY_START, OCCURRENCES_BY_FY, SEEDED_FYS, fyLabel, headClass,
+} from "../domain/catalog.ts";
 import { TODAY, countdown, fmtLong, inrShort } from "../domain/dates.ts";
 import { Countdown, Empty, PageHead, Pbar, StatusTag } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
@@ -23,16 +25,30 @@ export function ComplianceDetailPage() {
   const nav = useNavigate();
   const obligations = useObligations();
   const def = DEF_BY_CODE[decodeURIComponent(code)];
+  const [fy, setFy] = useState(FY_START);
+  const seeded = SEEDED_FYS.includes(fy);
 
-  /* Every occurrence of this compliance, with its live counts. */
+  /* Every occurrence of this compliance, with its live counts. For the year
+     ahead there is no client book yet, so periods are drawn straight from
+     the statutory calendar with every count left at zero — the same
+     two-layer approach Calendar uses. */
   const periods = useMemo(() => {
     if (!def) return [];
+    if (!seeded) {
+      return OCCURRENCES_BY_FY[fy]
+        .filter((occ) => occ.defCode === def.code)
+        .map((occ) => ({
+          runId: occ.runId, periodLabel: occ.periodLabel, dueDate: occ.dueDate,
+          filed: 0, pending: 0, overdue: 0, na: 0, fees: 0,
+        }))
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    }
     const m = new Map<string, {
       runId: string; periodLabel: string; dueDate: string;
       filed: number; pending: number; overdue: number; na: number; fees: number;
     }>();
     for (const o of obligations) {
-      if (o.defCode !== def.code) continue;
+      if (o.defCode !== def.code || o.fy !== fy) continue;
       let p = m.get(o.runId);
       if (!p) {
         p = {
@@ -47,7 +63,7 @@ export function ComplianceDetailPage() {
       else p.na++;
     }
     return [...m.values()].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  }, [obligations, def]);
+  }, [obligations, def, fy, seeded]);
 
   const totals = useMemo(() => {
     let filed = 0, pending = 0, overdue = 0, fees = 0, clients = 0;
@@ -76,9 +92,21 @@ export function ComplianceDetailPage() {
         icon="rules"
         note={<>{def.description}</>}
         aside={
-          <Link to="/compliances" className="btn btn--sm">
-            <Icon name="chevronLeft" size={14} /> All compliances
-          </Link>
+          <div className="u-row">
+            <select
+              className="plain"
+              value={fy}
+              onChange={(e) => setFy(Number(e.target.value))}
+              aria-label="Financial year"
+            >
+              {FY_OPTIONS.map((y) => (
+                <option key={y} value={y}>{fyLabel(y)}</option>
+              ))}
+            </select>
+            <Link to="/compliances" className="btn btn--sm">
+              <Icon name="chevronLeft" size={14} /> All compliances
+            </Link>
+          </div>
         }
       />
 
@@ -123,7 +151,7 @@ export function ComplianceDetailPage() {
       </div>
 
       <div className="stats" style={{ margin: "var(--s4) 0" }}>
-        <Stat2 label="Dates this year" value={periods.length} sub={FY_LABEL} />
+        <Stat2 label="Dates this year" value={periods.length} sub={fyLabel(fy)} />
         <Stat2 label="Clients it applies to" value={totals.clients.toLocaleString("en-IN")} sub="at its widest period" />
         <Stat2 label="Filed" value={totals.filed.toLocaleString("en-IN")} sub="across all periods" tone="filed" />
         <Stat2
@@ -193,7 +221,7 @@ export function ComplianceDetailPage() {
         </table>
         {periods.length === 0 ? (
           <Empty title="No dates in this financial year">
-            This compliance has no occurrences seeded for {FY_LABEL}.
+            This compliance has no occurrences seeded for {fyLabel(fy)}.
           </Empty>
         ) : (
           <div className="sheet__foot">Pick a period to see every client on that date and where each one stands.</div>

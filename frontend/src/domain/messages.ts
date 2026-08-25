@@ -40,7 +40,7 @@
    both speak for the client's own firm.
    ========================================================================== */
 
-import type { Channel, Client, Obligation, StepKind } from "./types.ts";
+import type { Channel, Obligation, Party, StepKind } from "./types.ts";
 import { fmtLong } from "./dates.ts";
 
 export interface Composed {
@@ -97,7 +97,7 @@ function emailFeeLine(o: Obligation, kind: StepKind): string | null {
 }
 
 function emailContent(
-  o: Obligation, client: Client, kind: StepKind, due: string, firmName: string,
+  o: Obligation, client: Party, kind: StepKind, due: string, firmName: string,
 ): { subject: string; body: string } {
   const opening = `Dear ${client.name},`;
   const fee = emailFeeLine(o, kind);
@@ -172,7 +172,7 @@ function emailContent(
 }
 
 function whatsappContent(
-  o: Obligation, client: Client, kind: StepKind, due: string, firmName: string,
+  o: Obligation, client: Party, kind: StepKind, due: string, firmName: string,
 ): string {
   const opener = `Dear ${client.name}, this is ${firmName} regarding your ${o.form} for ${o.periodLabel},`;
 
@@ -202,7 +202,7 @@ function whatsappContent(
   }
 }
 
-export function compose(o: Obligation, client: Client, channel: Channel, kind: StepKind): Composed {
+export function compose(o: Obligation, client: Party, channel: Channel, kind: StepKind): Composed {
   const due = fmtLong(o.dueDate);
   const firmName = sender.by;
   const overdue = kind === "p1" || kind === "p7" || kind === "p30";

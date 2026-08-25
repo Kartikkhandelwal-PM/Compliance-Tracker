@@ -28,7 +28,9 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useEngine, useObligations } from "../ui/app-state.tsx";
 import { buildRuns, untrackedCodes } from "../domain/engine.ts";
 import type { FilingRun } from "../domain/types.ts";
-import { DEF_BY_CODE, FY_START, HEADS, fyLabel, headClass, occurrencesForFY } from "../domain/catalog.ts";
+import {
+  DEF_BY_CODE, FY_OPTIONS, FY_START, HEADS, SEEDED_FYS, fyLabel, headClass, occurrencesForFY,
+} from "../domain/catalog.ts";
 import { STAFF } from "../domain/book.ts";
 import {
   DOW, MONTHS, TODAY, addDays, dow, fmtLong, inrShort, iso, monthLabelLong, parts,
@@ -39,9 +41,6 @@ import { Icon } from "../ui/Icon.tsx";
 
 /** Grid = the month as a wall calendar. Timeline = the year as one ordered run. */
 type View = "grid" | "timeline";
-
-/** Financial years offered. Only FY_START has a client book behind it. */
-const FY_OPTIONS = [FY_START - 1, FY_START, FY_START + 1];
 
 /** The twelve months of a financial year, Apr → Mar, as [year, month]. */
 function fyMonthList(fyStart: number): [number, number][] {
@@ -114,18 +113,18 @@ export function CalendarPage() {
   };
   const hideTip = () => setTip(null);
 
-  const seeded = fy === FY_START;
+  const seeded = SEEDED_FYS.includes(fy);
   const months = fyMonthList(fy);
   const [cy, cm] = months[monthIdx];
 
   /* ---- Filter the book, then aggregate ---------------------------------- */
 
   const filteredObligations = useMemo(() => {
-    let list = obligations;
+    let list = obligations.filter((o) => o.fy === fy);
     if (head !== "all") list = list.filter((o) => o.head === head);
     if (owner !== "all") list = list.filter((o) => o.assigneeId === owner);
     return list;
-  }, [obligations, head, owner]);
+  }, [obligations, fy, head, owner]);
 
   const runs = useMemo(() => buildRuns(filteredObligations), [filteredObligations]);
 
@@ -311,7 +310,7 @@ export function CalendarPage() {
               <b>{monthTotals.open.toLocaleString("en-IN")}</b> open
             </>
           ) : (
-            <>statutory due dates only · client filings are available for {fyLabel(FY_START)}</>
+            <>statutory due dates only · client filings begin once the year starts</>
           )
         }
         aside={
@@ -352,7 +351,7 @@ export function CalendarPage() {
           value={owner}
           onChange={(e) => { setOwner(e.target.value); setPicked(null); }}
           disabled={!seeded}
-          title={seeded ? undefined : `Owners can only be filtered for ${fyLabel(FY_START)}`}
+          title={seeded ? undefined : "Owners can only be filtered once a year has started"}
         >
           <option value="all">Any owner</option>
           <option value="none">Unassigned</option>
@@ -364,7 +363,7 @@ export function CalendarPage() {
           onChange={(e) => { setDayState(e.target.value as typeof dayState); setPicked(null); }}
           disabled={!seeded}
           aria-label="Day state"
-          title={seeded ? undefined : `Arrears can only be shown for ${fyLabel(FY_START)}`}
+          title={seeded ? undefined : "Arrears can only be shown once a year has started"}
         >
           <option value="all">All days</option>
           <option value="arrears">With arrears</option>

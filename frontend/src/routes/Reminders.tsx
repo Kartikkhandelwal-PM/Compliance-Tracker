@@ -16,11 +16,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp, useEngine, useOutbox } from "../ui/app-state.tsx";
-import { CLIENT_BY_ID, staffOf } from "../domain/book.ts";
+import { staffOf } from "../domain/book.ts";
 import { HEADS } from "../domain/catalog.ts";
 import {
-  NOW, getReminderSettings, releaseQueued, resendEntries, retryFailed, runScheduler,
-  scheduledSends, sendScheduledNow, skipScheduled,
+  NOW, getReminderSettings, ownerIdOf, ownerOf, releaseQueued, resendEntries,
+  retryFailed, runScheduler, scheduledSends, sendScheduledNow, skipScheduled,
 } from "../domain/engine.ts";
 import {
   TODAY, addDays, dateOf, fmtAgo, fmtAgoIfFresh, fmtDate, fmtDateTime, fmtShort, fmtStampShort, fmtTime,
@@ -210,8 +210,8 @@ function LogTab() {
     const needle = q.trim().toLowerCase();
     if (needle) {
       list = list.filter((e) => {
-        const c = CLIENT_BY_ID[e.clientId];
-        return (c && (c.name.toLowerCase().includes(needle) || c.pan.toLowerCase().includes(needle)))
+        const c = ownerOf(e);
+        return (c && (c.name.toLowerCase().includes(needle) || ownerIdOf(e).value.toLowerCase().includes(needle)))
           || e.form.toLowerCase().includes(needle);
       });
     }
@@ -245,12 +245,12 @@ function LogTab() {
   const allPicked = rows.length > 0 && rows.every((r) => picked.has(r.id));
 
   const exportXlsxFile = async () => {
-    const headers = ["Sent", "Time", "Client", "PAN", "Compliance", "Head",
+    const headers = ["Sent", "Time", "Client", "Id", "Compliance", "Head",
       "Channel", "Trigger", "Origin", "Sent by", "Delivery", "Attempt", "Message"];
     const dataRows = rows.map((e) => {
-      const c = CLIENT_BY_ID[e.clientId];
+      const c = ownerOf(e);
       return [
-        fmtDate(dateOf(e.sentAt)), fmtTime(e.sentAt), c?.name ?? e.clientId, c?.pan ?? "",
+        fmtDate(dateOf(e.sentAt)), fmtTime(e.sentAt), c?.name ?? e.clientId, ownerIdOf(e).value,
         e.form, e.head, e.channel, e.stage, e.origin,
         e.sentBy ? staffOf(e.sentBy).name : "Scheduler", e.status, e.attempt, e.preview,
       ];
@@ -468,7 +468,7 @@ function LogTab() {
             </thead>
             <tbody>
               {rows.map((e) => {
-                const c = CLIENT_BY_ID[e.clientId];
+                const c = ownerOf(e);
                 const on = picked.has(e.id);
                 return (
                   <tr
