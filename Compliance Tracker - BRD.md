@@ -2,10 +2,15 @@
 
 | | |
 |---|---|
-| **Version** | 0.2 (Draft) |
-| **Date** | 25 August 2026 |
+| **Product** | Compliance Tracker |
+| **Objective** | Automatic compliance mapping, status updates, and client reminders, all in one place. |
+| **Version** | 0.2 |
+| **Date** | 26 August 2026 |
 | **Prepared by** | KDK Software |
-| **Status** | Draft. All 11 modules drafted, for review. Supersedes version 0.1. |
+| **Status** | Ready for review |
+| **Live prototype** | <https://kartikkhandelwal-pm.github.io/Compliance-Tracker/> (for reference; see note below) |
+
+**Note:** Screenshots and the live prototype above are for reference only.
 
 ## Objective
 
@@ -1202,7 +1207,8 @@ is covered in its own module later in this document.
 - **Delivery**: a status tag. These are delivery colours, a separate meaning from the filing
   status colours used elsewhere in this document, but drawn from the same palette: Read is
   green, Delivered (not yet read) is blue, Held is amber, Cancelled is plain grey, Failed is
-  red.
+  red. This status is fetched from the sending provider, not tracked independently: Zepto Mail
+  for email, Rampwin for WhatsApp.
 - A small send icon on the far right of each row. **Clicking it** re-sends just that one
   message (labelled "Retry this message" if it had failed, otherwise "Send this again"),
   confirming "Re-sent to **[client]**" or, if that filing is already complete, "That filing is
