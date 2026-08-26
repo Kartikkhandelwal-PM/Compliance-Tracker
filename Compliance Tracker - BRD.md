@@ -14,6 +14,20 @@ client, which statutory compliances apply to them, what's upcoming, what's overd
 what's already filed, in one place, with automatic client reminders, instead of tracking it
 across spreadsheets and manual follow-ups.
 
+## Scope
+
+- See the full compliance calendar, and which clients each compliance applies to
+- See late fees on overdue compliances
+- See status of every compliance: due, overdue, filed, not applicable
+- Send reminders to clients over WhatsApp and email, with scheduling
+- Exclude specific clients from reminders
+- Automatically detect, from client data, which compliances a client is mapped to, and
+  automatically update status as filings happen
+- Manually override the status when the automatic detection needs correcting
+- Tracker: see every client against every compliance on one page
+- Obligation detail: drill into one compliance instance for one client
+- Dashboard: a single-glance overview of the firm's overall compliance position
+
 ## About this document
 
 This document specifies the product screen by screen, in the order a user moves through the

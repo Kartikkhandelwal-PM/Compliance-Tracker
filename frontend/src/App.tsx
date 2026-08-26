@@ -49,7 +49,6 @@ import { Logo } from "./ui/Logo.tsx";
 import { Splash } from "./ui/Splash.tsx";
 
 import { TodayPage } from "./routes/Today.tsx";
-import { RunsPage } from "./routes/Runs.tsx";
 import { RunDetailPage } from "./routes/RunDetail.tsx";
 import { CalendarPage } from "./routes/Calendar.tsx";
 import { ClientsPage } from "./routes/Clients.tsx";
@@ -538,7 +537,6 @@ export function App() {
 
         <Routes>
           <Route path="/" element={<TodayPage />} />
-          <Route path="/runs" element={<RunsPage />} />
           <Route path="/runs/:runId" element={<RunDetailPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/clients" element={<ClientsPage />} />
@@ -590,7 +588,13 @@ function breadcrumbs(path: string): { label: string; to?: string }[] {
   if (first === "settings") {
     return [{ label: "Settings" }, { label: map[seg[1]] ?? seg[1] ?? "" }];
   }
-  const head = { label: map[first] ?? first, to: seg.length > 1 ? `/${first}` : undefined };
+  /* "Filing" has no listing page of its own to link back to — a run is only
+     ever reached from Calendar, Compliances, or Tracker, never browsed as
+     its own index — so this segment is a plain label, not a dead link. */
+  const head = {
+    label: map[first] ?? first,
+    to: seg.length > 1 && first !== "runs" ? `/${first}` : undefined,
+  };
   if (seg.length === 1) return [head];
 
   /* Resolve a client's internal id to their name. Internal ids are never shown
