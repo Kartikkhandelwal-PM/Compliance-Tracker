@@ -2714,7 +2714,7 @@ button.stat:hover {
 }
 .cmpabout__row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--s3) var(--s5);
 }
 .cmpabout__row--wide {
@@ -2738,8 +2738,11 @@ button.stat:hover {
 }
 
 @media (max-width: 1100px) {
+  /* 3 items in 2 columns would leave the last one stranded with a hole
+     beside it — the exact raggedness this grid was already rewritten once
+     to avoid (see the note above). One column at this width instead. */
   .cmpabout__row {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
   .cmpabout__row--wide {
     grid-template-columns: 1fr;

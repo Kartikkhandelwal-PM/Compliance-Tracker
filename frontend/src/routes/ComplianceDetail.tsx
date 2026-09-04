@@ -111,11 +111,20 @@ export function ComplianceDetailPage() {
       />
 
       {/* ---- What this compliance is ------------------------------------
-           Four short facts on one line, then the two long ones (who it applies
+           Three short facts on one line, then the two long ones (who it applies
            to, what it costs) side by side underneath. The previous version
            flowed all six through an auto-fit grid, so "If missed" wrapped to
            three lines while "Filed by" was stranded alone on a second row with
-           a large hole beside it. */}
+           a large hole beside it.
+
+           "Filed by" (client-files vs. firm-files) used to sit here as a
+           single fixed label for the whole compliance type, on a page that
+           covers every client at once — but who actually filed is a
+           per-obligation fact (see the Source column two clicks in, on
+           Filing Run Detail), not one true answer for all of them. Showing
+           it here read as a universal claim it couldn't back up, so it's
+           gone from this aggregate view; the real, per-client answer is
+           still visible where there's an actual obligation to point at. */}
       <div className="cmpabout">
         <div className="cmpabout__row">
           <div className="cmpabout__f">
@@ -132,10 +141,6 @@ export function ComplianceDetailPage() {
           <div className="cmpabout__f">
             <dt>Due date rule</dt>
             <dd>{def.dueRule}</dd>
-          </div>
-          <div className="cmpabout__f">
-            <dt>Filed by</dt>
-            <dd>{def.clientFacing ? "Client files; firm sends reminders" : "Filed by the firm"}</dd>
           </div>
         </div>
         <div className="cmpabout__row cmpabout__row--wide">
