@@ -24,10 +24,10 @@
    ========================================================================== */
 
 import type {
-  Client, ClientProfile, ComplianceDef, GstEntity, RuleHit, TdsDeductor,
+  Client, ClientProfile, ComplianceDef, GstEntity, Obligation, RuleHit, TdsDeductor,
 } from "./types.ts";
 import { DEF_BY_CODE } from "./catalog.ts";
-import { inr } from "./dates.ts";
+import { diffDays, fmtDate, inr } from "./dates.ts";
 
 /* -------------------------------------------------------------------------
    Helpers for building auditable facts
@@ -188,6 +188,93 @@ export function decideItrForm(p: ClientProfile): ItrDecision {
         f("House properties", p.housePropertyCount),
         f("Agricultural income", money(p.agriculturalIncome)),
       ],
+    },
+  };
+}
+
+/* =========================================================================
+   1B · DERIVED ITR — Revised Return and ITR-U
+   ----------------------------------------------------------------------------
+   Unlike everything above, these two aren't decided from a client's profile:
+   they depend on what happened to that same client's ORIGINAL ITR obligation
+   for the year (filed or not, and when). The caller (`buildDerivedItr()` in
+   engine.ts) is the one that knows that obligation, since it's built earlier
+   in the same pass — these functions just turn it into a RuleHit, the same
+   auditable shape everything else in this file produces.
+   ========================================================================= */
+
+export interface DerivedItrDecision {
+  /** Whether the window is still open — the caller uses this to pick
+   *  "Pending" vs "Not Applicable" for the obligation's status. */
+  open: boolean;
+  hit: RuleHit;
+}
+
+const ITR_U_EXCLUSIONS =
+  "Not available if it would create or increase a loss, reduce tax already paid or increase a refund, or if the client is under search, survey or prosecution proceedings, or has already filed an ITR-U for this year — verify these manually before proceeding.";
+
+/** Revised return, s.139(5). Only ever called once the original has been
+ *  filed — there is nothing to revise otherwise. */
+export function revisedReturnApplicability(
+  original: Obligation, revisionDeadline: string, today: string,
+): DerivedItrDecision {
+  const open = diffDays(today, revisionDeadline) >= 0;
+  const facts: Fact[] = [
+    f("Original form filed", original.form),
+    f("Filed on", original.filedOn ? fmtDate(original.filedOn) : "—"),
+    f("Revision deadline", fmtDate(revisionDeadline)),
+  ];
+  if (open) facts.push(f("Days remaining", diffDays(today, revisionDeadline)));
+
+  return {
+    open,
+    hit: {
+      ruleRef: "Income Tax · s.139(5)",
+      condition: open
+        ? "The original return was filed, and the window to revise it — up to three months before the end of the assessment year, or before the assessment is completed, whichever is earlier — is still open."
+        : "The window to revise this return has closed — it can no longer be revised. An updated return under section 139(8A) may still be possible if within 48 months of the end of the assessment year.",
+      facts,
+    },
+  };
+}
+
+/** Updated return, s.139(8A). Applies whether or not the original was ever
+ *  filed — wider net than the revised return above, on purpose. */
+export function itrUApplicability(
+  original: Obligation, windowClose: string, ayEnd: string, today: string,
+): DerivedItrDecision {
+  const open = diffDays(today, windowClose) >= 0;
+  const filed = original.status === "Filed";
+  const facts: Fact[] = [
+    f("Original return", filed ? "Filed" : "Not filed"),
+    f("Window closes on", fmtDate(windowClose)),
+  ];
+
+  if (!open) {
+    return {
+      open: false,
+      hit: {
+        ruleRef: "Income Tax · s.139(8A)",
+        condition: "The 48-month window to file an updated return for this assessment year has closed.",
+        facts,
+      },
+    };
+  }
+
+  facts.push(f("Days remaining", diffDays(today, windowClose)));
+  const monthsElapsed = Math.max(0, Math.ceil(diffDays(ayEnd, today) / 30));
+  const tier = monthsElapsed <= 12 ? "25%" : monthsElapsed <= 24 ? "50%" : monthsElapsed <= 36 ? "60%" : "70%";
+  facts.push(f("Additional tax if filed today", `${tier} of tax plus interest (s.140B)`));
+
+  return {
+    open: true,
+    hit: {
+      ruleRef: "Income Tax · s.139(8A)",
+      condition: (filed
+        ? "The original return was filed for this year. An updated return can still be filed within 48 months of the end of the assessment year to correct or add income. "
+        : "No return was filed for this year through the normal or belated window. An updated return can be filed within 48 months of the end of the assessment year. "
+      ) + ITR_U_EXCLUSIONS,
+      facts,
     },
   };
 }

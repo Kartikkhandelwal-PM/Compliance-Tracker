@@ -19,13 +19,14 @@ import {
   TDS_DEDUCTOR_BY_ID, staffOf,
 } from "./book.ts";
 import { DEF_BY_CODE, FY_START, OCCURRENCES_BY_FY, SEEDED_FYS } from "./catalog.ts";
-import type { Applicable, ExposureContext } from "./rules.ts";
+import type { Applicable, DerivedItrDecision, ExposureContext } from "./rules.ts";
 import {
   applicableClientCompliances, applicableDeductorCompliances,
   applicableGstCompliances, estimateExposure, estimatedTax,
+  itrUApplicability, revisedReturnApplicability,
 } from "./rules.ts";
 import {
-  TODAY, addDays, dateOf, diffDays, inQuietHours, nextSendableAt, stamp,
+  TODAY, addDays, dateOf, diffDays, inQuietHours, iso, nextSendableAt, stamp,
 } from "./dates.ts";
 import { compose, getSender, setSender } from "./messages.ts";
 
@@ -274,6 +275,101 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
   return out;
 }
 
+/** The original ITR obligations Revised Return / ITR-U eligibility is
+ *  decided from — see `buildDerivedItr` below. */
+const ORIGINAL_ITR_CODES = new Set(["ITR-NONAUDIT", "ITR-NONAUDIT-BIZ", "ITR-AUDIT", "ITR-TP"]);
+
+/** Shared shape for both derived obligations below. Neither has a real
+ *  per-day late fee — missing the window just closes it, it doesn't accrue a
+ *  penalty the way an overdue GSTR-3B does — so status is only ever Pending,
+ *  Filed or Not Applicable, never Overdue. A small stable-hash chance marks
+ *  an open one as already filed, so the seeded book isn't uniformly
+ *  untouched. `reminderStage` is always "N/A": see the matching exclusion in
+ *  `chaseable()` for why these two are never swept into the automatic
+ *  WhatsApp/email cadence. */
+function makeDerivedObligation(
+  owner: Client, occ: Occurrence, decision: DerivedItrDecision, defCode: string,
+): Obligation {
+  const def = DEF_BY_CODE[defCode];
+  const id = `${owner.id}::${occ.runId}`;
+  let status: FilingStatus;
+  let basis: StatusBasis;
+  let filedOn: string | undefined;
+  let filedBy: string | undefined;
+
+  if (!decision.open) {
+    status = "Not Applicable";
+    basis = "Rule-excluded";
+  } else if (h(id + "|derived-filed") < 0.06) {
+    status = "Filed";
+    basis = "Manually marked";
+    filedOn = addDays(TODAY, -Math.floor(h(id + "|f") * 60) - 1);
+    filedBy = staffOf(owner.assigneeId).name;
+  } else {
+    status = "Pending";
+    basis = "Due date not passed";
+  }
+
+  return {
+    id,
+    ownerType: "Client",
+    clientId: owner.id,
+    runId: occ.runId,
+    defCode,
+    fy: occ.fy,
+    head: def.head,
+    form: def.form,
+    periodLabel: occ.periodLabel,
+    dueDate: occ.dueDate,
+    status,
+    basis,
+    rule: decision.hit,
+    assigneeId: owner.assigneeId,
+    daysOverdue: 0,
+    exposure: 0,
+    exposureFormula: def.lateFee.note,
+    filedOn,
+    filedBy,
+    reminderStage: "N/A",
+  };
+}
+
+/** Revised Return and ITR-U don't fit `buildFor()`: their applicability
+ *  depends on what happened to the client's own original ITR obligation for
+ *  the same year, not on the profile alone. Run as a second pass over the
+ *  obligations `buildFor()` just produced for this year's clients, so the
+ *  original's filed status/date is already there to read. */
+function buildDerivedItr(fy: number, clientObls: Obligation[], occByDef: Map<string, Occurrence[]>): Obligation[] {
+  const origByClient = new Map<string, Obligation>();
+  for (const o of clientObls) {
+    if (ORIGINAL_ITR_CODES.has(o.defCode)) origByClient.set(o.clientId, o);
+  }
+
+  const revOcc = occByDef.get("ITR-REVISED")?.[0];
+  const uOcc = occByDef.get("ITR-U")?.[0];
+  /* End of the assessment year this FY's original ITR belongs to — see the
+     matching note on `Occurrence.fy` in types.ts. */
+  const ayEnd = iso(fy + 1, 3, 31);
+  const out: Obligation[] = [];
+
+  for (const owner of CLIENTS) {
+    const original = origByClient.get(owner.id);
+    if (!original) continue;
+
+    /* Nothing to revise if the original was never filed. */
+    if (revOcc && original.status === "Filed") {
+      const decision = revisedReturnApplicability(original, revOcc.dueDate, TODAY);
+      out.push(makeDerivedObligation(owner, revOcc, decision, "ITR-REVISED"));
+    }
+    /* ITR-U applies whether or not the original was filed — no status gate. */
+    if (uOcc) {
+      const decision = itrUApplicability(original, uOcc.dueDate, ayEnd, TODAY);
+      out.push(makeDerivedObligation(owner, uOcc, decision, "ITR-U"));
+    }
+  }
+  return out;
+}
+
 /** Every seeded financial year, not just the current one — a past year's
  *  occurrences are all in the past relative to `TODAY`, so the same
  *  filed-vs-overdue simulation below naturally produces a mostly-closed
@@ -283,7 +379,9 @@ function build(): Obligation[] {
   const out: Obligation[] = [];
   for (const fy of SEEDED_FYS) {
     const occByDef = occByDefFor(fy);
-    out.push(...buildFor(CLIENTS, "Client", applicableClientCompliances, occByDef));
+    const clientObls = buildFor(CLIENTS, "Client", applicableClientCompliances, occByDef);
+    out.push(...clientObls);
+    out.push(...buildDerivedItr(fy, clientObls, occByDef));
     out.push(...buildFor(GST_ENTITIES, "GstEntity", applicableGstCompliances, occByDef));
     out.push(...buildFor(TDS_DEDUCTORS, "TdsDeductor", applicableDeductorCompliances, occByDef));
   }
@@ -801,6 +899,11 @@ function manualKindFor(o: Obligation): StepKind {
  *  cadence should still be messaging a client about. */
 function chaseable(o: Obligation): boolean {
   if (o.fy !== FY_START) return false;
+  /* Revised Return and ITR-U are optional windows, not chase-ladder
+     deadlines — Revised Return's due date (31 December this year) would
+     otherwise pull it straight into the automatic WhatsApp/email cadence
+     built for hard statutory deadlines like GSTR-3B. */
+  if (o.defCode === "ITR-REVISED" || o.defCode === "ITR-U") return false;
   if (o.status !== "Pending" && o.status !== "Overdue") return false;
   const cfg = complianceSetting(o.defCode);
   return cfg.tracked && cfg.clientFacing;

@@ -385,6 +385,34 @@ export const DEFS: ComplianceDef[] = [
     lateFee: { kind: "flat", amount: 100000, note: "Penalty u/s 271BA ₹1,00,000 for failure to furnish Form 3CEB." },
     clientFacing: true,
   },
+  {
+    /* Applicability isn't decided from the profile like everything else here
+       — it depends on what happened to the client's own original ITR
+       obligation for the same year. See `buildDerivedItr()` in engine.ts and
+       the `revisedReturnApplicability` / `itrUApplicability` functions in
+       rules.ts. Never gets a per-day late fee: missing the window doesn't
+       accrue a penalty, it just closes the door. */
+    code: "ITR-REVISED",
+    head: "Income Tax",
+    form: "Revised Return (ITR)",
+    description: "Revision of an already-filed return",
+    frequency: "Annual",
+    dueRule: "31 December following the financial year, or before assessment is completed, if earlier",
+    applicability: "Clients whose original return was filed, while the s.139(5) revision window remains open",
+    lateFee: { kind: "flat", amount: 0, note: "No independent penalty for revising — interest under sections 234A/234B/234C can still apply on any additional tax admitted." },
+    clientFacing: true,
+  },
+  {
+    code: "ITR-U",
+    head: "Income Tax",
+    form: "Updated Return (ITR-U)",
+    description: "Filing or correcting a return after the normal, belated and revised windows have closed",
+    frequency: "Annual",
+    dueRule: "Within 48 months from the end of the relevant assessment year",
+    applicability: "Any client within the 48-month s.139(8A) window, whether or not the original return was filed",
+    lateFee: { kind: "flat", amount: 0, note: "No late fee as such — filing carries additional tax under section 140B (25%/50%/60%/70% of tax plus interest, depending on when within the 48 months it's filed) and is blocked in some cases (loss return, refund increase, search/survey, prosecution, ITR-U already filed). Verify eligibility on the portal before filing." },
+    clientFacing: true,
+  },
 
   /* ---- TDS returns ------------------------------------------------------ */
   {
@@ -632,6 +660,11 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
     once("TAX-AUDIT", fyStart, 9, 30, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),
     once("ITR-AUDIT", fyStart, 10, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),
     once("ITR-TP", fyStart, 11, 30, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),
+    /* Tagged `fy: fyStart` — same FY-selector bucket as the original ITR it
+       derives from — even though the actual due date (window close) falls
+       years later. */
+    once("ITR-REVISED", fyStart, 12, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),
+    once("ITR-U", fyStart + 5, 3, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),
 
     ...(["24Q", "26Q", "27Q", "27EQ"] as const).flatMap((code) =>
       quarterlyFixed(fyStart, code, [
