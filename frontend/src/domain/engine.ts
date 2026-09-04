@@ -284,9 +284,11 @@ const ORIGINAL_ITR_CODES = new Set(["ITR-NONAUDIT", "ITR-NONAUDIT-BIZ", "ITR-AUD
  *  penalty the way an overdue GSTR-3B does — so status is only ever Pending,
  *  Filed or Not Applicable, never Overdue. A small stable-hash chance marks
  *  an open one as already filed, so the seeded book isn't uniformly
- *  untouched. `reminderStage` is always "N/A": see the matching exclusion in
- *  `chaseable()` for why these two are never swept into the automatic
- *  WhatsApp/email cadence. */
+ *  untouched. `reminderStage` follows the same T-7/T-3/due-date ladder as
+ *  every other client-facing compliance — Revised Return's near-term 31
+ *  December due date puts it on the ladder almost immediately; ITR-U's
+ *  window-close due date is years out, so it sits at "T-7 scheduled" until
+ *  that approaches. */
 function makeDerivedObligation(
   owner: Client, occ: Occurrence, decision: DerivedItrDecision, defCode: string,
 ): Obligation {
@@ -330,7 +332,7 @@ function makeDerivedObligation(
     exposureFormula: def.lateFee.note,
     filedOn,
     filedBy,
-    reminderStage: "N/A",
+    reminderStage: reminderStageFor(status, occ.dueDate, def.clientFacing),
   };
 }
 
@@ -899,11 +901,6 @@ function manualKindFor(o: Obligation): StepKind {
  *  cadence should still be messaging a client about. */
 function chaseable(o: Obligation): boolean {
   if (o.fy !== FY_START) return false;
-  /* Revised Return and ITR-U are optional windows, not chase-ladder
-     deadlines — Revised Return's due date (31 December this year) would
-     otherwise pull it straight into the automatic WhatsApp/email cadence
-     built for hard statutory deadlines like GSTR-3B. */
-  if (o.defCode === "ITR-REVISED" || o.defCode === "ITR-U") return false;
   if (o.status !== "Pending" && o.status !== "Overdue") return false;
   const cfg = complianceSetting(o.defCode);
   return cfg.tracked && cfg.clientFacing;
