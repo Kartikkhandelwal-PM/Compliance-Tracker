@@ -89,8 +89,12 @@ export function ObligationDrawer({
       title={<><span className="num">{o.form}</span> · {o.periodLabel}</>}
       subtitle={
         <>
-          <Link to={`/clients/${client.id}?type=${o.ownerType}`} onClick={close} style={{ textDecoration: "underline", textUnderlineOffset: 3 }}>
-            {client.name}
+          <Link
+            to={`/clients/${client.id}?type=${o.ownerType}`}
+            onClick={close}
+            style={{ display: "inline-flex", alignItems: "center", gap: 2, textDecoration: "underline", textUnderlineOffset: 3 }}
+          >
+            {client.name} <Icon name="chevronRight" size={13} />
           </Link>
         </>
       }
@@ -248,41 +252,53 @@ export function ObligationDrawer({
         </div>
       </div>
 
-      <Link to={`/clients/${client.id}?type=${o.ownerType}`} onClick={close} className="obwhy__link">
-        Open {client.name} <Icon name="chevronRight" size={13} />
-      </Link>
-
-      <a href={KDK_FILING_URL} target="_blank" rel="noopener noreferrer" className="obwhy__link">
-        Open this filing in KDK <Icon name="external" size={13} />
-      </a>
+      {/* The client itself is already one click away, in the subtitle up in
+          the header — a second link to the same place down here would just
+          repeat it. Only actions that are NEW belong in this row. */}
+      <div className="u-row" style={{ marginTop: "var(--s4)", flexWrap: "wrap" }}>
+        <a href={KDK_FILING_URL} target="_blank" rel="noopener noreferrer" className="btn">
+          <Icon name="external" size={14} /> Open this filing
+        </a>
+        {/* No note yet: a button is enough, the same weight as the one above —
+            the full card below is earned by having something to show, not
+            offered empty as a place to look for one. */}
+        {!o.note ? (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => { setNoteDraft(""); setAsking("note"); }}
+          >
+            <Icon name="info" size={14} /> Add note
+          </button>
+        ) : null}
+      </div>
 
       {/* ---- Note ---------------------------------------------------------
            One note per filing, not a log — matches the override reason,
-           which is also a single current value rather than a history. */}
-      <div className="obwhy" style={{ marginTop: "var(--s3)" }}>
-        <div className="obwhy__head">
-          <Icon name="info" size={14} />
-          <span>Note</span>
-          <span className="u-spacer" />
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={() => { setNoteDraft(o.note?.text ?? ""); setAsking("note"); }}
-          >
-            {o.note ? "Edit" : "Add note"}
-          </button>
-        </div>
-        {o.note ? (
+           which is also a single current value rather than a history. Shown
+           as a full card only once there is a note to show. */}
+      {o.note ? (
+        <div className="obwhy" style={{ marginTop: "var(--s3)" }}>
+          <div className="obwhy__head">
+            <Icon name="info" size={14} />
+            <span>Note</span>
+            <span className="u-spacer" />
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => { setNoteDraft(o.note?.text ?? ""); setAsking("note"); }}
+            >
+              Edit
+            </button>
+          </div>
           <p className="obwhy__rule">
             {o.note.text}
             <span className="u-mute" style={{ display: "block", fontSize: "var(--t-11)", marginTop: 4 }}>
               {o.note.by} · {fmtLong(o.note.on)}
             </span>
           </p>
-        ) : (
-          <p className="u-mute" style={{ fontSize: "var(--t-13)" }}>No note yet.</p>
-        )}
-      </div>
+        </div>
+      ) : null}
 
       {asking === "note" ? (
         <div className="sheet" style={{ marginTop: "var(--s4)" }}>
@@ -290,13 +306,13 @@ export function ObligationDrawer({
             <span className="sheet__title">{o.note ? "Edit note" : "Add note"}</span>
           </div>
           <div className="sheet__body">
-            <div className="field" style={{ height: 72 }}>
+            <div className="field">
               <textarea
                 autoFocus
+                rows={3}
                 value={noteDraft}
                 placeholder="Anything worth flagging about this filing for this client"
                 onChange={(e) => setNoteDraft(e.target.value)}
-                style={{ width: "100%", height: "100%", resize: "none", border: 0, outline: "none", background: "transparent", font: "inherit" }}
               />
             </div>
             <div className="u-row" style={{ marginTop: "var(--s3)" }}>
@@ -403,8 +419,6 @@ export function ObligationDrawer({
             {asking === "na" ? (
               <div className="field" style={{ height: 36, marginBottom: 8 }}>
                 <select
-                  className="plain"
-                  style={{ width: "100%", height: "100%" }}
                   value={naChoice}
                   onChange={(e) => {
                     const v = e.target.value;

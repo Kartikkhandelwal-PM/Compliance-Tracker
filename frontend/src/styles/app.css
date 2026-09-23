@@ -1674,13 +1674,16 @@ a.railbtn {
 .field input:focus,
 .field input:focus-visible,
 .field select:focus,
-.field select:focus-visible {
+.field select:focus-visible,
+.field textarea:focus,
+.field textarea:focus-visible {
   box-shadow: none;
   outline: none;
   border-radius: 0;
 }
 .field input,
-.field select {
+.field select,
+.field textarea {
   border: none;
   outline: none;
   background: none;
@@ -1688,6 +1691,16 @@ a.railbtn {
   min-width: 0;
   font-size: var(--t-13);
   color: var(--ink);
+}
+.field:has(textarea) {
+  height: auto;
+  align-items: stretch;
+  padding: var(--s2) var(--s3);
+}
+.field textarea {
+  resize: none;
+  font: inherit;
+  line-height: 1.5;
 }
 .field input::placeholder {
   color: var(--ink-4);

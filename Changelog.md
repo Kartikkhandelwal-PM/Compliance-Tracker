@@ -31,3 +31,19 @@
   (changing the owner, saving a note) did not show up until the
   drawer was closed and reopened, because it was reading a stale copy
   of the filing instead of the live one.
+- Fixed the Not Applicable dropdown and the note box both showing a
+  doubled border. The app's shared input styling reset that for a
+  plain input, but not for a dropdown reusing an unrelated style or
+  for a text box, so each one drew a second ring of its own.
+  Restyled both to match the rest of the app's inputs.
+  Also fixed the row above the note box: it collapsed into unbroken
+  text ("Open Agarwal & RaghavanOpen this filing in KDK") because
+  three links were styled like inline text instead of separate
+  buttons. Dropped the "Open [client]" link entirely, since the
+  client's name is already a link right above it in the drawer's own
+  header, and added an arrow to that header link so it reads as
+  navigation. The remaining two, "Open this filing" and "Add note",
+  are now sized and spaced like proper buttons. When there is no note
+  yet, only the small "Add note" button shows; the full note card
+  only appears once a note exists, instead of an always-visible empty
+  tile.
