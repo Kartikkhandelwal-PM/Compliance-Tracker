@@ -15,21 +15,45 @@ import type { Obligation } from "../domain/types.ts";
 import { STAFF } from "../domain/book.ts";
 import { DEF_BY_CODE } from "../domain/catalog.ts";
 import {
-  markFiled, markNotApplicable, ownerOf, reassign, reinstate, sendReminders, unmarkFiled,
+  markFiled, markNotApplicable, ownerOf, reassign, reinstate, sendReminders, setNote, unmarkFiled,
 } from "../domain/engine.ts";
 import { fmtLong, inr } from "../domain/dates.ts";
 import { Countdown, StatusTag } from "./bits.tsx";
 import { Drawer } from "./Drawer.tsx";
 import { Icon } from "./Icon.tsx";
-import { useApp } from "./app-state.tsx";
+import { useApp, useObligations } from "./app-state.tsx";
+
+/** The reasons that came up often enough in practice to list instead of
+ *  retyping. "Other" drops back to the free-text box below. */
+const NA_REASONS = [
+  "Registration surrendered. Confirmed with the client.",
+  "Client filed directly through their own consultant this period.",
+  "Not applicable. Turnover below threshold, verified from books.",
+  "Duplicate registration; obligation tracked under the other GSTIN.",
+];
+
+/* No live per-filing URL yet — this is a placeholder destination so the
+   button has somewhere real to go while KDK's side is built. Swap for a
+   URL built from the filing once that exists. */
+const KDK_FILING_URL = "https://dev-sc.kdksoftware.co.in/dashboard?sidebarCollapsed=1";
 
 export function ObligationDrawer({
   obligation, onClose,
 }: { obligation: Obligation | null; onClose: () => void }) {
   const { toast, me } = useApp();
   const [reason, setReason] = useState("");
+  const [naChoice, setNaChoice] = useState("");
   const [arn, setArn] = useState("");
-  const [asking, setAsking] = useState<"na" | "reinstate" | "filed" | null>(null);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [asking, setAsking] = useState<"na" | "reinstate" | "filed" | "note" | null>(null);
+
+  /* `obligation` is a snapshot handed in by whichever screen opened the
+     drawer, and that caller has no reason to refresh its own reference
+     every time the store changes underneath it. Re-reading the live copy by
+     id here is what makes an action taken IN the drawer (reassign, note,
+     override) show up immediately instead of only after it's closed and
+     reopened. */
+  const live = useObligations();
 
   /* The engine emits a "Due-date route" fact whose value is the statutory rule
      verbatim, which the Record tab already shows. Two copies of the same
@@ -38,20 +62,23 @@ export function ObligationDrawer({
      This must sit ABOVE the `!obligation` early return: hooks run
      unconditionally or React throws "Rendered more hooks than during the
      previous render" the moment the drawer opens. */
+  const current = obligation && (live.find((x) => x.id === obligation.id) ?? obligation);
   const shownFacts = useMemo(
-    () => (obligation?.rule.facts ?? []).filter((f) => !/due[- ]date route/i.test(f.field)),
-    [obligation],
+    () => (current?.rule.facts ?? []).filter((f) => !/due[- ]date route/i.test(f.field)),
+    [current],
   );
 
-  if (!obligation) return null;
-  const o = obligation;
+  if (!current) return null;
+  const o = current;
   const client = ownerOf(o);
   const def = DEF_BY_CODE[o.defCode];
 
   const close = () => {
     setAsking(null);
     setReason("");
+    setNaChoice("");
     setArn("");
+    setNoteDraft("");
     onClose();
   };
 
@@ -116,7 +143,7 @@ export function ObligationDrawer({
               <Icon name="plus" size={15} /> Add back
             </button>
           ) : (
-            <button type="button" className="btn" onClick={() => setAsking("na")}>
+            <button type="button" className="btn" onClick={() => { setNaChoice(""); setReason(""); setAsking("na"); }}>
               <Icon name="ban" size={15} /> Not applicable
             </button>
           )}
@@ -225,6 +252,80 @@ export function ObligationDrawer({
         Open {client.name} <Icon name="chevronRight" size={13} />
       </Link>
 
+      <a href={KDK_FILING_URL} target="_blank" rel="noopener noreferrer" className="obwhy__link">
+        Open this filing in KDK <Icon name="external" size={13} />
+      </a>
+
+      {/* ---- Note ---------------------------------------------------------
+           One note per filing, not a log — matches the override reason,
+           which is also a single current value rather than a history. */}
+      <div className="obwhy" style={{ marginTop: "var(--s3)" }}>
+        <div className="obwhy__head">
+          <Icon name="info" size={14} />
+          <span>Note</span>
+          <span className="u-spacer" />
+          <button
+            type="button"
+            className="btn btn--sm"
+            onClick={() => { setNoteDraft(o.note?.text ?? ""); setAsking("note"); }}
+          >
+            {o.note ? "Edit" : "Add note"}
+          </button>
+        </div>
+        {o.note ? (
+          <p className="obwhy__rule">
+            {o.note.text}
+            <span className="u-mute" style={{ display: "block", fontSize: "var(--t-11)", marginTop: 4 }}>
+              {o.note.by} · {fmtLong(o.note.on)}
+            </span>
+          </p>
+        ) : (
+          <p className="u-mute" style={{ fontSize: "var(--t-13)" }}>No note yet.</p>
+        )}
+      </div>
+
+      {asking === "note" ? (
+        <div className="sheet" style={{ marginTop: "var(--s4)" }}>
+          <div className="sheet__head">
+            <span className="sheet__title">{o.note ? "Edit note" : "Add note"}</span>
+          </div>
+          <div className="sheet__body">
+            <div className="field" style={{ height: 72 }}>
+              <textarea
+                autoFocus
+                value={noteDraft}
+                placeholder="Anything worth flagging about this filing for this client"
+                onChange={(e) => setNoteDraft(e.target.value)}
+                style={{ width: "100%", height: "100%", resize: "none", border: 0, outline: "none", background: "transparent", font: "inherit" }}
+              />
+            </div>
+            <div className="u-row" style={{ marginTop: "var(--s3)" }}>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  setNote(o.id, noteDraft, me.name);
+                  toast(noteDraft.trim() ? "Note saved" : "Note cleared");
+                  setAsking(null);
+                }}
+              >
+                Save note
+              </button>
+              {o.note ? (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => { setNote(o.id, "", me.name); toast("Note cleared"); setAsking(null); }}
+                >
+                  Remove note
+                </button>
+              ) : null}
+              <button type="button" className="btn" onClick={() => setAsking(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* ---- Record a filing ----------------------------------------------
            The acknowledgement is asked for here and nowhere else. Marking one
            obligation filed can afford a field; the bulk action on the run
@@ -299,14 +400,36 @@ export function ObligationDrawer({
               A reason is required. Overrides are kept separate from rule-driven decisions so
               the engine's own accuracy stays measurable.
             </p>
-            <div className="field" style={{ height: 36 }}>
-              <input
-                autoFocus
-                value={reason}
-                placeholder="e.g. Registration surrendered in June, confirmed with client"
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </div>
+            {asking === "na" ? (
+              <div className="field" style={{ height: 36, marginBottom: 8 }}>
+                <select
+                  className="plain"
+                  style={{ width: "100%", height: "100%" }}
+                  value={naChoice}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setNaChoice(v);
+                    setReason(v === "other" ? "" : v);
+                  }}
+                >
+                  <option value="" disabled>Select a reason…</option>
+                  {NA_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  <option value="other">Other — type manually</option>
+                </select>
+              </div>
+            ) : null}
+            {asking === "reinstate" || naChoice === "other" ? (
+              <div className="field" style={{ height: 36 }}>
+                <input
+                  autoFocus
+                  value={reason}
+                  placeholder={asking === "reinstate"
+                    ? "e.g. Registration surrendered in June, confirmed with client"
+                    : "Type the reason"}
+                  onChange={(e) => setReason(e.target.value)}
+                />
+              </div>
+            ) : null}
             <div className="u-row" style={{ marginTop: "var(--s3)" }}>
               <button
                 type="button"
@@ -321,7 +444,9 @@ export function ObligationDrawer({
               >
                 Save override
               </button>
-              <button type="button" className="btn" onClick={() => setAsking(null)}>Cancel</button>
+              <button type="button" className="btn" onClick={() => { setAsking(null); setNaChoice(""); setReason(""); }}>
+                Cancel
+              </button>
             </div>
           </div>
         </div>

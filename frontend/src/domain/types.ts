@@ -287,6 +287,10 @@ export interface Obligation {
    *  and the record says so rather than pretending otherwise. */
   arn?: string;
   reminderStage: ReminderStage;
+  /** A single free-text note staff can leave on this filing — replaced, not
+   *  appended, the way the override reason is: one current note per filing,
+   *  not a log. */
+  note?: { text: string; by: string; on: string };
 }
 
 export type ReminderStage =

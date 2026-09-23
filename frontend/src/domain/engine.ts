@@ -572,6 +572,18 @@ export function reassign(ids: string[], staffId: string) {
   emit();
 }
 
+/** Set (or clear, with an empty string) this filing's note. Single obligation
+ *  only — unlike the other mutators here, a note is written from the drawer
+ *  for one filing at a time, never in bulk. */
+export function setNote(id: string, text: string, by: string) {
+  const trimmed = text.trim();
+  OBLIGATIONS = OBLIGATIONS.map((o) => {
+    if (o.id !== id) return o;
+    return { ...o, note: trimmed ? { text: trimmed, by, on: TODAY } : undefined };
+  });
+  emit();
+}
+
 /* ==========================================================================
    REMINDER ENGINE
    --------------------------------------------------------------------------
