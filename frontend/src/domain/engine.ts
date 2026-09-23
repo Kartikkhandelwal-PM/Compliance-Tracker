@@ -171,7 +171,13 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
         const id = `${owner.id}::${occ.runId}`;
         const seed = h(id);
         const daysOverdue = Math.max(0, diffDays(occ.dueDate, TODAY));
-        const notYetDue = diffDays(TODAY, occ.dueDate) > 0;
+        /* >= 0, not > 0: a filing due today has not passed its due date yet
+           (that happens at midnight), so it still belongs in the "not yet due"
+           branch below — eligible to file early today or sit Pending — rather
+           than falling straight into the arrears simulation, which used to
+           mark some of today's filings "Overdue, due date passed" hours
+           before the date had actually passed. */
+        const notYetDue = diffDays(TODAY, occ.dueDate) >= 0;
 
         let status: FilingStatus;
         let basis: StatusBasis;
@@ -1427,7 +1433,11 @@ export function summarise(obs: Obligation[]): FirmSummary {
   let overdueCount = 0, exposure = 0, dueThisWeek = 0, dueToday = 0,
     filedThisMonth = 0, pendingTotal = 0, unassigned = 0;
   const overdueClients = new Set<string>();
-  const weekEnd = addDays(TODAY, 7);
+  /* Same 7-day span (today through +6) as the hero card's day-by-day strip in
+     Today.tsx — they used to disagree by one day at the boundary, which could
+     put a whole day's filings in this total without a matching bar or
+     compliance count underneath it. */
+  const weekEnd = addDays(TODAY, 6);
   const monthStart = TODAY.slice(0, 7) + "-01";
 
   for (const o of obs) {

@@ -24,8 +24,8 @@
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { RecordType, Obligation } from "../domain/types.ts";
-import { useObligations, useOutbox } from "../ui/app-state.tsx";
-import { CLIENT_BY_ID, GST_ENTITY_BY_ID, TDS_DEDUCTOR_BY_ID, staffOf } from "../domain/book.ts";
+import { useApp, useObligations, useOutbox } from "../ui/app-state.tsx";
+import { CLIENT_BY_ID, GST_ENTITY_BY_ID, STAFF, TDS_DEDUCTOR_BY_ID, staffOf } from "../domain/book.ts";
 import { decideItrForm, estimatedTax } from "../domain/rules.ts";
 import { updateParty } from "../domain/engine.ts";
 import { FY_LABEL, FY_OPTIONS, FY_START, HEADS, fyLabel } from "../domain/catalog.ts";
@@ -55,6 +55,7 @@ export function ClientDetailPage() {
   const ownerType = resolveType(id, params.get("type"));
   const all = useObligations();
   const outbox = useOutbox();
+  const { toast } = useApp();
   const [tab, setTab] = useState<Tab>("obligations");
   const [head, setHead] = useState("all");
   const [peek, setPeek] = useState<Obligation | null>(null);
@@ -158,10 +159,24 @@ export function ClientDetailPage() {
             <span className="cprofile__k">Owner</span>
             <span className="u-row">
               <Avatar initials={staffOf(record.assigneeId).initials} />
-              <span className="u-col" style={{ lineHeight: 1.2 }}>
-                <b style={{ fontSize: "var(--t-13)" }}>{staffOf(record.assigneeId).name}</b>
-                <span className="u-mute" style={{ fontSize: "var(--t-11)" }}>{staffOf(record.assigneeId).role}</span>
-              </span>
+              {/* The dropdown IS the name — no separate label beside it.
+                  Reassigning here only sets who is responsible for this
+                  client going forward; it does not touch obligations already
+                  assigned under the old owner. Reassigning those in bulk is
+                  what RunDetail's per-run "Assign to…" is for. */}
+              <select
+                className="plain"
+                style={{ fontSize: "var(--t-13)", fontWeight: 600 }}
+                value={record.assigneeId}
+                onChange={(e) => {
+                  updateParty(ownerType, record.id, { assigneeId: e.target.value });
+                  toast(`Owner changed to ${staffOf(e.target.value).name}`);
+                }}
+                aria-label="Change owner"
+              >
+                <option value="none">Unassigned</option>
+                {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
             </span>
           </div>
           <div className="cprofile__contact">
