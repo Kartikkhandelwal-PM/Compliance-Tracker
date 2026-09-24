@@ -84,14 +84,16 @@ export function ComplianceDetailPage() {
          assessment year, for a TDS correction it's a quarter whose original
          hasn't been filed yet (see `tdsCorrectionApplicability` /
          `itrUApplicability` in rules.ts). Whether it's worth a "coming
-         soon" row depends on how far off that still is: ITR-U's not-yet-open
-         year always opens right as this FY closes, and a quarter's
-         correction opens once its original is due — both worth flagging
-         when that's still within this FY. 24Q-CORR's Q4 is the one case
-         where it isn't: that original isn't even due till 31 May, a good
-         two months into the NEXT FY, so there's nothing to preview yet. */
+         soon" row depends on how far off that still is. A quarter's
+         correction opens once its original is due, worth flagging when
+         that's still within this FY — 24Q-CORR's Q4 is the one case where
+         it isn't: that original isn't even due till 31 May, a good two
+         months into the NEXT FY. ITR-U's not-yet-open year is always the
+         CURRENT, still-running one — it only opens on this FY's very last
+         day, so for practically this whole year there's nothing coming
+         soon about it either; it never gets a preview row, just like Q4. */
       const opensWithinThisFY = (p: { periodLabel: string }) => {
-        if (def.code === "ITR-U") return true;
+        if (def.code === "ITR-U") return false;
         const baseCode = CORR_BASE_CODE[def.code];
         const original = obligations.find((o) => o.defCode === baseCode && o.periodLabel === p.periodLabel);
         return original !== undefined && original.dueDate <= CURRENT_FY_END;
