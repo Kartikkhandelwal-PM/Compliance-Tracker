@@ -18,7 +18,9 @@ import {
   CLIENTS, CLIENT_BY_ID, GST_ENTITIES, GST_ENTITY_BY_ID, TDS_DEDUCTORS,
   TDS_DEDUCTOR_BY_ID, h, staffOf,
 } from "./book.ts";
-import { CORR_BASE_CODE, DEF_BY_CODE, FY_START, SEEDED_FYS, occurrencesForFY } from "./catalog.ts";
+import {
+  CORR_BASE_CODE, DEFAULT_UNTRACKED, DEFS, DEF_BY_CODE, FY_START, SEEDED_FYS, occurrencesForFY,
+} from "./catalog.ts";
 import type { Applicable, DerivedItrDecision, ExposureContext } from "./rules.ts";
 import {
   applicableClientCompliances, applicableDeductorCompliances,
@@ -607,16 +609,20 @@ export function getVersion(): number {
  * people stop trusting the switches.
  */
 export function allObligations(): Obligation[] {
-  if (OVERRIDES.size === 0) return OBLIGATIONS;
   return OBLIGATIONS.filter((o) => complianceSetting(o.defCode).tracked);
 }
 
 /** Untracked compliance codes — for the screens that read the catalogue
  *  directly (the calendar's date list, the compliance index) rather than
- *  through the book. */
+ *  through the book. Starts from `DEFAULT_UNTRACKED`, not just what's been
+ *  explicitly switched off, so those defaults are actually off everywhere
+ *  until a firm turns them on — not just on the settings row itself. */
 export function untrackedCodes(): Set<string> {
-  const out = new Set<string>();
-  for (const [code, cfg] of OVERRIDES) if (!cfg.tracked) out.add(code);
+  const out = new Set(DEFAULT_UNTRACKED);
+  for (const [code, cfg] of OVERRIDES) {
+    if (cfg.tracked) out.delete(code);
+    else out.add(code);
+  }
   return out;
 }
 
@@ -990,7 +996,10 @@ const OVERRIDES = new Map<string, ComplianceOverride>();
 
 export function complianceSetting(code: string): ComplianceOverride {
   const def = DEF_BY_CODE[code];
-  return OVERRIDES.get(code) ?? { tracked: true, clientFacing: def?.clientFacing ?? false };
+  return OVERRIDES.get(code) ?? {
+    tracked: !DEFAULT_UNTRACKED.has(code),
+    clientFacing: def?.clientFacing ?? false,
+  };
 }
 
 export function updateCompliance(code: string, patch: Partial<ComplianceOverride>) {
@@ -1022,10 +1031,11 @@ export function updateParty(ownerType: RecordType, id: string, patch: Partial<Pa
   emit();
 }
 
-/** How many compliances the firm has switched off, for the settings summary. */
+/** How many compliances are off right now, defaults included, for the
+ *  settings summary. */
 export function untrackedCount(): number {
   let n = 0;
-  for (const [, v] of OVERRIDES) if (!v.tracked) n++;
+  for (const d of DEFS) if (!complianceSetting(d.code).tracked) n++;
   return n;
 }
 

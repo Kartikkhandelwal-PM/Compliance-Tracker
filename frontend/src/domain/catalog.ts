@@ -704,6 +704,23 @@ export const DEF_BY_CODE: Record<string, ComplianceDef> = Object.fromEntries(
   DEFS.map((d) => [d.code, d]),
 );
 
+/** Compliances that start out switched off in Settings → Compliances,
+ *  rather than the usual "on until a firm turns it off". These are the
+ *  ones that only apply to a minority of practices (CMP-08's composition
+ *  scheme, GSTR-4/7/8's own narrow filer types, the ROC forms) or that
+ *  most firms handle outside this tracker entirely (Advance Tax, transfer
+ *  pricing, payroll). A firm that does handle one just switches it back on
+ *  — this only changes what a fresh install starts with, not what's
+ *  possible. Read through `complianceSetting()`, never `.tracked` here
+ *  directly, so an explicit override always wins over this default. */
+export const DEFAULT_UNTRACKED = new Set([
+  "CMP-08", "GSTR-7", "GSTR-8", "GSTR-4",
+  "ADV-TAX",
+  "ITR-TP",
+  "AOC-4", "MGT-7", "DPT-3", "MSME-1", "DIR-3-KYC", "LLP-11", "LLP-8",
+  "PF-ECR", "ESI", "PTAX",
+]);
+
 /** Which of the three unlinked records (`Client`/`GstEntity`/`TdsDeductor`)
  *  owns a compliance's obligations. Mostly `def.head` — "GST" is always a
  *  GstEntity, "TDS" is always a TdsDeductor (this now includes `TDS-CHALLAN`,
