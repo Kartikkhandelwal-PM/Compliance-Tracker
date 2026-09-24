@@ -8,7 +8,7 @@ export type IconName =
   | "collapse" | "expand" | "plus" | "clock" | "send" | "external" | "info"
   | "arrowRight" | "sort" | "user" | "bolt" | "ban" | "history" | "bell"
   | "tick" | "tickDouble" | "menu" | "settings" | "fullscreen" | "fullscreenExit"
-  | "sync"
+  | "sync" | "eye" | "eyeOff"
   /* Chat furniture — only used to make the WhatsApp preview read as a real
      thread rather than a quotation of one. */
   | "phone" | "video" | "dots" | "lock" | "mic" | "attach" | "smile" | "camera";
@@ -47,6 +47,12 @@ const P: Record<IconName, string> = {
   ban: "M12 20.5a8.5 8.5 0 1 0 0-17 8.5 8.5 0 0 0 0 17ZM6 6l12 12",
   history: "M3.5 12a8.5 8.5 0 1 0 2.6-6.1M3.5 4v5h5M12 7.5V12l3 2",
   sync: "M4 12a8 8 0 0 1 14-5.3M18 3v4h-4M20 12a8 8 0 0 1-14 5.3M6 21v-4h4",
+  /* A secret field's reveal toggle — a plain eye, and the same eye with one
+     slash through it, never a whole different glyph, so toggling doesn't
+     make the control jump. */
+  eye: "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"
+    + "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
+  eyeOff: "M2.5 12S6 5.5 12 5.5c1.6 0 3 .3 4.3.9M21.5 12s-1.3 2.5-3.7 4.3M9.4 9.6a3 3 0 0 0 5 3.3M3.5 3.5l17 17",
   bell: "M18 8.5a6 6 0 1 0-12 0c0 5.2-1.6 6.8-2 7.2a.6.6 0 0 0 .4 1h15.2a.6.6 0 0 0 .4-1c-.4-.4-2-2-2-7.2ZM9.8 20a2.4 2.4 0 0 0 4.4 0",
   /* WhatsApp receipts. One tick = sent to the server, two = on the handset;
      the colour, not the count, is what says "read". */

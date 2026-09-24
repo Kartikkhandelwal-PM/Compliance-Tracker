@@ -35,23 +35,31 @@ import { Link } from "react-router-dom";
 import { STAFF } from "../domain/book.ts";
 import { DEFS, HEADS, headClass } from "../domain/catalog.ts";
 import {
-  complianceSetting, getDefaultAssignee, getFirm, getNotificationSettings,
-  getReminderSettings, getSchedule, getSenderProfile, resetCompliances, resetSchedule,
-  setDefaultAssignee, toggleStepChannel, updateCompliance, updateFirm,
-  updateNotificationSettings, updateReminderSettings, updateSenderProfile,
-  updateStep, untrackedCount,
+  complianceSetting, getDefaultAssignee, getFirm,
+  getNotificationSettings, getReminderSettings, getSchedule, getSenderProfile,
+  resetCompliances, resetSchedule, saveRampwin, saveZeptomail, setDefaultAssignee,
+  setEmailProvider, setWaProvider, toggleStepChannel, updateCompliance, updateFirm,
+  updateNotificationSettings, updateReminderSettings, updateSenderProfile, updateStep,
+  untrackedCount,
 } from "../domain/engine.ts";
 import { useApp, useEngine } from "../ui/app-state.tsx";
-import { Avatar, Check, Empty, PageHead } from "../ui/bits.tsx";
+import { Avatar, Check, Empty, PageHead, Seg } from "../ui/bits.tsx";
 import { BrandIcon, Icon } from "../ui/Icon.tsx";
 import type { IconName } from "../ui/Icon.tsx";
-import type { Channel, FirmProfile } from "../domain/types.ts";
+import type { Channel, FirmProfile, SenderProfile } from "../domain/types.ts";
 
-type Section = "firm" | "sender" | "reminders" | "compliances" | "team" | "notifications";
+type Section =
+  | "firm" | "whatsapp" | "email" | "reminders" | "compliances" | "team" | "notifications";
 
 const SECTIONS: { id: Section; label: string; icon: IconName; note: string }[] = [
   { id: "firm", label: "Firm", icon: "clients", note: "Your details" },
-  { id: "sender", label: "Sender", icon: "send", note: "WhatsApp and email" },
+  /* WhatsApp and email used to be one "Sender" section with both cards
+     stacked on the same page — a firm setting up one channel had to scroll
+     past a fully-built form for the other to get there. Two destinations,
+     each showing exactly one channel's setup, is more sections in the nav
+     but less to look at on any one screen. */
+  { id: "whatsapp", label: "WhatsApp", icon: "send", note: "Business number" },
+  { id: "email", label: "Email", icon: "outbox", note: "Sending address" },
   { id: "reminders", label: "Reminders", icon: "clock", note: "Steps and timing" },
   { id: "compliances", label: "Compliances", icon: "matrix", note: "What you track" },
   { id: "team", label: "Team", icon: "team", note: "Staff and owners" },
@@ -94,7 +102,8 @@ export function RulesPage() {
           </div>
 
           {section === "firm" ? <FirmSection /> : null}
-          {section === "sender" ? <SenderSection /> : null}
+          {section === "whatsapp" ? <WhatsAppSection /> : null}
+          {section === "email" ? <EmailSection /> : null}
           {section === "reminders" ? <RemindersSection /> : null}
           {section === "compliances" ? <CompliancesSection /> : null}
           {section === "team" ? <TeamSection /> : null}
@@ -134,26 +143,6 @@ function Text({ value, onChange, placeholder, mono }: {
   );
 }
 
-/**
- * A value the firm can see but not change.
- *
- * `readOnly`, not `disabled` — the point is that the reader knows what is
- * configured, so the text has to stay selectable and copyable (someone will be
- * reading that WhatsApp number out on a support call). A disabled input blocks
- * selection and reads as "broken" rather than "fixed by us". The sunk fill is
- * the only signal it needs; a lock glyph on every row was noise.
- */
-function Locked({ value, mono }: { value: string; mono?: boolean }) {
-  return (
-    <input
-      className={`sinput is-locked${mono ? " num" : ""}`}
-      value={value}
-      readOnly
-      aria-readonly="true"
-    />
-  );
-}
-
 function Toggle({ on, onToggle, title, body }: {
   on: boolean; onToggle: () => void; title: string; body: string;
 }) {
@@ -185,6 +174,110 @@ function Card({ title, note, children, foot }: {
       </div>
       <div className="sheet__body">{children}</div>
       {foot ? <div className="sheet__foot">{foot}</div> : null}
+    </div>
+  );
+}
+
+/** A real radio group (one name, one selection, arrow-key accessible),
+ *  styled as cards rather than dots — shown up front rather than behind a
+ *  select, because "recommended" only means something next to the
+ *  alternative it's being recommended over. */
+function ConnChoice<T extends string>({ name, value, onChange, options }: {
+  name: string;
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; title: string; sub: string }[];
+}) {
+  return (
+    <div className="conn" role="radiogroup">
+      {options.map((o) => (
+        <label key={o.value} className={`conn__opt${value === o.value ? " is-on" : ""}`}>
+          <input
+            type="radio"
+            name={name}
+            checked={value === o.value}
+            onChange={() => onChange(o.value)}
+          />
+          <span className="conn__dot" />
+          <span>
+            <span className="conn__title">{o.title}</span>
+            <span className="conn__sub">{o.sub}</span>
+          </span>
+        </label>
+      ))}
+    </div>
+  );
+}
+
+/** A field worth hiding by default — an API key or token, shown as dots
+ *  until the reader chooses to look, same as a password field, but with a
+ *  visible toggle because this one is meant to be copied back out, not just
+ *  typed once and forgotten. */
+function Secret({ value, onChange, placeholder }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const [shown, setShown] = useState(false);
+  return (
+    <div className="field-secret">
+      <input
+        type={shown ? "text" : "password"}
+        className="sinput"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        className="field-secret__toggle"
+        onClick={() => setShown((v) => !v)}
+        aria-label={shown ? "Hide" : "Show"}
+        tabIndex={-1}
+      >
+        <Icon name={shown ? "eyeOff" : "eye"} size={15} />
+      </button>
+    </div>
+  );
+}
+
+/** A field in a credential form — label and hint stacked on their own lines
+ *  rather than squeezed onto one baseline, because these hints run long
+ *  ("From your mail agent's setup info in ZeptoMail") in a way the rest of
+ *  Settings' short hints ("Yours to set") never do. */
+function PField({ label, hint, children }: {
+  label: string; hint?: string; children: ReactNode;
+}) {
+  return (
+    <div className="pfield">
+      <span className="pfield__label">{label}</span>
+      {/* Reserving a blank hint line even with nothing to say was worse than
+         the misalignment it fixed — a solo field like "API endpoint" got a
+         dead gap under its label with no text to justify it. Real fix:
+         every field that sits in a pair gets a real hint, even a short one,
+         so the two inputs start level without faking the space. */}
+      {hint ? <p className="pfield__hint">{hint}</p> : null}
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A read-only value inside a credential form — an endpoint, a fixed
+ * username, a number KDK set up.
+ *
+ * `readOnly`, not `disabled` — the point is that the reader knows what is
+ * configured, so the text has to stay selectable and copyable (someone will
+ * be reading that endpoint or username back on a support call). A disabled
+ * input blocks selection and reads as "broken" rather than "fixed by us".
+ *
+ * Also, unlike a locked row on a plain settings page, a lock glyph earns its
+ * place here: this sits beside editable fields it would otherwise look
+ * identical to.
+ */
+function PLocked({ value }: { value: string }) {
+  return (
+    <div className="field-locked">
+      <input className="sinput is-locked num" value={value} readOnly aria-readonly="true" />
+      <Icon name="lock" size={14} className="field-locked__glyph" />
     </div>
   );
 }
@@ -251,79 +344,420 @@ function FirmSection() {
    ========================================================================== */
 
 /**
- * Sender.
+ * WhatsApp and email sender setup.
  *
- * WhatsApp is NOT the firm's to configure. Messages go out on KDK's own
- * "CA Connect" WhatsApp Business account — one Meta-verified number serving
- * every practice on the product. A firm cannot substitute its own: that would
- * need its own Meta Business verification, API access and per-template
- * approval. An earlier version offered "Display name" and "Business number" as
- * text inputs, which promised a capability the product does not have.
+ * Both channels default to KDK's shared account — one Meta-verified
+ * WhatsApp Business number and one sending domain, serving every practice
+ * on the product, shown here as read-only. A firm cannot just substitute
+ * its own number or domain into those same fields: a WhatsApp number needs
+ * its own Meta Business verification and template approval, and an email
+ * domain needs its own SPF/DKIM alignment, neither of which typing a new
+ * value into KDK's configuration would actually set up. (An earlier version
+ * of this screen offered "Display name" and "Business number" as plain text
+ * inputs, which promised exactly that capability without it existing.)
  *
- * The same is true of the From address — it belongs to KDK's sending domain,
- * and changing it would break SPF/DKIM alignment and land the mail in spam.
+ * What genuinely exists now is a second, independent account per channel —
+ * the firm's own, brought in through a provider that does the real
+ * verification: Rampwin for WhatsApp, ZeptoMail for email. Each channel's
+ * toggle switches which account it sends through; nothing about the other
+ * channel changes, and switching back to KDK doesn't discard a connection
+ * already made, in case the firm switches again later.
  *
- * So this screen shows what clients see, and edits the one thing the firm
- * genuinely owns: where replies go.
+ * Two nav destinations, not one "Sender" page with both cards stacked —
+ * setting up one channel used to mean scrolling past a fully-built form for
+ * the other to get to it.
  */
-function SenderSection() {
+function WhatsAppSection() {
   const s = useEngine(getSenderProfile);
+  return <WhatsAppCard s={s} />;
+}
+
+function EmailSection() {
+  const s = useEngine(getSenderProfile);
+  return <EmailCard s={s} />;
+}
+
+function WhatsAppCard({ s }: { s: SenderProfile }) {
+  const { toast } = useApp();
+  const own = s.waProvider === "rampwin";
+
+  const [displayName, setDisplayName] = useState(s.rampwin.displayName);
+  const [apiKey, setApiKey] = useState(s.rampwin.apiKey);
+  const [channelId, setChannelId] = useState(s.rampwin.channelId);
+  /* A saved connection opens on its summary, not its credential form — the
+     API key sitting in an open text field every time this screen loads is a
+     mis-click away from being changed by accident. Only a fresh, unsaved
+     connection opens straight into the form, because there's nothing yet to
+     summarise. */
+  const [editing, setEditing] = useState(!s.rampwin.connected);
+
+  const valid = !!apiKey.trim() && !!channelId.trim() && !!displayName.trim();
+
+  const save = () => {
+    saveRampwin({
+      displayName: displayName.trim(),
+      apiKey: apiKey.trim(),
+      channelId: channelId.trim(),
+    });
+    toast("WhatsApp channel saved");
+    setEditing(false);
+  };
+
+  const cancel = () => {
+    setDisplayName(s.rampwin.displayName);
+    setApiKey(s.rampwin.apiKey);
+    setChannelId(s.rampwin.channelId);
+    setEditing(false);
+  };
 
   return (
-    <>
-      <Card
-        title="WhatsApp Business"
-        note="Managed by KDK"
-        foot="This number is set up for you and can't be changed here. Contact KDK to send from your own WhatsApp number instead."
-      >
-        <div className="sbrand">
-          <BrandIcon name="whatsapp" size={26} />
-          <div>
-            <div className="u-strong">{s.waName}</div>
-            <div className="u-mute" style={{ fontSize: "var(--t-12)" }}>
-              Sending on behalf of the practice
-            </div>
+    <Card title="WhatsApp Business" note={own ? "Your own number, via Rampwin" : "Managed by KDK"}>
+      <div className="sbrand">
+        <BrandIcon name="whatsapp" size={26} />
+        <div>
+          <div className="u-strong">
+            {own ? (s.rampwin.displayName || "Not connected yet") : s.waName}
           </div>
-          <span className="u-spacer" />
-          <span className={`tag ${s.waVerified ? "tag--filed" : "tag--pending"}`}>
-            <i className="tag__dot" />{s.waVerified ? "Verified business" : "Unverified"}
-          </span>
-        </div>
-
-        <div className="sgrid">
-          <Row label="Display name" hint="What clients see as the sender">
-            <Locked value={s.waName} />
-          </Row>
-          <Row label="Business number">
-            <Locked value={s.waNumber} mono />
-          </Row>
-        </div>
-      </Card>
-
-      <Card
-        title="Email"
-        foot="This address is set up for you and can't be changed here. Replies are yours to route."
-      >
-        <div className="sbrand">
-          <BrandIcon name="email" size={24} />
-          <div>
-            <div className="u-strong">{s.fromEmail}</div>
-            <div className="u-mute" style={{ fontSize: "var(--t-12)" }}>
-              Replies arrive at {s.replyTo || "—"}
-            </div>
+          <div className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+            {own ? "Sending through the firm's own Rampwin account" : "Sending on behalf of the practice"}
           </div>
         </div>
+        <span className="u-spacer" />
+        <span className={`tag ${(own ? s.rampwin.connected : s.waVerified) ? "tag--filed" : "tag--pending"}`}>
+          <i className="tag__dot" />
+          {own
+            ? (s.rampwin.connected ? "Connected" : "Not connected")
+            : (s.waVerified ? "Verified business" : "Unverified")}
+        </span>
+      </div>
 
-        <div className="sgrid">
-          <Row label="From address" hint="Managed by KDK">
-            <Locked value={s.fromEmail} />
-          </Row>
-          <Row label="Reply-to address" hint="Yours to set">
-            <Text value={s.replyTo} onChange={(v) => updateSenderProfile({ replyTo: v })} />
-          </Row>
+      {/* Two accounts, either one selectable — picking one is what makes it
+          the one messages actually send through. Switching away from a
+          Rampwin channel already set up doesn't erase it; picking "Your own
+          number" again brings the same saved details straight back. */}
+      <ConnChoice
+        name="wa-provider"
+        value={s.waProvider}
+        onChange={setWaProvider}
+        options={[
+          { value: "kdk", title: "CA Connect", sub: "Managed by KDK" },
+          {
+            value: "rampwin",
+            title: "Your own number",
+            sub: s.rampwin.connected ? "Connected, via Rampwin" : "Set up via Rampwin",
+          },
+        ]}
+      />
+
+      {!own ? (
+        <div className="pgrid">
+          <div className="pgrid__pair">
+            <PField label="Display name" hint="What clients see as the sender">
+              <PLocked value={s.waName} />
+            </PField>
+            <PField label="Business number" hint="The number messages send from">
+              <PLocked value={s.waNumber} />
+            </PField>
+          </div>
         </div>
-      </Card>
-    </>
+      ) : !editing ? (
+        <>
+          {/* Read-only, not the credential form — every field here is a
+              `PLocked` the same way KDK's own fields above are, so there is
+              nothing to mis-click into changing. The API key itself is left
+              out entirely; "Connected" already says it's there, and there's
+              no reason for it to be on screen once it's done its job. */}
+          <div className="pgrid">
+            <div className="pgrid__pair">
+              <PField label="Display name" hint="What clients see as the sender">
+                <PLocked value={s.rampwin.displayName} />
+              </PField>
+              <PField label="Channel ID" hint="The WhatsApp channel messages send through">
+                <PLocked value={s.rampwin.channelId} />
+              </PField>
+            </div>
+          </div>
+
+          <div className="providercfg__foot">
+            <span className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+              Sending through <b>Rampwin</b>
+            </span>
+            <span className="u-spacer" />
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => toast("Test message sent to your own WhatsApp number")}
+            >
+              <Icon name="send" size={14} /> Send test message
+            </button>
+            <button type="button" className="btn btn--sm" onClick={() => setEditing(true)}>
+              Edit configuration
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* One way in: a channel the firm already runs in their own
+              Rampwin account, pointed at by its API key. Setting up a new
+              number with Meta is Rampwin's own onboarding, not this
+              screen's — it has nothing to add to that flow. */}
+          <div className="pgrid">
+            <PField label="API key" hint="From Rampwin → Settings → General settings">
+              <Secret value={apiKey} onChange={setApiKey} placeholder="Rampwin API key" />
+            </PField>
+            <div className="pgrid__pair">
+              <PField label="Channel ID" hint="The WhatsApp channel to send through">
+                <Text value={channelId} onChange={setChannelId} placeholder="Channel ID" mono />
+              </PField>
+              <PField label="Display name" hint="What clients see as the sender">
+                <Text value={displayName} onChange={setDisplayName} placeholder="e.g. Sharma & Associates" />
+              </PField>
+            </div>
+          </div>
+
+          <div className="providercfg__foot">
+            <span className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+              {s.rampwin.connected ? <>Sending through <b>Rampwin</b></> : "Not yet connected"}
+            </span>
+            <span className="u-spacer" />
+            {s.rampwin.connected ? (
+              <button type="button" className="btn btn--sm" onClick={cancel}>Cancel</button>
+            ) : null}
+            <button type="button" className="btn btn--primary btn--sm" disabled={!valid} onClick={save}>
+              Save changes
+            </button>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function EmailCard({ s }: { s: SenderProfile }) {
+  const { toast } = useApp();
+  const own = s.emailProvider === "zeptomail";
+
+  const [method, setMethod] = useState(s.zeptomail.method);
+  const [apiToken, setApiToken] = useState(s.zeptomail.apiToken);
+  const [mailAgent, setMailAgent] = useState(s.zeptomail.mailAgent);
+  const [fromName, setFromName] = useState(s.zeptomail.fromName);
+  const [fromAddress, setFromAddress] = useState(s.zeptomail.fromAddress);
+  const [bounceAddress, setBounceAddress] = useState(s.zeptomail.bounceAddress);
+
+  /* Same reasoning as the WhatsApp card: a saved setup opens on its
+     summary, not a form with a live token field in it. */
+  const [editing, setEditing] = useState(!s.zeptomail.configured);
+
+  const valid = !!apiToken.trim() && !!fromName.trim() && !!fromAddress.trim();
+
+  const save = () => {
+    saveZeptomail({
+      method, apiToken: apiToken.trim(), mailAgent: mailAgent.trim(), fromName: fromName.trim(),
+      fromAddress: fromAddress.trim(), bounceAddress: bounceAddress.trim(),
+    });
+    toast("Email settings saved");
+    setEditing(false);
+  };
+
+  const cancel = () => {
+    setMethod(s.zeptomail.method);
+    setApiToken(s.zeptomail.apiToken);
+    setMailAgent(s.zeptomail.mailAgent);
+    setFromName(s.zeptomail.fromName);
+    setFromAddress(s.zeptomail.fromAddress);
+    setBounceAddress(s.zeptomail.bounceAddress);
+    setEditing(false);
+  };
+
+  return (
+    <Card title="Email" note={own ? "Your own domain, via ZeptoMail" : "Managed by KDK"}>
+      <div className="sbrand">
+        <BrandIcon name="email" size={24} />
+        <div>
+          <div className="u-strong">
+            {own ? (s.zeptomail.fromAddress || "Not set up yet") : s.fromEmail}
+          </div>
+          <div className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+            {own
+              ? (s.zeptomail.mailAgent ? `Mail agent: ${s.zeptomail.mailAgent}` : "Sent via ZeptoMail")
+              : `Replies arrive at ${s.replyTo || "—"}`}
+          </div>
+        </div>
+        {own ? (
+          <>
+            <span className="u-spacer" />
+            <span className={`tag ${s.zeptomail.configured ? "tag--filed" : "tag--pending"}`}>
+              <i className="tag__dot" />{s.zeptomail.configured ? "Configured" : "Not set up"}
+            </span>
+          </>
+        ) : null}
+      </div>
+
+      {/* Two accounts, either one selectable — switching away from ZeptoMail
+          doesn't erase what was saved there; picking it again brings the
+          same setup straight back. */}
+      <ConnChoice
+        name="email-provider"
+        value={s.emailProvider}
+        onChange={setEmailProvider}
+        options={[
+          { value: "kdk", title: "CA Connect", sub: "Managed by KDK" },
+          {
+            value: "zeptomail",
+            title: "Your own domain",
+            sub: s.zeptomail.configured ? "Configured, via ZeptoMail" : "Set up via ZeptoMail",
+          },
+        ]}
+      />
+
+      {!own ? (
+        <div className="pgrid">
+          <div className="pgrid__pair">
+            <PField label="From address" hint="Managed by KDK">
+              <PLocked value={s.fromEmail} />
+            </PField>
+            <PField label="Reply-to address" hint="Yours to set">
+              <Text value={s.replyTo} onChange={(v) => updateSenderProfile({ replyTo: v })} />
+            </PField>
+          </div>
+        </div>
+      ) : !editing ? (
+        <>
+          {/* Read-only, not the credential form — every field here is a
+              `PLocked` the same way KDK's own fields above are, so there is
+              nothing to mis-click into changing. The token itself is left
+              out entirely; "Configured" already says it's there. */}
+          <div className="pgrid">
+            <div className="pgrid__pair">
+              <PField label="Connection" hint="How ZeptoMail sends these">
+                <PLocked value={s.zeptomail.method === "smtp" ? "SMTP relay" : "Send Mail API"} />
+              </PField>
+              <PField label="Mail agent" hint="Labels which agent these sends belong to">
+                <PLocked value={s.zeptomail.mailAgent || "Not labelled"} />
+              </PField>
+            </div>
+            <div className="pgrid__pair">
+              <PField label="From name" hint="What clients see as the sender">
+                <PLocked value={s.zeptomail.fromName} />
+              </PField>
+              <PField label="From address">
+                <PLocked value={s.zeptomail.fromAddress} />
+              </PField>
+            </div>
+            <PField label="Bounce address" hint="Where ZeptoMail returns undeliverable mail">
+              <PLocked value={s.zeptomail.bounceAddress || "Not set"} />
+            </PField>
+          </div>
+
+          <div className="providercfg__foot">
+            <span className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+              Sending through <b>ZeptoMail {s.zeptomail.method === "smtp" ? "SMTP relay" : "Send Mail API"}</b>
+            </span>
+            <span className="u-spacer" />
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => toast(`Test email sent to ${s.zeptomail.fromAddress}`)}
+            >
+              <Icon name="send" size={14} /> Send test email
+            </button>
+            <button type="button" className="btn btn--sm" onClick={() => setEditing(true)}>
+              Edit configuration
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Deliberately a small pill switch, not another pair of big cards
+              — this is a detail of HOW "Your own domain" sends, not a
+              second decision of the same weight as picking the account
+              above it. ZeptoMail genuinely accepts either wire, same token:
+              API is what they recommend, SMTP relay is for software that
+              only speaks SMTP. */}
+          <div className="pmethod">
+            <span className="pmethod__l">Connect via</span>
+            <Seg
+              value={method}
+              onChange={setMethod}
+              options={[
+                { value: "api", label: "Send Mail API" },
+                { value: "smtp", label: "SMTP relay" },
+              ]}
+            />
+          </div>
+
+          <div className="pgrid">
+            {method === "api" ? (
+              <>
+                <PField label="API endpoint" hint="Fixed">
+                  <PLocked value="https://api.zeptomail.com/v1.1/email" />
+                </PField>
+                <PField label="Send Mail token" hint="From your mail agent's setup info in ZeptoMail">
+                  <Secret value={apiToken} onChange={setApiToken} placeholder="Send Mail Token" />
+                </PField>
+                <PField label="Mail agent" hint="Optional — labels which agent these sends belong to">
+                  <Text value={mailAgent} onChange={setMailAgent} placeholder="e.g. compliance-reminders" mono />
+                </PField>
+              </>
+            ) : (
+              <>
+                <div className="pgrid__pair">
+                  <PField label="SMTP host" hint="ZeptoMail's fixed relay address">
+                    <PLocked value="smtp.zeptomail.com" />
+                  </PField>
+                  <PField label="Port" hint="587 with TLS, or 465 with SSL">
+                    <PLocked value="587 / 465" />
+                  </PField>
+                </div>
+                <div className="pgrid__pair">
+                  <PField label="Username" hint="ZeptoMail also accepts the From address instead">
+                    <PLocked value="emailapikey" />
+                  </PField>
+                  <PField label="Password" hint="The same Send Mail Token, from your mail agent">
+                    <Secret value={apiToken} onChange={setApiToken} placeholder="Send Mail Token" />
+                  </PField>
+                </div>
+              </>
+            )}
+
+            <div className="pgrid__pair">
+              <PField label="From name" hint="What clients see as the sender">
+                <Text value={fromName} onChange={setFromName} placeholder="e.g. Sharma & Associates" />
+              </PField>
+              <PField label="From address" hint="Must sit on a domain you've verified in ZeptoMail">
+                <Text value={fromAddress} onChange={setFromAddress} placeholder="compliance@yourfirm.com" mono />
+              </PField>
+            </div>
+            <PField label="Bounce address" hint="Optional — where ZeptoMail returns undeliverable mail">
+              <Text value={bounceAddress} onChange={setBounceAddress} placeholder="bounces@yourfirm.com" mono />
+            </PField>
+          </div>
+
+          <div className="providercfg__foot">
+            <span className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+              {s.zeptomail.configured
+                ? <>Sending through <b>ZeptoMail {s.zeptomail.method === "smtp" ? "SMTP relay" : "Send Mail API"}</b></>
+                : "Not yet set up"}
+            </span>
+            <span className="u-spacer" />
+            <button
+              type="button"
+              className="btn btn--sm"
+              disabled={!s.zeptomail.configured}
+              onClick={() => toast(`Test email sent to ${s.zeptomail.fromAddress}`)}
+            >
+              <Icon name="send" size={14} /> Send test email
+            </button>
+            {s.zeptomail.configured ? (
+              <button type="button" className="btn btn--sm" onClick={cancel}>Cancel</button>
+            ) : null}
+            <button type="button" className="btn btn--primary btn--sm" disabled={!valid} onClick={save}>
+              Save changes
+            </button>
+          </div>
+        </>
+      )}
+    </Card>
   );
 }
 

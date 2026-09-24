@@ -67,6 +67,37 @@ export interface Sender {
   fromEmail: string;
   replyTo: string;
   verified: boolean;
+  /** Which account each channel actually sends through. "kdk" is the shared
+   *  account every firm gets by default; switching to the firm's own
+   *  provider is what the rest of this file's WhatsApp-is-not-configurable
+   *  note used to rule out — now genuinely possible because the firm brings
+   *  its own Rampwin/ZeptoMail account rather than trying to reuse KDK's. */
+  waProvider: "kdk" | "rampwin";
+  emailProvider: "kdk" | "zeptomail";
+  /** A firm's own Rampwin channel — the WhatsApp Business number they already
+   *  set up in their own Rampwin account, pointed at by its API key and
+   *  channel ID. `connected` is set once saved. */
+  rampwin: {
+    displayName: string;
+    apiKey: string;
+    channelId: string;
+    connected: boolean;
+  };
+  /** A firm's own ZeptoMail mail agent, sent either through ZeptoMail's
+   *  Send Mail API or its SMTP relay — same token either way, ZeptoMail
+   *  just accepts it two different ways in. `configured` is set on save,
+   *  once the fields each method needs are filled; it's cleared the moment
+   *  any of them changes, since the last save is the only thing this app can
+   *  actually vouch for. */
+  zeptomail: {
+    method: "api" | "smtp";
+    apiToken: string;
+    mailAgent: string;
+    fromName: string;
+    fromAddress: string;
+    bounceAddress: string;
+    configured: boolean;
+  };
 }
 
 let sender: Sender = {
@@ -76,6 +107,13 @@ let sender: Sender = {
   fromEmail: "compliance@kdksoftware.com",
   replyTo: "compliance@kdksoftware.com",
   verified: true,
+  waProvider: "kdk",
+  emailProvider: "kdk",
+  rampwin: { displayName: "", apiKey: "", channelId: "", connected: false },
+  zeptomail: {
+    method: "api", apiToken: "", mailAgent: "", fromName: "", fromAddress: "", bounceAddress: "",
+    configured: false,
+  },
 };
 
 export function getSender(): Sender {

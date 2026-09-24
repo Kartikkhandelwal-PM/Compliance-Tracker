@@ -1844,6 +1844,27 @@ select.plain:disabled {
 .ltable td.u-right {
   text-align: right;
 }
+/* A sortable column header: same type as the plain th around it, just
+   clickable — no button chrome to say so, the pointer and hover colour do
+   that instead. The arrow only appears once the column is the active sort,
+   so an idle header doesn't imply an order that isn't applied yet. */
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 3px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.th-sort:hover { color: var(--ink); }
+.th-sort.is-active { color: var(--ink); }
 .ltable tbody td {
   padding: var(--s3);
   border-bottom: 1px solid var(--rule);
@@ -5550,6 +5571,208 @@ a.calpill.p-overdue:hover {
   max-width: 68ch;
 }
 
+/* ---- Connection method: a real radio group, styled as two cards ----------
+   A <select> would hide the second option until opened; the whole point of
+   showing both up front is that "recommended" only means something next to
+   the alternative it's being recommended over. */
+.conn {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+  /* Same cap as `.pgrid` below it — the choice and the fields it reveals
+     are one form, and their right edges should line up. */
+  max-width: 640px;
+}
+.conn__opt {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  background: var(--sheet);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.conn__opt:hover { border-color: var(--rule-strong); }
+
+/* A lighter-weight choice nested under an already-selected account — how
+   ZeptoMail is reached, not which account is in use. Full-size cards here
+   read as a second decision of the same importance as the one above it,
+   which is what made every option on the screen look interchangeable. */
+.pmethod {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+.pmethod__l {
+  font-size: var(--t-12);
+  font-weight: 600;
+  color: var(--ink-3);
+}
+.conn__opt.is-on {
+  border-color: var(--focus);
+  background: color-mix(in srgb, var(--focus) 6%, var(--sheet));
+}
+.conn__opt input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.conn__dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--rule-strong);
+  display: grid;
+  place-items: center;
+}
+.conn__opt.is-on .conn__dot { border-color: var(--focus); }
+.conn__dot::after {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--focus);
+  transform: scale(0);
+  transition: transform 0.12s ease;
+}
+.conn__opt.is-on .conn__dot::after { transform: scale(1); }
+.conn__opt > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.conn__title {
+  font-size: var(--t-13);
+  font-weight: 650;
+  color: var(--ink);
+}
+.conn__sub {
+  font-size: var(--t-11);
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+
+/* ---- A field whose value is worth hiding by default ----------------------
+   `.sinput` with room carved out on the right for the toggle, which sits on
+   top of it rather than beside it — a secret is still one field, not two. */
+.field-secret {
+  position: relative;
+}
+.field-secret .sinput {
+  padding-right: 38px;
+  font-family: var(--f-mono);
+  letter-spacing: 0.02em;
+}
+.field-secret__toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: none;
+  border-radius: var(--radius);
+  color: var(--ink-4);
+  cursor: pointer;
+}
+.field-secret__toggle:hover {
+  color: var(--ink-2);
+  background: var(--hover);
+}
+
+/* ---- Provider config footer: status on the left, actions on the right ---- */
+.providercfg__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin-top: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--rule);
+}
+.providercfg__foot b { color: var(--ink-2); }
+
+/* ---- Provider config fields -----------------------------------------------
+   A credential form reads worse dense than a normal settings row does: an
+   API key, an endpoint and a hint sentence all competing for a 230px column
+   is what wrapped mid-word and buried the hint under the label in the first
+   pass at this screen. So this is its own, wider rhythm — one field per row
+   by default, label and hint stacked instead of squeezed onto one baseline,
+   and only genuinely short, comparable fields (From name / From address)
+   opt into sitting side by side. */
+.pgrid {
+  display: flex;
+  flex-direction: column;
+  /* Tighter than a plain settings row's gap — the label-hint-input stack
+     inside each `.pfield` already reads as one unit, so the space between
+     units doesn't need to be as generous as the space inside one. The
+     earlier `--s4` here on top of `--s4` inside every field read as loose
+     rather than spacious. */
+  gap: var(--s3);
+  /* Capped, not stretched to the card's own width — a "Rampwin API key"
+     text box run out to 870px on a wide desktop reads as broken, not
+     generous. A form has its own natural width regardless of how wide the
+     card around it is. */
+  max-width: 640px;
+}
+.pgrid__pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s3) var(--s4);
+}
+.pfield {
+  display: flex;
+  flex-direction: column;
+  /* The label and its hint read as one caption, not two lines with room
+     between them — the gap that matters is the one before the input. */
+  gap: 1px;
+  min-width: 0;
+}
+.pfield__label {
+  font-size: var(--t-13);
+  font-weight: 650;
+  color: var(--ink);
+}
+.pfield__hint {
+  font-size: var(--t-12);
+  line-height: 1.35;
+  color: var(--ink-3);
+  margin: 0 0 4px;
+}
+.pfield .sinput {
+  height: 36px;
+  font-size: var(--t-14);
+}
+.pfield .field-secret .sinput { padding-right: 42px; }
+
+/* A locked field inside a provider form — same sunk fill as `.sinput.is-locked`
+   elsewhere, plus a lock glyph, because here it sits beside editable fields
+   that look identical otherwise; a settings page with nothing else to compare
+   it to didn't need the extra signal, a form mixing both does. */
+.field-locked {
+  position: relative;
+}
+.field-locked .sinput {
+  padding-right: 38px;
+}
+.field-locked__glyph {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--ink-4);
+  pointer-events: none;
+}
+
 /* The channel identity block — the brand mark at real size, because that is
    what a client recognises before they read a word of it. */
 .sbrand {
@@ -6085,6 +6308,27 @@ a.cprofile__ch:hover {
   color: var(--ink-2);
   margin-top: 4px;
   line-height: 1.5;
+}
+
+/* Tax liability. What's owed, not a penalty for being late, so it stays
+   neutral ink rather than the fee block's red — but it's still money at
+   risk, so it keeps the fee block's size rather than the settled, smaller
+   weight of a filed record below. */
+.obstate__tax {
+  padding: var(--s3) var(--s4) var(--s4);
+  border-top: 1px solid var(--rule);
+  background: var(--sunk);
+}
+.obstate__tax b {
+  display: block;
+  font-size: var(--t-22);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.obstate__tax select {
+  margin-top: 6px;
 }
 
 /* Filing record. Occupies the same slot as the fee block but reads as a settled

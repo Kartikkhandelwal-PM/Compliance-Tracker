@@ -26,6 +26,7 @@ import { Icon } from "../ui/Icon.tsx";
 import { ObligationDrawer } from "../ui/ObligationDrawer.tsx";
 
 type Filter = "all" | "open" | "overdue" | "filed" | "na";
+type SortCol = "fee" | "tax";
 
 export function RunDetailPage() {
   const { runId = "" } = useParams();
@@ -36,6 +37,16 @@ export function RunDetailPage() {
   const [filter, setFilter] = useState<Filter>("open");
   const [q, setQ] = useState("");
   const [owner, setOwner] = useState("all");
+  /* No sort selected: the table reads as a triage list (status, then fee).
+     Clicking "Late fee" or "Tax liability" replaces that with a plain sort
+     on that column — clicking the same header again flips direction, a new
+     header resets to descending, same as any sortable table. */
+  const [sortCol, setSortCol] = useState<SortCol | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const clickSort = (col: SortCol) => {
+    if (sortCol === col) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    else { setSortCol(col); setSortDir("desc"); }
+  };
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [peek, setPeek] = useState<Obligation | null>(null);
   /* Mark-filed is the one bulk action here that cannot be shrugged off: it
@@ -74,13 +85,26 @@ export function RunDetailPage() {
       });
     }
 
+    /* Default view groups by what needs doing first (Overdue, then Pending,
+       then Filed), with the highest late fee breaking ties within a group —
+       the sort a triage screen wants. Clicking a "Late fee" or "Tax
+       liability" header instead drops the status grouping and just orders
+       by that column, because the point of sorting on one is to see who's
+       biggest, not who's biggest among the overdue. */
+    if (sortCol) {
+      const key = sortCol === "fee" ? "exposure" : "taxLiability";
+      const mul = sortDir === "desc" ? -1 : 1;
+      return [...list].sort(
+        (a, b) => mul * (a[key] - b[key]) || ownerOf(a).name.localeCompare(ownerOf(b).name),
+      );
+    }
     const order: Record<FilingStatus, number> = { Overdue: 0, Pending: 1, Filed: 2, "Not Applicable": 3 };
     return [...list].sort(
       (a, b) => order[a.status] - order[b.status] ||
         b.exposure - a.exposure ||
         ownerOf(a).name.localeCompare(ownerOf(b).name),
     );
-  }, [items, filter, owner, q]);
+  }, [items, filter, owner, q, sortCol, sortDir]);
 
   if (items.length === 0) {
     return (
@@ -99,10 +123,15 @@ export function RunDetailPage() {
       else if (o.status === "Pending") a.pending++;
       else a.na++;
       a.exposure += o.exposure;
+      a.taxLiability += o.taxLiability;
       return a;
     },
-    { filed: 0, pending: 0, overdue: 0, na: 0, exposure: 0 },
+    { filed: 0, pending: 0, overdue: 0, na: 0, exposure: 0, taxLiability: 0 },
   );
+  /* ROC and GSTR-1-family compliances carry no tax liability of their own —
+     the penalty is the whole risk. ITR, TDS and GSTR-3B/9 do, so the column
+     and its sort option are only offered where they'd have anything in them. */
+  const hasTaxLiability = counts.taxLiability > 0;
 
   const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const toggleAll = () =>
@@ -120,13 +149,18 @@ export function RunDetailPage() {
   const idLabel = ownerIdOf(first).label;
 
   const exportXlsxFile = async () => {
-    const headers = ["Client", idLabel, "State", "Form", "Period", "Due date", "Status", "Status source", "Acknowledgement", "Filed on", "Recorded by", "Days overdue", "Estimated penalty", "Owner"];
+    const headers = [
+      "Client", idLabel, "State", "Form", "Period", "Due date", "Status", "Status source",
+      "Acknowledgement", "Filed on", "Recorded by", "Days overdue", "Estimated penalty",
+      ...(hasTaxLiability ? ["Estimated tax liability"] : []), "Owner",
+    ];
     const dataRows = rows.map((o) => {
       const c = ownerOf(o);
       return [
         c.name, ownerIdOf(o).value, c.state, o.form, o.periodLabel, o.dueDate,
         o.status, o.basis, o.arn ?? "", o.filedOn ?? "", o.filedBy ?? "",
-        o.daysOverdue, o.exposure, staffOf(o.assigneeId).name,
+        o.daysOverdue, o.exposure,
+        ...(hasTaxLiability ? [o.taxLiability] : []), staffOf(o.assigneeId).name,
       ];
     });
     await exportXlsx({
@@ -161,7 +195,18 @@ export function RunDetailPage() {
         <Stat label="Overdue" value={counts.overdue} tone={counts.overdue ? "overdue" : undefined} sub="past due, not filed" />
         <Stat label="Pending" value={counts.pending} sub="not yet due" />
         <Stat label="Filed" value={counts.filed} tone="filed" sub={`${Math.round((counts.filed / Math.max(1, counts.filed + counts.pending + counts.overdue)) * 100)}% of the run`} />
-        <Stat label="At risk" value={inrShort(counts.exposure)} tone={counts.exposure ? "overdue" : undefined} sub="estimated late fees" />
+        <Stat
+          label="At risk"
+          value={inrShort(counts.exposure + counts.taxLiability)}
+          tone={counts.exposure || counts.taxLiability ? "overdue" : undefined}
+          /* ROC and GSTR-1-family runs carry no tax liability of their own —
+             for those this collapses back to exactly what it said before tax
+             liability existed, rather than a "· ₹0 tax liability" that means
+             nothing on this compliance. */
+          sub={counts.taxLiability
+            ? `${inrShort(counts.exposure)} late fee · ${inrShort(counts.taxLiability)} tax liability`
+            : "estimated late fees"}
+        />
         <Stat
           label="Not applicable"
           value={counts.na}
@@ -217,7 +262,26 @@ export function RunDetailPage() {
               <th>Source</th>
               <th>Reminder</th>
               <th className="u-right">Days</th>
-              <th className="u-right">At risk</th>
+              <th className="u-right">
+                <button
+                  type="button"
+                  className={`th-sort${sortCol === "fee" ? " is-active" : ""}`}
+                  onClick={() => clickSort("fee")}
+                >
+                  Late fee {sortCol === "fee" ? (sortDir === "desc" ? "↓" : "↑") : null}
+                </button>
+              </th>
+              {hasTaxLiability ? (
+                <th className="u-right">
+                  <button
+                    type="button"
+                    className={`th-sort${sortCol === "tax" ? " is-active" : ""}`}
+                    onClick={() => clickSort("tax")}
+                  >
+                    Tax liability {sortCol === "tax" ? (sortDir === "desc" ? "↓" : "↑") : null}
+                  </button>
+                </th>
+              ) : null}
               <th style={{ width: 30 }} />
             </tr>
           </thead>
@@ -265,6 +329,11 @@ export function RunDetailPage() {
                   <td className="u-right num" style={{ color: o.exposure ? "var(--st-overdue-fg)" : "var(--ink-4)", fontWeight: o.exposure ? 600 : 400 }}>
                     {o.exposure ? `₹${inr(o.exposure)}` : "—"}
                   </td>
+                  {hasTaxLiability ? (
+                    <td className="u-right num" style={{ color: o.taxLiability ? "var(--ink)" : "var(--ink-4)" }}>
+                      {o.taxLiability ? `₹${inr(o.taxLiability)}` : "—"}
+                    </td>
+                  ) : null}
                   <td className="u-faint"><Icon name="chevronRight" size={14} /></td>
                 </tr>
               );

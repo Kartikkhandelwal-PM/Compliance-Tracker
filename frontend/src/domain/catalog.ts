@@ -171,6 +171,28 @@ export const DEFS: ComplianceDef[] = [
     },
     clientFacing: true,
   },
+  /* Not a return with a due date of its own — an optional correction window
+     on the GSTR-1 just filed. It opens once GSTR-1 is filed (or its due
+     date passes, whichever is later) and closes the moment GSTR-3B is filed
+     for the same period, so the date tracked here is GSTR-3B's, not a
+     separate statutory deadline. Three variants for the same reason GSTR-3B
+     has three: the date the window closes depends on which GSTR-3B the
+     taxpayer files. */
+  {
+    code: "GSTR-1A",
+    head: "GST",
+    form: "GSTR-1A",
+    description: "Optional amendment to outward supplies already reported in GSTR-1",
+    frequency: "Monthly",
+    dueRule: "Opens once GSTR-1 is filed; closes on the 20th when GSTR-3B is filed",
+    applicability: "Regular monthly GSTR-1 filers who need to correct or add invoices before GSTR-3B",
+    lateFee: {
+      kind: "flat",
+      amount: 0,
+      note: "No late fee under GST law — GSTR-1A is an optional correction facility, not a statutory return. Skipping it only means GSTR-3B is filed without those corrections.",
+    },
+    clientFacing: true,
+  },
   {
     code: "GSTR-3B",
     head: "GST",
@@ -210,6 +232,26 @@ export const DEFS: ComplianceDef[] = [
     lateFee: { kind: "flat", amount: 0, note: "No late fee under GST law — IFF is a facility, not a statutory return. Skipping it only delays those invoices reaching the recipient's books until the quarterly GSTR-1." },
     clientFacing: true,
   },
+  /* Same correction window as GSTR-1A, timed to this category's own GSTR-3B
+     instead — QRMP taxpayers file GSTR-1 quarterly, so the window to fix it
+     is also quarterly. Listed before its GSTR-3B: the window opens when
+     GSTR-1 is filed and closes when GSTR-3B is, so it belongs ahead of the
+     return that ends it, not after. */
+  {
+    code: "GSTR-1A-QRMP-A",
+    head: "GST",
+    form: "GSTR-1A (QRMP · Cat A)",
+    description: "Optional amendment to outward supplies already reported in the quarterly GSTR-1",
+    frequency: "Quarterly",
+    dueRule: "Opens once the quarterly GSTR-1 is filed; closes on the 22nd when GSTR-3B is filed",
+    applicability: "QRMP taxpayers in Category A states/UTs who need to correct or add invoices before GSTR-3B",
+    lateFee: {
+      kind: "flat",
+      amount: 0,
+      note: "No late fee under GST law — GSTR-1A is an optional correction facility, not a statutory return. Skipping it only means GSTR-3B is filed without those corrections.",
+    },
+    clientFacing: true,
+  },
   {
     code: "GSTR-3B-QRMP-A",
     head: "GST",
@@ -219,6 +261,21 @@ export const DEFS: ComplianceDef[] = [
     dueRule: "22nd of the month following the quarter",
     applicability: "QRMP taxpayers in Category A states/UTs",
     lateFee: { kind: "perDay", amount: 50, nilAmount: 20, cap: 5000, note: "Late fee plus interest as applicable." },
+    clientFacing: true,
+  },
+  {
+    code: "GSTR-1A-QRMP-B",
+    head: "GST",
+    form: "GSTR-1A (QRMP · Cat B)",
+    description: "Optional amendment to outward supplies already reported in the quarterly GSTR-1",
+    frequency: "Quarterly",
+    dueRule: "Opens once the quarterly GSTR-1 is filed; closes on the 24th when GSTR-3B is filed",
+    applicability: "QRMP taxpayers in Category B states/UTs who need to correct or add invoices before GSTR-3B",
+    lateFee: {
+      kind: "flat",
+      amount: 0,
+      note: "No late fee under GST law — GSTR-1A is an optional correction facility, not a statutory return. Skipping it only means GSTR-3B is filed without those corrections.",
+    },
     clientFacing: true,
   },
   {
@@ -418,7 +475,7 @@ export const DEFS: ComplianceDef[] = [
   {
     code: "24Q",
     head: "TDS",
-    form: "Form 24Q",
+    form: "Form 138 (24Q)",
     description: "TDS return (salaries)",
     frequency: "Quarterly",
     dueRule: "31 Jul / 31 Oct / 31 Jan / 31 May",
@@ -426,10 +483,33 @@ export const DEFS: ComplianceDef[] = [
     lateFee: { kind: "perDay", amount: 200, cap: "tdsAmount", note: "₹200/day u/s 234E, capped at the TDS amount; penalty u/s 271H may also apply." },
     clientFacing: false,
   },
+  /* A correction statement fixes errors in the quarter's original return —
+     wrong PAN, a missed deductee, a challan mismatch — the same relationship
+     GSTR-1A has to GSTR-1. The window is much longer and doesn't reset each
+     quarter, though: two years from the end of the financial year the
+     original return belongs to, for every quarter in it alike. Effective
+     1 April 2026 the window was cut from six years to two (it was six for
+     anything filed before that date). Tagged with a due date years past the
+     quarter itself, the same way `ITR-U` is — see the note there. */
+  {
+    code: "24Q-CORR",
+    head: "TDS",
+    form: "Form 138 (24Q) Correction",
+    description: "Correction statement for an already-filed 24Q",
+    frequency: "Quarterly",
+    dueRule: "Within 2 years of the end of the financial year the original return belongs to",
+    applicability: "Employers who need to correct an already-filed 24Q — a wrong PAN, a missed deductee, a challan mismatch",
+    lateFee: {
+      kind: "flat",
+      amount: 0,
+      note: "No separate fee under s.234E for the correction itself — that applies only to the original return's own delay. But once the two-year window closes, the correction can no longer be filed at all, and the error stays live in the deductee's Form 26AS/16.",
+    },
+    clientFacing: false,
+  },
   {
     code: "26Q",
     head: "TDS",
-    form: "Form 26Q",
+    form: "Form 140 (26Q)",
     description: "TDS return (non-salary payments)",
     frequency: "Quarterly",
     dueRule: "31 Jul / 31 Oct / 31 Jan / 31 May",
@@ -438,9 +518,24 @@ export const DEFS: ComplianceDef[] = [
     clientFacing: false,
   },
   {
+    code: "26Q-CORR",
+    head: "TDS",
+    form: "Form 140 (26Q) Correction",
+    description: "Correction statement for an already-filed 26Q",
+    frequency: "Quarterly",
+    dueRule: "Within 2 years of the end of the financial year the original return belongs to",
+    applicability: "Deductors who need to correct an already-filed 26Q",
+    lateFee: {
+      kind: "flat",
+      amount: 0,
+      note: "No separate fee under s.234E for the correction itself. Once the two-year window closes, the correction can no longer be filed at all.",
+    },
+    clientFacing: false,
+  },
+  {
     code: "27Q",
     head: "TDS",
-    form: "Form 27Q",
+    form: "Form 144 (27Q)",
     description: "TDS return (payments to non-residents)",
     frequency: "Quarterly",
     dueRule: "31 Jul / 31 Oct / 31 Jan / 31 May",
@@ -449,14 +544,44 @@ export const DEFS: ComplianceDef[] = [
     clientFacing: false,
   },
   {
+    code: "27Q-CORR",
+    head: "TDS",
+    form: "Form 144 (27Q) Correction",
+    description: "Correction statement for an already-filed 27Q",
+    frequency: "Quarterly",
+    dueRule: "Within 2 years of the end of the financial year the original return belongs to",
+    applicability: "Deductors who need to correct an already-filed 27Q",
+    lateFee: {
+      kind: "flat",
+      amount: 0,
+      note: "No separate fee under s.234E for the correction itself. Once the two-year window closes, the correction can no longer be filed at all.",
+    },
+    clientFacing: false,
+  },
+  {
     code: "27EQ",
     head: "TDS",
-    form: "Form 27EQ",
+    form: "Form 143 (27EQ)",
     description: "TCS return",
     frequency: "Quarterly",
     dueRule: "31 Jul / 31 Oct / 31 Jan / 31 May",
     applicability: "Collectors of tax at source",
     lateFee: { kind: "perDay", amount: 200, cap: "tdsAmount", note: "₹200/day u/s 234E, capped at the TCS amount." },
+    clientFacing: false,
+  },
+  {
+    code: "27EQ-CORR",
+    head: "TDS",
+    form: "Form 143 (27EQ) Correction",
+    description: "Correction statement for an already-filed 27EQ",
+    frequency: "Quarterly",
+    dueRule: "Within 2 years of the end of the financial year the original return belongs to",
+    applicability: "Collectors who need to correct an already-filed 27EQ",
+    lateFee: {
+      kind: "flat",
+      amount: 0,
+      note: "No separate fee under s.234E for the correction itself. Once the two-year window closes, the correction can no longer be filed at all.",
+    },
     clientFacing: false,
   },
 
@@ -621,12 +746,15 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
 
   return [
     ...monthlyFollowing(fyStart, "GSTR-1", 11),
+    ...monthlyFollowing(fyStart, "GSTR-1A", 20),
     ...monthlyFollowing(fyStart, "GSTR-3B", 20),
     ...monthlyFollowing(fyStart, "GSTR-7", 10),
     ...monthlyFollowing(fyStart, "GSTR-8", 10),
     ...quarterlyFollowing(fyStart, "GSTR-1-QRMP", 13),
     ...iffMonths(fyStart, "IFF", 13),
+    ...quarterlyFollowing(fyStart, "GSTR-1A-QRMP-A", 22),
     ...quarterlyFollowing(fyStart, "GSTR-3B-QRMP-A", 22),
+    ...quarterlyFollowing(fyStart, "GSTR-1A-QRMP-B", 24),
     ...quarterlyFollowing(fyStart, "GSTR-3B-QRMP-B", 24),
     ...quarterlyFollowing(fyStart, "CMP-08", 18),
     once("GSTR-4", fyStart, 4, 30, prevKey, prevFY, fyStart),
@@ -671,6 +799,15 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
         [fyStart, 7, 31], [fyStart, 10, 31], [fyStart + 1, 1, 31], [fyStart + 1, 5, 31],
       ]),
     ),
+    /* All four quarters of a financial year share one correction deadline —
+       two years from the end of that FY, not from each quarter's own due
+       date — so the same date is repeated four times, once per quarter's
+       occurrence, rather than varying by quarter the way the originals do. */
+    ...(["24Q-CORR", "26Q-CORR", "27Q-CORR", "27EQ-CORR"] as const).flatMap((code) =>
+      quarterlyFixed(fyStart, code, [
+        [fyStart + 3, 3, 31], [fyStart + 3, 3, 31], [fyStart + 3, 3, 31], [fyStart + 3, 3, 31],
+      ]),
+    ),
 
     once("AOC-4", fyStart, 10, 29, prevKey, prevFY, fyStart),
     once("MGT-7", fyStart, 11, 29, prevKey, prevFY, fyStart),
@@ -703,6 +840,13 @@ export const YEAR_AHEAD = FY_START + 1;
 
 /** The full year-picker list offered throughout the product, oldest first. */
 export const FY_OPTIONS: number[] = [...SEEDED_FYS, YEAR_AHEAD];
+
+/** Which original form each TDS/TCS correction statement corrects — the
+ *  engine uses it to find the sibling obligation a correction's eligibility
+ *  depends on, the UI uses it to know when a not-yet-open one is due to. */
+export const CORR_BASE_CODE: Record<string, string> = {
+  "24Q-CORR": "24Q", "26Q-CORR": "26Q", "27Q-CORR": "27Q", "27EQ-CORR": "27EQ",
+};
 
 /** Every offered year's statutory calendar, precomputed once. */
 export const OCCURRENCES_BY_FY: Record<number, Occurrence[]> = Object.fromEntries(

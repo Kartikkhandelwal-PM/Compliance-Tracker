@@ -14,41 +14,100 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useObligations } from "../ui/app-state.tsx";
 import {
-  DEF_BY_CODE, FY_OPTIONS, FY_START, OCCURRENCES_BY_FY, SEEDED_FYS, fyLabel, headClass,
+  CORR_BASE_CODE, DEF_BY_CODE, FY_OPTIONS, FY_START, OCCURRENCES_BY_FY, SEEDED_FYS, fyLabel, headClass,
 } from "../domain/catalog.ts";
-import { TODAY, countdown, fmtLong, inrShort } from "../domain/dates.ts";
+import { TODAY, countdown, fmtLong, inrShort, iso } from "../domain/dates.ts";
 import { Countdown, Empty, PageHead, Pbar, StatusTag } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
+
+/** Compliances whose window stays open for years, not one — ITR-U (up to
+ *  48 months) and the TDS correction statements (2 years). At any moment
+ *  several origin years' windows are open at once (this AY's, and the one
+ *  before it, and the one before that...), all equally live — "due this
+ *  specific year" would only ever catch the single cohort closing that
+ *  year and hide the rest, which are just as open and just as actionable.
+ *  So instead of a year picker, every currently-open origin year shows
+ *  together; the engine already stops generating one the moment its window
+ *  closes (see `lookbackFYs`), so this list is never anything to page
+ *  through, just whatever is still live right now. */
+const LONG_TAIL_CODES = new Set(["ITR-U", "24Q-CORR", "26Q-CORR", "27Q-CORR", "27EQ-CORR"]);
+
+/** The current book year's own close — 31 March of the year after
+ *  `FY_START`. Doubles as the cutoff for whether a not-yet-open long-tail
+ *  period is worth previewing at all: one due to open before this FY is
+ *  out is worth a "coming soon" row; one that only opens once the NEXT FY
+ *  starts (24Q-CORR's Q4, whose original isn't even due till 31 May) isn't
+ *  — there is a whole year of nothing to say about it before that's true. */
+const CURRENT_FY_END = iso(FY_START + 1, 3, 31);
 
 export function ComplianceDetailPage() {
   const { code = "" } = useParams();
   const nav = useNavigate();
   const obligations = useObligations();
   const def = DEF_BY_CODE[decodeURIComponent(code)];
+  const longTail = def ? LONG_TAIL_CODES.has(def.code) : false;
   const [fy, setFy] = useState(FY_START);
   const seeded = SEEDED_FYS.includes(fy);
 
-  /* Every occurrence of this compliance, with its live counts. For the year
-     ahead there is no client book yet, so periods are drawn straight from
-     the statutory calendar with every count left at zero — the same
-     two-layer approach Calendar uses. */
+  /* Every occurrence of this compliance due inside the picked year's own
+     Apr–Mar span — by due date, not by the `fy` tag, so a compliance tagged
+     to the year it corrects rather than the year it's due (see `longTail`
+     below) still lands under the year it's actually due in when it does
+     have exactly one such year. For the year ahead there is no client book
+     yet, so periods fall back to the statutory calendar with every count
+     left at zero — the same two-layer approach Calendar uses — but only
+     once there's genuinely no real obligation to show instead. */
   const periods = useMemo(() => {
     if (!def) return [];
-    if (!seeded) {
-      return OCCURRENCES_BY_FY[fy]
-        .filter((occ) => occ.defCode === def.code)
-        .map((occ) => ({
-          runId: occ.runId, periodLabel: occ.periodLabel, dueDate: occ.dueDate,
-          filed: 0, pending: 0, overdue: 0, na: 0, fees: 0,
-        }))
+    if (longTail) {
+      const m = new Map<string, {
+        runId: string; periodLabel: string; dueDate: string;
+        filed: number; pending: number; overdue: number; na: number; fees: number;
+      }>();
+      for (const o of obligations) {
+        if (o.defCode !== def.code) continue;
+        let p = m.get(o.runId);
+        if (!p) {
+          p = {
+            runId: o.runId, periodLabel: o.periodLabel, dueDate: o.dueDate,
+            filed: 0, pending: 0, overdue: 0, na: 0, fees: 0,
+          };
+          m.set(o.runId, p);
+        }
+        if (o.status === "Filed") p.filed++;
+        else if (o.status === "Pending") p.pending++;
+        else if (o.status === "Overdue") { p.overdue++; p.fees += o.exposure; }
+        else p.na++;
+      }
+      /* A period where every client came back Not Applicable never had
+         anything to act on yet — for ITR-U that's a not-yet-started
+         assessment year, for a TDS correction it's a quarter whose original
+         hasn't been filed yet (see `tdsCorrectionApplicability` /
+         `itrUApplicability` in rules.ts). Whether it's worth a "coming
+         soon" row depends on how far off that still is: ITR-U's not-yet-open
+         year always opens right as this FY closes, and a quarter's
+         correction opens once its original is due — both worth flagging
+         when that's still within this FY. 24Q-CORR's Q4 is the one case
+         where it isn't: that original isn't even due till 31 May, a good
+         two months into the NEXT FY, so there's nothing to preview yet. */
+      const opensWithinThisFY = (p: { periodLabel: string }) => {
+        if (def.code === "ITR-U") return true;
+        const baseCode = CORR_BASE_CODE[def.code];
+        const original = obligations.find((o) => o.defCode === baseCode && o.periodLabel === p.periodLabel);
+        return original !== undefined && original.dueDate <= CURRENT_FY_END;
+      };
+      return [...m.values()]
+        .filter((p) => p.filed > 0 || p.pending > 0 || p.overdue > 0 || opensWithinThisFY(p))
         .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     }
+    const from = `${fy}-04-01`;
+    const to = `${fy + 1}-03-31`;
     const m = new Map<string, {
       runId: string; periodLabel: string; dueDate: string;
       filed: number; pending: number; overdue: number; na: number; fees: number;
     }>();
     for (const o of obligations) {
-      if (o.defCode !== def.code || o.fy !== fy) continue;
+      if (o.defCode !== def.code || o.dueDate < from || o.dueDate > to) continue;
       let p = m.get(o.runId);
       if (!p) {
         p = {
@@ -62,8 +121,18 @@ export function ComplianceDetailPage() {
       else if (o.status === "Overdue") { p.overdue++; p.fees += o.exposure; }
       else p.na++;
     }
-    return [...m.values()].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  }, [obligations, def, fy, seeded]);
+    if (m.size > 0) return [...m.values()].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    if (!seeded) {
+      return OCCURRENCES_BY_FY[fy]
+        .filter((occ) => occ.defCode === def.code && occ.dueDate >= from && occ.dueDate <= to)
+        .map((occ) => ({
+          runId: occ.runId, periodLabel: occ.periodLabel, dueDate: occ.dueDate,
+          filed: 0, pending: 0, overdue: 0, na: 0, fees: 0,
+        }))
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    }
+    return [];
+  }, [obligations, def, fy, seeded, longTail]);
 
   const totals = useMemo(() => {
     let filed = 0, pending = 0, overdue = 0, fees = 0, clients = 0;
@@ -93,16 +162,25 @@ export function ComplianceDetailPage() {
         note={<>{def.description}</>}
         aside={
           <div className="u-row">
-            <select
-              className="plain"
-              value={fy}
-              onChange={(e) => setFy(Number(e.target.value))}
-              aria-label="Financial year"
-            >
-              {FY_OPTIONS.map((y) => (
-                <option key={y} value={y}>{fyLabel(y)}</option>
-              ))}
-            </select>
+            {longTail ? (
+              <span
+                className="tag tag--outline"
+                title="This compliance's window stays open for years, not one, so every year still open shows together instead of a single year at a time."
+              >
+                All years
+              </span>
+            ) : (
+              <select
+                className="plain"
+                value={fy}
+                onChange={(e) => setFy(Number(e.target.value))}
+                aria-label="Financial year"
+              >
+                {FY_OPTIONS.map((y) => (
+                  <option key={y} value={y}>{fyLabel(y)}</option>
+                ))}
+              </select>
+            )}
             <Link to="/compliances" className="btn btn--sm">
               <Icon name="chevronLeft" size={14} /> All compliances
             </Link>
@@ -156,7 +234,11 @@ export function ComplianceDetailPage() {
       </div>
 
       <div className="stats" style={{ margin: "var(--s4) 0" }}>
-        <Stat2 label="Dates this year" value={periods.length} sub={fyLabel(fy)} />
+        <Stat2
+          label={longTail ? "Open periods" : "Dates this year"}
+          value={periods.length}
+          sub={longTail ? "across every seeded year" : fyLabel(fy)}
+        />
         <Stat2 label="Clients it applies to" value={totals.clients.toLocaleString("en-IN")} sub="at its widest period" />
         <Stat2 label="Filed" value={totals.filed.toLocaleString("en-IN")} sub="across all periods" tone="filed" />
         <Stat2
@@ -185,6 +267,9 @@ export function ComplianceDetailPage() {
           <tbody>
             {periods.map((p) => {
               const past = p.dueDate < TODAY;
+              /* longTail-only: kept as a preview (see `opensWithinThisFY`
+                 above) but still nothing to act on yet. */
+              const notYetOpen = longTail && p.filed === 0 && p.pending === 0 && p.overdue === 0;
               return (
                 /* The whole row navigates. Previously only the period text and
                    the chevron were links, so clicking the due date, the
@@ -192,7 +277,7 @@ export function ComplianceDetailPage() {
                    most of the row's width. */
                 <tr
                   key={p.runId}
-                  className="is-clickable"
+                  className={`is-clickable${notYetOpen ? " is-muted" : ""}`}
                   onClick={() => nav(`/runs/${encodeURIComponent(p.runId)}`)}
                 >
                   <td>
@@ -206,9 +291,18 @@ export function ComplianceDetailPage() {
                   </td>
                   <td className="num">{fmtLong(p.dueDate)}</td>
                   <td>
-                    {p.overdue > 0
-                      ? <StatusTag status="Overdue" label={countdown(p.dueDate)} />
-                      : <Countdown due={p.dueDate} />}
+                    {notYetOpen ? (
+                      <span
+                        className="tag tag--outline"
+                        title="Nothing to act on yet — the return this would correct hasn't been filed for this period. It'll open on its own once it has."
+                      >
+                        Not open yet
+                      </span>
+                    ) : p.overdue > 0 ? (
+                      <StatusTag status="Overdue" label={countdown(p.dueDate)} />
+                    ) : (
+                      <Countdown due={p.dueDate} />
+                    )}
                   </td>
                   <td>
                     <Pbar filed={p.filed} pending={p.pending} overdue={p.overdue} />
@@ -225,9 +319,15 @@ export function ComplianceDetailPage() {
           </tbody>
         </table>
         {periods.length === 0 ? (
-          <Empty title="No dates in this financial year">
-            This compliance has no occurrences seeded for {fyLabel(fy)}.
-          </Empty>
+          longTail ? (
+            <Empty title="No open periods">
+              No client currently has this one open in any seeded year.
+            </Empty>
+          ) : (
+            <Empty title="No dates in this financial year">
+              This compliance has no occurrences seeded for {fyLabel(fy)}.
+            </Empty>
+          )
         ) : (
           <div className="sheet__foot">Pick a period to see every client on that date and where each one stands.</div>
         )}

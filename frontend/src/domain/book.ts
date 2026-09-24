@@ -45,6 +45,23 @@ function rng(seed: number) {
   };
 }
 
+/** Stable 0–1 hash of a string — unlike `rng`, not seeded or stateful: the
+ *  same id always gives the same number, so a decision keyed off an owner's
+ *  or a compliance's id (which client has "the kind of book that sometimes
+ *  needs a correction filed", which override fires, which day a filing
+ *  lands) stays put across renders instead of reshuffling every time.
+ *  Exported so both the engine (simulated filing history) and the rule
+ *  engine (who a rarely-used compliance even applies to) can read off the
+ *  same stable id space without importing each other. */
+export function h(s: string): number {
+  let x = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    x ^= s.charCodeAt(i);
+    x = Math.imul(x, 16777619);
+  }
+  return (x >>> 0) / 4294967296;
+}
+
 export const STAFF: Staff[] = [
   { id: "s1", name: "Kartik Khandelwal", role: "Partner", initials: "KK" },
   { id: "s2", name: "Rohit Agarwal", role: "Senior", initials: "RA" },

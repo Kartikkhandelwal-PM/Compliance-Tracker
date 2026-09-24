@@ -12,45 +12,55 @@ import type {
   Channel, Client, ComplianceOverride, DeliveryStatus, FilingRun, FilingStatus,
   FirmProfile, Head, NotificationSettings, Obligation, Occurrence, OutboxEntry, Party,
   RecordType, ReminderSettings, ReminderStage, ScheduleStep, ScheduledSend,
-  SenderProfile, StatusBasis, StepKind,
+  SenderProfile, StatusBasis, StepKind, TaxBasis, TdsDeductor,
 } from "./types.ts";
 import {
   CLIENTS, CLIENT_BY_ID, GST_ENTITIES, GST_ENTITY_BY_ID, TDS_DEDUCTORS,
-  TDS_DEDUCTOR_BY_ID, staffOf,
+  TDS_DEDUCTOR_BY_ID, h, staffOf,
 } from "./book.ts";
-import { DEF_BY_CODE, FY_START, OCCURRENCES_BY_FY, SEEDED_FYS } from "./catalog.ts";
+import { CORR_BASE_CODE, DEF_BY_CODE, FY_START, SEEDED_FYS, occurrencesForFY } from "./catalog.ts";
 import type { Applicable, DerivedItrDecision, ExposureContext } from "./rules.ts";
 import {
   applicableClientCompliances, applicableDeductorCompliances,
   applicableGstCompliances, estimateExposure, estimatedTax,
-  itrUApplicability, revisedReturnApplicability,
+  itrUApplicability, needsCorrections, revisedReturnApplicability, tdsCorrectionApplicability,
 } from "./rules.ts";
 import {
   TODAY, addDays, dateOf, diffDays, inQuietHours, iso, nextSendableAt, stamp,
 } from "./dates.ts";
+import type { Sender } from "./messages.ts";
 import { compose, getSender, setSender } from "./messages.ts";
 
-/* Stable 0–1 hash so simulated history never shifts between renders. */
-function h(s: string): number {
-  let x = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    x ^= s.charCodeAt(i);
-    x = Math.imul(x, 16777619);
-  }
-  return (x >>> 0) / 4294967296;
-}
-
-/** One financial year's occurrences, grouped by compliance code. Built fresh
- *  per year rather than once globally, now that `build()` walks every seeded
- *  year rather than only the current one. */
+/** One financial year's occurrences, grouped by compliance code. Computed
+ *  fresh from the recurring rules rather than read off the precomputed
+ *  `OCCURRENCES_BY_FY` table — that table only covers the years offered in
+ *  the year picker (`FY_OPTIONS`), and this also has to work for the older,
+ *  unlisted origin years `itrCorrectionLookback` below reaches back into. */
 function occByDefFor(fy: number): Map<string, Occurrence[]> {
   const map = new Map<string, Occurrence[]>();
-  for (const o of OCCURRENCES_BY_FY[fy]) {
+  for (const o of occurrencesForFY(fy)) {
     const list = map.get(o.defCode);
     if (list) list.push(o);
     else map.set(o.defCode, [o]);
   }
   return map;
+}
+
+/** How far before the seeded client book a compliance whose window is
+ *  `dueYearOffset` years long can still have one open — older than that and
+ *  every origin year's window has necessarily already closed. Computed from
+ *  `TODAY` rather than a fixed count, so the range itself rolls forward on
+ *  its own as years pass: an origin year drops out the moment its window
+ *  closes, with nothing to bump by hand the way `HISTORY_YEARS` needs. A
+ *  capped loop, not an unbounded one — due dates only get older going
+ *  backward, so the first closed year means every year before it is too. */
+function lookbackFYs(dueYearOffset: number): number[] {
+  const out: number[] = [];
+  for (let fy = SEEDED_FYS[0] - 1; fy >= SEEDED_FYS[0] - 15; fy--) {
+    if (iso(fy + dueYearOffset, 3, 31) < TODAY) break;
+    out.push(fy);
+  }
+  return out;
 }
 
 function reminderStageFor(status: FilingStatus, dueDate: string, clientFacing: boolean): ReminderStage {
@@ -126,6 +136,51 @@ function exposureContextFor(ownerType: RecordType, ownerId: string): ExposureCon
     turnover: c.profile.turnover, totalIncome: c.profile.totalIncome,
     tdsPerQuarter: 0, monthlyPayroll: 0, estimatedTax: estimatedTax(c.profile),
   };
+}
+
+/** The label shown for each of TDS's three ways of arriving at a tax
+ *  liability figure, and the order they're offered in. */
+export const TAX_BASIS_LABEL: Record<TaxBasis, string> = {
+  books: "From books (manual input)",
+  challan: "From challan payment",
+  quarterCompare: "As per previous-quarter liability comparison",
+};
+
+/** TDS tax liability, by basis.
+ *
+ *  Placeholder until KDK supplies each of the three figures directly — none
+ *  of them exist as real, separate numbers in this prototype's data, only
+ *  one flat `tdsPerQuarter` average per deductor. Each basis is that one
+ *  number varied by a stable per-obligation factor, so switching basis in
+ *  the drawer visibly changes the figure instead of silently doing nothing.
+ *  Swap the three branches for real reads once that integration exists;
+ *  nothing that calls this needs to change. */
+function tdsLiabilityFor(id: string, tdsPerQuarter: number, basis: TaxBasis): number {
+  if (basis === "books") return Math.round(tdsPerQuarter);
+  if (basis === "challan") return Math.round(tdsPerQuarter * (0.85 + h(`${id}|challan`) * 0.3));
+  return Math.round(tdsPerQuarter * (0.8 + h(`${id}|qcompare`) * 0.4));
+}
+
+/** GSTR-3B (all three cadences) and GSTR-9 carry a real tax liability — net
+ *  GST payable after ITC — unlike GSTR-1 and its correction, which are
+ *  informational filings with nothing to pay. How many of a year's periods
+ *  each defCode covers, for slicing the annual figure down to one period's
+ *  share. */
+const GST_LIABILITY_PERIODS: Record<string, number> = {
+  "GSTR-3B": 12, "GSTR-3B-QRMP-A": 4, "GSTR-3B-QRMP-B": 4, "GSTR-9": 1,
+};
+
+/** GST tax liability, one period's share of an annual estimate.
+ *
+ *  Placeholder until KDK supplies the real net-payable figure — this data
+ *  only has turnover to work from, not actual outward tax and ITC, so it's
+ *  modelled as a stable per-entity effective rate (6-10% of turnover,
+ *  roughly what net GST liability runs to after ITC for a typical
+ *  business) split evenly across the year's periods. Swap for a real read
+ *  once that integration exists; nothing that calls this needs to change. */
+function gstLiabilityFor(id: string, turnover: number, periodsPerYear: number): number {
+  const netRate = 0.06 + h(`${id}|gstrate`) * 0.04;
+  return Math.round((turnover * netRate) / periodsPerYear);
 }
 
 /** Every screen that needs a record's name/contact/owner reaches it through
@@ -248,7 +303,19 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
         }
 
         const effOverdue = status === "Overdue" ? daysOverdue : 0;
-        const exp = estimateExposure(def, effOverdue, exposureContextFor(ownerType, owner.id));
+        const ctx = exposureContextFor(ownerType, owner.id);
+        const exp = estimateExposure(def, effOverdue, ctx);
+        /* Only TDS carries a choice of basis — ITR's figure and GST's are
+           each a single formula (estimatedTax / gstLiabilityFor). GSTR-1
+           and its correction stay at 0: nothing is paid with either, the
+           period's whole liability sits on that period's GSTR-3B instead. */
+        const taxBasis: TaxBasis | undefined = ownerType === "TdsDeductor" ? "books" : undefined;
+        const gstPeriods = ownerType === "GstEntity" ? GST_LIABILITY_PERIODS[def.code] : undefined;
+        const taxLiability = taxBasis
+          ? tdsLiabilityFor(id, ctx.tdsPerQuarter, taxBasis)
+          : gstPeriods
+          ? gstLiabilityFor(id, ctx.turnover, gstPeriods)
+          : ctx.estimatedTax;
 
         out.push({
           id,
@@ -269,6 +336,8 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
           daysOverdue: effOverdue,
           exposure: exp.amount,
           exposureFormula: exp.formula,
+          taxLiability,
+          taxBasis,
           filedOn,
           filedBy,
           arn,
@@ -336,6 +405,7 @@ function makeDerivedObligation(
     daysOverdue: 0,
     exposure: 0,
     exposureFormula: def.lateFee.note,
+    taxLiability: estimatedTax(owner.profile),
     filedOn,
     filedBy,
     reminderStage: reminderStageFor(status, occ.dueDate, def.clientFacing),
@@ -378,6 +448,94 @@ function buildDerivedItr(fy: number, clientObls: Obligation[], occByDef: Map<str
   return out;
 }
 
+/** Same shape as `makeDerivedObligation` above, for a `TdsDeductor` instead
+ *  of a `Client` — tax liability is computed the TDS way (a basis, not a
+ *  flat estimate), everything else follows the same open/filed/pending
+ *  split. */
+function makeDerivedTdsObligation(
+  owner: TdsDeductor, occ: Occurrence, decision: DerivedItrDecision, defCode: string,
+): Obligation {
+  const def = DEF_BY_CODE[defCode];
+  const id = `${owner.id}::${occ.runId}`;
+  let status: FilingStatus;
+  let basis: StatusBasis;
+  let filedOn: string | undefined;
+  let filedBy: string | undefined;
+
+  if (!decision.open) {
+    status = "Not Applicable";
+    basis = "Rule-excluded";
+  } else if (h(id + "|derived-filed") < 0.06) {
+    status = "Filed";
+    basis = "Manually marked";
+    filedOn = addDays(TODAY, -Math.floor(h(id + "|f") * 60) - 1);
+    filedBy = staffOf(owner.assigneeId).name;
+  } else {
+    status = "Pending";
+    basis = "Due date not passed";
+  }
+
+  return {
+    id,
+    ownerType: "TdsDeductor",
+    clientId: owner.id,
+    runId: occ.runId,
+    defCode,
+    fy: occ.fy,
+    head: def.head,
+    form: def.form,
+    periodLabel: occ.periodLabel,
+    dueDate: occ.dueDate,
+    status,
+    basis,
+    rule: decision.hit,
+    assigneeId: owner.assigneeId,
+    daysOverdue: 0,
+    exposure: 0,
+    exposureFormula: def.lateFee.note,
+    taxLiability: tdsLiabilityFor(id, owner.profile.tdsPerQuarter, "books"),
+    taxBasis: "books",
+    filedOn,
+    filedBy,
+    reminderStage: reminderStageFor(status, occ.dueDate, def.clientFacing),
+  };
+}
+
+/** 24Q/26Q/27Q/27EQ-CORR don't fit `buildFor()` either, and for the same
+ *  reason ITR-U doesn't: eligibility depends on a sibling obligation, not on
+ *  the deductor's profile alone. Unlike ITR-U though, the sibling is the
+ *  SAME QUARTER's original return, not a once-a-year one — a Q3 correction
+ *  needs Q3's original filed, Q1 being filed doesn't open it. Run as a
+ *  second pass over the obligations `buildFor()` just produced for this
+ *  year's deductors, one quarter at a time. */
+function buildDerivedTdsCorrections(deductorObls: Obligation[], occByDef: Map<string, Occurrence[]>): Obligation[] {
+  const out: Obligation[] = [];
+  const originalsByDeductorAndCode = new Map<string, Obligation[]>();
+  for (const o of deductorObls) {
+    const key = `${o.clientId}|${o.defCode}`;
+    const list = originalsByDeductorAndCode.get(key);
+    if (list) list.push(o);
+    else originalsByDeductorAndCode.set(key, [o]);
+  }
+
+  for (const d of TDS_DEDUCTORS) {
+    for (const [corrCode, baseCode] of Object.entries(CORR_BASE_CODE)) {
+      if (!needsCorrections(d.id, corrCode)) continue;
+      const corrOccs = occByDef.get(corrCode);
+      /* No entry under the base code means this deductor never files it —
+         nothing to ever correct, so the correction isn't generated at all. */
+      const originals = originalsByDeductorAndCode.get(`${d.id}|${baseCode}`);
+      if (!corrOccs || !originals) continue;
+      for (const occ of corrOccs) {
+        const original = originals.find((o) => o.periodLabel === occ.periodLabel);
+        const decision = tdsCorrectionApplicability(original, baseCode, occ.dueDate, TODAY);
+        out.push(makeDerivedTdsObligation(d, occ, decision, corrCode));
+      }
+    }
+  }
+  return out;
+}
+
 /** Every seeded financial year, not just the current one — a past year's
  *  occurrences are all in the past relative to `TODAY`, so the same
  *  filed-vs-overdue simulation below naturally produces a mostly-closed
@@ -391,7 +549,27 @@ function build(): Obligation[] {
     out.push(...clientObls);
     out.push(...buildDerivedItr(fy, clientObls, occByDef));
     out.push(...buildFor(GST_ENTITIES, "GstEntity", applicableGstCompliances, occByDef));
-    out.push(...buildFor(TDS_DEDUCTORS, "TdsDeductor", applicableDeductorCompliances, occByDef));
+    const deductorObls = buildFor(TDS_DEDUCTORS, "TdsDeductor", applicableDeductorCompliances, occByDef);
+    out.push(...deductorObls);
+    out.push(...buildDerivedTdsCorrections(deductorObls, occByDef));
+  }
+
+  /* ITR-U's window is 5 years and the TDS correction statements' is 2 —
+     long enough that an origin year outside the 3-year seeded book can
+     still have one open. Rather than resurrecting an older year's whole
+     ITR/ROC or TDS book, build just enough of it to decide these two, keep
+     only the ones whose window hasn't closed, and discard the rest. */
+  for (const fy of lookbackFYs(5)) {
+    const occByDef = occByDefFor(fy);
+    const clientObls = buildFor(CLIENTS, "Client", applicableClientCompliances, occByDef);
+    out.push(...buildDerivedItr(fy, clientObls, occByDef).filter(
+      (o) => o.defCode === "ITR-U" && o.dueDate >= TODAY,
+    ));
+  }
+  for (const fy of lookbackFYs(3)) {
+    const occByDef = occByDefFor(fy);
+    const deductorObls = buildFor(TDS_DEDUCTORS, "TdsDeductor", applicableDeductorCompliances, occByDef);
+    out.push(...buildDerivedTdsCorrections(deductorObls, occByDef).filter((o) => o.dueDate >= TODAY));
   }
   return out;
 }
@@ -584,6 +762,18 @@ export function setNote(id: string, text: string, by: string) {
   emit();
 }
 
+/** Switch which of TDS's three ways of arriving at a tax liability figure
+ *  this filing uses, and recompute it. Only meaningful on an obligation that
+ *  already has a `taxBasis` (TDS-owned) — a no-op otherwise. */
+export function setTaxBasis(id: string, basis: TaxBasis) {
+  OBLIGATIONS = OBLIGATIONS.map((o) => {
+    if (o.id !== id || !o.taxBasis) return o;
+    const d = TDS_DEDUCTOR_BY_ID[o.clientId];
+    return { ...o, taxBasis: basis, taxLiability: tdsLiabilityFor(o.id, d.profile.tdsPerQuarter, basis) };
+  });
+  emit();
+}
+
 /* ==========================================================================
    REMINDER ENGINE
    --------------------------------------------------------------------------
@@ -736,6 +926,10 @@ export function getSenderProfile(): SenderProfile {
     waVerified: s.verified,
     fromEmail: s.fromEmail,
     replyTo: s.replyTo,
+    waProvider: s.waProvider,
+    emailProvider: s.emailProvider,
+    rampwin: s.rampwin,
+    zeptomail: s.zeptomail,
   };
 }
 
@@ -747,6 +941,42 @@ export function updateSenderProfile(patch: Partial<SenderProfile>) {
     ...(patch.fromEmail !== undefined ? { fromEmail: patch.fromEmail } : {}),
     ...(patch.replyTo !== undefined ? { replyTo: patch.replyTo } : {}),
   });
+  emit();
+}
+
+/* --- Bring-your-own channels ------------------------------------------------
+   Two independent switches, one per channel. Flipping either only changes
+   which account that channel sends through — it never touches the other
+   channel, and switching WhatsApp back to KDK doesn't clear a Rampwin
+   connection the firm already made, in case they flip back. */
+
+export function setWaProvider(provider: "kdk" | "rampwin") {
+  setSender({ waProvider: provider });
+  emit();
+}
+
+/** Commits a Rampwin channel — an existing WhatsApp Business number the firm
+ *  already set up in their own Rampwin account, pointed at by its API key.
+ *  This app has no API of its own to verify that against, so saving is a
+ *  form rather than a real handshake; swap for a real check once one exists. */
+export function saveRampwin(config: Omit<Sender["rampwin"], "connected">) {
+  setSender({ rampwin: { ...config, connected: true } });
+  emit();
+}
+
+export function setEmailProvider(provider: "kdk" | "zeptomail") {
+  setSender({ emailProvider: provider });
+  emit();
+}
+
+/** Commits a ZeptoMail configuration, either connection method — the same
+ *  token works for both, ZeptoMail just accepts it two different ways in.
+ *  This app cannot itself confirm the sending domain is verified in
+ *  ZeptoMail (that is a DNS check on their side), so `configured` records
+ *  only that the firm saved a complete setup, not that it has been proven
+ *  to work — "Send test email" is what actually exercises it. */
+export function saveZeptomail(config: Omit<Sender["zeptomail"], "configured">) {
+  setSender({ zeptomail: { ...config, configured: true } });
   emit();
 }
 

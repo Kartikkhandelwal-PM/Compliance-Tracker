@@ -115,24 +115,34 @@ export function MatrixPage() {
      The Period pill (This month / Next 3 months / Full year) only applies to
      the current year — it's a rolling slice around today, and a past year
      has no "today" inside it to roll around. So it's hidden entirely once a
-     past year is picked, and that year always shows its whole Apr–Mar span. */
+     past year is picked, and that year always shows its whole Apr–Mar span.
+
+     "Full year" on the current year used to mean "today + 365 days" rather
+     than the FY's own span — a rolling window drifts past 31 March the
+     moment today is within a year of it (which is most of the year), so it
+     quietly pulled in the first few months of the NEXT FY under "this
+     year"'s tracker. It now means exactly what it means on a past year: the
+     FY's own Apr–Mar span, nothing rolling about it. */
   const columns = useMemo<Column[]>(() => {
     let from: string, to: string;
-    if (isCurrentYear) {
+    if (isCurrentYear && win !== "year") {
       /* A week of trailing grace so something due yesterday and still unresolved
          doesn't vanish from the grid the moment its due date passes — same
-         "a week of arrears behind" pattern as Calendar's own runway strip.
-         "This month" and "Next 3 months" both use it; only "Full year" needs a
-         longer look back, since it's meant to read as the whole year at once. */
-      from = addDays(TODAY, win === "year" ? -120 : -7);
-      to = addDays(TODAY, win === "month" ? 31 : win === "quarter" ? 92 : 365);
+         "a week of arrears behind" pattern as Calendar's own runway strip. */
+      from = addDays(TODAY, -7);
+      to = addDays(TODAY, win === "month" ? 31 : 92);
     } else {
       from = `${fy}-04-01`;
       to = `${fy + 1}-03-31`;
     }
     const seen = new Map<string, Column>();
     for (const o of obligations) {
-      if (o.fy !== fy) continue;
+      /* By due date falling in the window, not by the `fy` tag — ITR-U and
+         the TDS correction statements are tagged to the year they correct,
+         not the year they're actually due, which can be years later. The
+         due-date check right below is what actually decides "is this in
+         this year's window"; the tag check used to run first and exclude
+         them before that had a chance to matter. */
       if (o.dueDate < from || o.dueDate > to) continue;
       if (head !== "all" && o.head !== head) continue;
       if (!seen.has(o.runId)) {
@@ -185,7 +195,8 @@ export function MatrixPage() {
       fees: number; open: number; late: number; filed: number;
     }>();
     for (const o of obligations) {
-      if (o.fy !== fy) continue;
+      /* `colIndex` already only has the runIds `columns` kept — due-date
+         filtered, same reasoning as there. No separate `fy` check needed. */
       const ci = colIndex.get(o.runId);
       if (ci === undefined) continue;
       if (owners.length > 0 && !owners.includes(o.assigneeId)) continue;
@@ -470,7 +481,13 @@ export function MatrixPage() {
                       >
                         <button type="button" onClick={() => nav(`/runs/${encodeURIComponent(c.runId)}`)}>
                           <i className={`trk__spine ${headClass(c.head)}`} />
-                          <b>{c.form}</b>
+                          {/* This column is 84px wide — room for one short line,
+                              two at a push. "Form 138 (24Q)" clamps to two lines
+                              and crowds the due date under it; the "Form " prefix
+                              is the one word this cell can afford to drop, since
+                              the tooltip and every other page still spell it out
+                              in full. */}
+                          <b>{c.form.replace(/^Form /, "")}</b>
                           <span className="num">{fmtShort(c.due)}</span>
                         </button>
                       </th>

@@ -11,11 +11,12 @@
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Obligation } from "../domain/types.ts";
+import type { Obligation, TaxBasis } from "../domain/types.ts";
 import { STAFF } from "../domain/book.ts";
 import { DEF_BY_CODE } from "../domain/catalog.ts";
 import {
-  markFiled, markNotApplicable, ownerOf, reassign, reinstate, sendReminders, setNote, unmarkFiled,
+  TAX_BASIS_LABEL, markFiled, markNotApplicable, ownerOf, reassign, reinstate, sendReminders,
+  setNote, setTaxBasis, unmarkFiled,
 } from "../domain/engine.ts";
 import { fmtLong, inr } from "../domain/dates.ts";
 import { Countdown, StatusTag } from "./bits.tsx";
@@ -204,6 +205,33 @@ export function ObligationDrawer({
             <span className="obstate__feesub">
               over {o.daysOverdue} {o.daysOverdue === 1 ? "day" : "days"} · {o.exposureFormula}
             </span>
+          </div>
+        ) : null}
+
+        {/* Tax liability is a separate figure from the late fee above — it's
+            what's owed, not a penalty for being late, so it's shown whatever
+            the status is. Only TDS carries a choice of how it's arrived at;
+            ITR's is a single number with nothing to switch. */}
+        {o.taxLiability > 0 ? (
+          <div className="obstate__tax">
+            <span className="obstate__k">Tax liability</span>
+            <b className="num">₹{inr(o.taxLiability)}</b>
+            {o.taxBasis ? (
+              <select
+                className="plain plain--sm"
+                value={o.taxBasis}
+                onChange={(e) => {
+                  setTaxBasis(o.id, e.target.value as TaxBasis);
+                  toast("Tax liability basis updated");
+                }}
+              >
+                {(Object.keys(TAX_BASIS_LABEL) as TaxBasis[]).map((k) => (
+                  <option key={k} value={k}>{TAX_BASIS_LABEL[k]}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="obstate__feesub">Estimated from the client's profile</span>
+            )}
           </div>
         ) : null}
 

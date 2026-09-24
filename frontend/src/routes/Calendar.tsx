@@ -120,7 +120,16 @@ export function CalendarPage() {
   /* ---- Filter the book, then aggregate ---------------------------------- */
 
   const filteredObligations = useMemo(() => {
-    let list = obligations.filter((o) => o.fy === fy);
+    /* By due date falling in the FY's own Apr–Mar window, not by the `fy`
+       tag — most obligations agree on both, but a few (ITR-U, the TDS
+       correction statements) are tagged to the year they correct rather
+       than the year they're actually due, sometimes years later. Filtering
+       on the tag hid them from the calendar entirely until someone thought
+       to flip back to that old year on the off chance something of theirs
+       was quietly coming due now. */
+    const from = `${fy}-04-01`;
+    const to = `${fy + 1}-03-31`;
+    let list = obligations.filter((o) => o.dueDate >= from && o.dueDate <= to);
     if (head !== "all") list = list.filter((o) => o.head === head);
     if (owner !== "all") list = list.filter((o) => o.assigneeId === owner);
     return list;

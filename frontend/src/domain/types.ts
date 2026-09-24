@@ -232,6 +232,10 @@ export interface RuleHit {
 
 export type FilingStatus = "Filed" | "Pending" | "Overdue" | "Not Applicable";
 
+/** TDS's three ways of arriving at a tax liability figure — see the note on
+ *  `Obligation.taxBasis`. */
+export type TaxBasis = "books" | "challan" | "quarterCompare";
+
 export type StatusBasis =
   /** The engine itself decided the compliance does not apply. */
   | "Rule-excluded"
@@ -273,6 +277,22 @@ export interface Obligation {
   /** Estimated accruing penalty in ₹ — 0 unless overdue */
   exposure: number;
   exposureFormula: string;
+  /** Estimated tax due on this filing, in ₹ — 0 for compliances that carry
+   *  no tax liability of their own (GST: penalty is the only risk there).
+   *  For ITR-family obligations this is one client-level figure, the same
+   *  on every open obligation for that client and year — placeholder
+   *  calculation for now, since `estimatedTax()` in rules.ts is a single
+   *  formula per entity type, not the default/fallback ladder the real KDK
+   *  figure uses. For TDS obligations it depends on `taxBasis` below. Swap
+   *  the calculation once that spec is in; nothing that reads this field
+   *  needs to change. */
+  taxLiability: number;
+  /** Which of TDS's three ways of arriving at `taxLiability` is currently
+   *  selected — only set on TDS-owned obligations, where staff can switch
+   *  it (see `setTaxBasis`). Absent everywhere else: ITR's figure has one
+   *  method, GST has none. Placeholder figures per basis until KDK supplies
+   *  the real ones for each. */
+  taxBasis?: TaxBasis;
   filedOn?: string;
   /** Who recorded the filing. Always set when a person marked it — including
    *  through a bulk action, where it is the only thing that can be captured.
@@ -478,6 +498,25 @@ export interface SenderProfile {
   waVerified: boolean;
   fromEmail: string;
   replyTo: string;
+  /** Which account each channel actually sends through — see `Sender` in
+   *  messages.ts, the source these mirror. */
+  waProvider: "kdk" | "rampwin";
+  emailProvider: "kdk" | "zeptomail";
+  rampwin: {
+    displayName: string;
+    apiKey: string;
+    channelId: string;
+    connected: boolean;
+  };
+  zeptomail: {
+    method: "api" | "smtp";
+    apiToken: string;
+    mailAgent: string;
+    fromName: string;
+    fromAddress: string;
+    bounceAddress: string;
+    configured: boolean;
+  };
 }
 
 /** Per-compliance overrides. A firm that does not do payroll should not be

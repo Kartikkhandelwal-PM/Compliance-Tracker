@@ -26,8 +26,20 @@
 import type {
   Client, ClientProfile, ComplianceDef, GstEntity, Obligation, RuleHit, TdsDeductor,
 } from "./types.ts";
+import { h } from "./book.ts";
 import { DEF_BY_CODE } from "./catalog.ts";
 import { diffDays, fmtDate, inr } from "./dates.ts";
+
+/** Correction and amendment facilities (GSTR-1A, TDS correction statements)
+ *  are optional and rare in practice — most returns never need one. Applied
+ *  to every eligible entity the way the return they correct is, they would
+ *  make it look like every client has something to fix every period. Gated
+ *  instead to roughly one in seven, the "sometimes has to correct something"
+ *  minority, keyed off the entity's own id so it stays the same entities
+ *  every year rather than reshuffling. */
+export function needsCorrections(entityId: string, code: string): boolean {
+  return h(`${entityId}|${code}|corrections`) < (1 / 7);
+}
 
 /* -------------------------------------------------------------------------
    Helpers for building auditable facts
@@ -239,16 +251,36 @@ export function revisedReturnApplicability(
 }
 
 /** Updated return, s.139(8A). Applies whether or not the original was ever
- *  filed — wider net than the revised return above, on purpose. */
+ *  filed — wider net than the revised return above, on purpose.
+ *
+ *  The 48-month window runs "from the end of the relevant assessment year" —
+ *  not from today, and not from the original's own due date. For the
+ *  assessment year still in progress, that end date is still ahead of us, so
+ *  the window has not opened yet even though it will eventually run for four
+ *  years once it does. Without this check every current-year client showed
+ *  an ITR-U "open" the day their book was built — before their original
+ *  return was even due — which nobody can act on. */
 export function itrUApplicability(
   original: Obligation, windowClose: string, ayEnd: string, today: string,
 ): DerivedItrDecision {
-  const open = diffDays(today, windowClose) >= 0;
+  const notYetOpen = diffDays(today, ayEnd) >= 0;
+  const open = !notYetOpen && diffDays(today, windowClose) >= 0;
   const filed = original.status === "Filed";
   const facts: Fact[] = [
     f("Original return", filed ? "Filed" : "Not filed"),
     f("Window closes on", fmtDate(windowClose)),
   ];
+
+  if (notYetOpen) {
+    return {
+      open: false,
+      hit: {
+        ruleRef: "Income Tax · s.139(8A)",
+        condition: `The 48-month window to file an updated return only begins once this assessment year ends, on ${fmtDate(ayEnd)}.`,
+        facts,
+      },
+    };
+  }
 
   if (!open) {
     return {
@@ -274,6 +306,47 @@ export function itrUApplicability(
         ? "The original return was filed for this year. An updated return can still be filed within 48 months of the end of the assessment year to correct or add income. "
         : "No return was filed for this year through the normal or belated window. An updated return can be filed within 48 months of the end of the assessment year. "
       ) + ITR_U_EXCLUSIONS,
+      facts,
+    },
+  };
+}
+
+/** Correction statement on an already-filed TDS/TCS return. Unlike ITR-U,
+ *  there is no "the window hasn't opened yet" date to check — the gate is
+ *  simpler and harder than a date: the original for this exact quarter has
+ *  to have actually been filed, or there is nothing to correct. A quarter
+ *  whose original is still Pending or Overdue isn't "not yet open", it just
+ *  has nothing behind it yet. */
+export function tdsCorrectionApplicability(
+  original: Obligation | undefined, formCode: string, windowClose: string, today: string,
+): DerivedItrDecision {
+  const filed = original?.status === "Filed";
+  const facts: Fact[] = [
+    f("Original return", original ? (filed ? "Filed" : original.status) : "Not yet generated"),
+    f("Window closes on", fmtDate(windowClose)),
+  ];
+
+  if (!filed) {
+    return {
+      open: false,
+      hit: {
+        ruleRef: `TDS Return Form Mapping · ${formCode}`,
+        condition: `There is nothing to correct until the original ${formCode} for this quarter has been filed.`,
+        facts,
+      },
+    };
+  }
+
+  const open = diffDays(today, windowClose) >= 0;
+  if (open) facts.push(f("Days remaining", diffDays(today, windowClose)));
+
+  return {
+    open,
+    hit: {
+      ruleRef: `TDS Return Form Mapping · ${formCode}`,
+      condition: open
+        ? `The original ${formCode} for this quarter was filed, and the correction window — two years from the end of the financial year it belongs to — is still open.`
+        : `The window to correct this ${formCode} has closed.`,
       facts,
     },
   };
@@ -422,6 +495,13 @@ export function applicableGstCompliances(entity: GstEntity): Applicable[] {
         condition: "Regular taxpayer with turnover above ₹5 crore. Monthly filing is mandatory; the QRMP option is not available.",
         facts: gstFacts,
       });
+      if (needsCorrections(entity.id, "GSTR-1A")) {
+        add("GSTR-1A", {
+          ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
+          condition: "Optional correction window on the GSTR-1 just filed, open until GSTR-3B is filed for the same month.",
+          facts: gstFacts,
+        });
+      }
       add("GSTR-3B", {
         ruleRef: "GST Return Type Mapping · Regular > ₹5cr",
         condition: "Regular taxpayer with turnover above ₹5 crore. Monthly filing is mandatory; the QRMP option is not available.",
@@ -447,6 +527,13 @@ export function applicableGstCompliances(entity: GstEntity): Applicable[] {
         condition: "QRMP taxpayer. IFF lets B2B invoices for month 1 and month 2 of the quarter reach the recipient early, instead of waiting for the quarterly GSTR-1.",
         facts: gstFacts,
       });
+      if (needsCorrections(entity.id, "GSTR-1A-QRMP")) {
+        add(p.gstStateCategory === "Category A" ? "GSTR-1A-QRMP-A" : "GSTR-1A-QRMP-B", {
+          ruleRef: `GST Return Type Mapping · QRMP ${p.gstStateCategory}`,
+          condition: `Optional correction window on the quarterly GSTR-1 just filed, open until GSTR-3B is filed on the ${p.gstStateCategory === "Category A" ? "22nd" : "24th"}.`,
+          facts: [...gstFacts, f("State", entity.state)],
+        });
+      }
       add(p.gstStateCategory === "Category A" ? "GSTR-3B-QRMP-A" : "GSTR-3B-QRMP-B", {
         ruleRef: `GST Return Type Mapping · QRMP ${p.gstStateCategory}`,
         condition: `QRMP taxpayer in a ${p.gstStateCategory} state. Quarterly GSTR-3B due on the ${p.gstStateCategory === "Category A" ? "22nd" : "24th"} of the month following the quarter.`,
@@ -458,6 +545,13 @@ export function applicableGstCompliances(entity: GstEntity): Applicable[] {
         condition: "Regular taxpayer with turnover up to ₹5 crore that has not opted into QRMP: monthly GSTR-1 and GSTR-3B.",
         facts: gstFacts,
       });
+      if (needsCorrections(entity.id, "GSTR-1A")) {
+        add("GSTR-1A", {
+          ruleRef: "GST Return Type Mapping · Regular ≤ ₹5cr",
+          condition: "Optional correction window on the GSTR-1 just filed, open until GSTR-3B is filed for the same month.",
+          facts: gstFacts,
+        });
+      }
       add("GSTR-3B", {
         ruleRef: "GST Return Type Mapping · Regular ≤ ₹5cr",
         condition: "Regular taxpayer with turnover up to ₹5 crore that has not opted into QRMP: monthly GSTR-1 and GSTR-3B.",
@@ -534,6 +628,12 @@ export function applicableDeductorCompliances(d: TdsDeductor): Applicable[] {
     f("Payments made", p.paymentNatures.join(", ") || "—"),
   ];
 
+  /* 24Q/26Q/27Q/27EQ-CORR are not added here — unlike everything else in
+     this function, a correction statement's eligibility depends on whether
+     the SAME quarter's original was actually filed, which this function has
+     no visibility into (it only knows the deductor's profile). They're
+     built as a derived second pass in engine.ts, the same way ITR-U is,
+     once the originals for the quarter already exist to check against. */
   if (deductorLiable && p.paymentNatures.includes("Salary")) {
     add("24Q", {
       ruleRef: "TDS Return Form Mapping · 24Q",
