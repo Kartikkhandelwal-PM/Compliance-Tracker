@@ -236,9 +236,14 @@ export interface RuleHit {
 
 export type FilingStatus = "Filed" | "Pending" | "Overdue" | "Not Applicable";
 
-/** TDS's three ways of arriving at a tax liability figure — see the note on
- *  `Obligation.taxBasis`. */
-export type TaxBasis = "books" | "challan" | "quarterCompare";
+/** The ways of arriving at a tax liability figure — see the note on
+ *  `Obligation.taxBasis`. TDS offers books/challan/quarterCompare; GST
+ *  offers books/yearAgo. Which subset applies to a given obligation is
+ *  `TAX_BASIS_OPTIONS[ownerType]`, not every value here at once.
+ *  `yearAgo` is the same period one year back — April 2026 compares
+ *  against April 2025, Apr-Jun 2026 against Apr-Jun 2025, and so on for
+ *  the annual GSTR-9 — never the period immediately before. */
+export type TaxBasis = "books" | "challan" | "quarterCompare" | "yearAgo";
 
 export type StatusBasis =
   /** The engine itself decided the compliance does not apply. */

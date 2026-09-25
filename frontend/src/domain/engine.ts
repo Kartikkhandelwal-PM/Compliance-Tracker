@@ -140,12 +140,26 @@ function exposureContextFor(ownerType: RecordType, ownerId: string): ExposureCon
   };
 }
 
-/** The label shown for each of TDS's three ways of arriving at a tax
- *  liability figure, and the order they're offered in. */
+/** The label shown for each way of arriving at a tax liability figure.
+ *  `yearAgo` reads the same regardless of the compliance's own cadence —
+ *  "same period last year" already means April 2025 for an April 2026
+ *  return, Apr-Jun 2025 for a QRMP Apr-Jun 2026 return, and last year's
+ *  figure for the annual GSTR-9 — so unlike a "previous period" wording,
+ *  it needs no cadence-specific branching to stay correct. */
 export const TAX_BASIS_LABEL: Record<TaxBasis, string> = {
-  books: "From books (manual input)",
+  books: "From books",
   challan: "From challan payment",
   quarterCompare: "As per previous-quarter liability comparison",
+  yearAgo: "As per same period last year",
+};
+
+/** Which of the four `TaxBasis` values a given owner's obligations actually
+ *  offer, and the order they're shown in — TDS keeps its three, GST gets
+ *  its own two. Neither list is "every basis that exists," so the drawer
+ *  reads this rather than every key of `TAX_BASIS_LABEL`. */
+export const TAX_BASIS_OPTIONS: Partial<Record<RecordType, TaxBasis[]>> = {
+  TdsDeductor: ["books", "challan", "quarterCompare"],
+  GstEntity: ["books", "yearAgo"],
 };
 
 /** TDS tax liability, by basis.
@@ -172,17 +186,23 @@ const GST_LIABILITY_PERIODS: Record<string, number> = {
   "GSTR-3B": 12, "GSTR-3B-QRMP-A": 4, "GSTR-3B-QRMP-B": 4, "GSTR-9": 1,
 };
 
-/** GST tax liability, one period's share of an annual estimate.
+/** GST tax liability, one period's share of an annual estimate, by basis.
  *
  *  Placeholder until KDK supplies the real net-payable figure — this data
  *  only has turnover to work from, not actual outward tax and ITC, so it's
  *  modelled as a stable per-entity effective rate (6-10% of turnover,
  *  roughly what net GST liability runs to after ITC for a typical
- *  business) split evenly across the year's periods. Swap for a real read
- *  once that integration exists; nothing that calls this needs to change. */
-function gstLiabilityFor(id: string, turnover: number, periodsPerYear: number): number {
+ *  business) split evenly across the year's periods. "From books" is that
+ *  figure as-is; "yearAgo" — the same period one year back — varies it by
+ *  a stable per-obligation factor, the same way TDS's own comparison basis
+ *  does, so switching in the drawer visibly changes the number. Swap for
+ *  real reads once that integration exists; nothing that calls this needs
+ *  to change. */
+function gstLiabilityFor(id: string, turnover: number, periodsPerYear: number, basis: TaxBasis): number {
   const netRate = 0.06 + h(`${id}|gstrate`) * 0.04;
-  return Math.round((turnover * netRate) / periodsPerYear);
+  const fromBooks = (turnover * netRate) / periodsPerYear;
+  if (basis === "yearAgo") return Math.round(fromBooks * (0.85 + h(`${id}|yearago`) * 0.3));
+  return Math.round(fromBooks);
 }
 
 /** Every screen that needs a record's name/contact/owner reaches it through
@@ -307,16 +327,17 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
         const effOverdue = status === "Overdue" ? daysOverdue : 0;
         const ctx = exposureContextFor(ownerType, owner.id);
         const exp = estimateExposure(def, effOverdue, ctx);
-        /* Only TDS carries a choice of basis — ITR's figure and GST's are
-           each a single formula (estimatedTax / gstLiabilityFor). GSTR-1
-           and its correction stay at 0: nothing is paid with either, the
-           period's whole liability sits on that period's GSTR-3B instead. */
-        const taxBasis: TaxBasis | undefined = ownerType === "TdsDeductor" ? "books" : undefined;
+        /* TDS and GST (GSTR-3B/9 only) each carry a choice of basis — ITR's
+           figure is a single formula (estimatedTax) with nothing to switch.
+           GSTR-1 and its correction stay at 0: nothing is paid with either,
+           the period's whole liability sits on that period's GSTR-3B instead. */
         const gstPeriods = ownerType === "GstEntity" ? GST_LIABILITY_PERIODS[def.code] : undefined;
-        const taxLiability = taxBasis
+        const taxBasis: TaxBasis | undefined =
+          ownerType === "TdsDeductor" ? "books" : gstPeriods ? "books" : undefined;
+        const taxLiability = ownerType === "TdsDeductor" && taxBasis
           ? tdsLiabilityFor(id, ctx.tdsPerQuarter, taxBasis)
-          : gstPeriods
-          ? gstLiabilityFor(id, ctx.turnover, gstPeriods)
+          : gstPeriods && taxBasis
+          ? gstLiabilityFor(id, ctx.turnover, gstPeriods, taxBasis)
           : ctx.estimatedTax;
 
         out.push({
@@ -768,14 +789,24 @@ export function setNote(id: string, text: string, by: string) {
   emit();
 }
 
-/** Switch which of TDS's three ways of arriving at a tax liability figure
- *  this filing uses, and recompute it. Only meaningful on an obligation that
- *  already has a `taxBasis` (TDS-owned) — a no-op otherwise. */
+/** Switch which way this filing's tax liability is arrived at, and
+ *  recompute it — TDS's three bases or GST's two, per `TAX_BASIS_OPTIONS`.
+ *  Only meaningful on an obligation that already has a `taxBasis` — a
+ *  no-op otherwise. */
 export function setTaxBasis(id: string, basis: TaxBasis) {
   OBLIGATIONS = OBLIGATIONS.map((o) => {
     if (o.id !== id || !o.taxBasis) return o;
-    const d = TDS_DEDUCTOR_BY_ID[o.clientId];
-    return { ...o, taxBasis: basis, taxLiability: tdsLiabilityFor(o.id, d.profile.tdsPerQuarter, basis) };
+    if (o.ownerType === "TdsDeductor") {
+      const d = TDS_DEDUCTOR_BY_ID[o.clientId];
+      return { ...o, taxBasis: basis, taxLiability: tdsLiabilityFor(o.id, d.profile.tdsPerQuarter, basis) };
+    }
+    if (o.ownerType === "GstEntity") {
+      const periods = GST_LIABILITY_PERIODS[o.defCode];
+      if (!periods) return o;
+      const g = GST_ENTITY_BY_ID[o.clientId];
+      return { ...o, taxBasis: basis, taxLiability: gstLiabilityFor(o.id, g.profile.turnover, periods, basis) };
+    }
+    return o;
   });
   emit();
 }

@@ -15,8 +15,8 @@ import type { Channel, Obligation, TaxBasis } from "../domain/types.ts";
 import { STAFF } from "../domain/book.ts";
 import { DEF_BY_CODE } from "../domain/catalog.ts";
 import {
-  TAX_BASIS_LABEL, markFiled, markNotApplicable, ownerOf, reassign, reinstate, sendReminders,
-  setNote, setTaxBasis, unmarkFiled,
+  TAX_BASIS_LABEL, TAX_BASIS_OPTIONS, markFiled, markNotApplicable, ownerOf, reassign, reinstate,
+  sendReminders, setNote, setTaxBasis, unmarkFiled,
 } from "../domain/engine.ts";
 import { fmtLong, inr } from "../domain/dates.ts";
 import { Countdown, StatusTag } from "./bits.tsx";
@@ -233,7 +233,7 @@ export function ObligationDrawer({
                   toast("Tax liability basis updated");
                 }}
               >
-                {(Object.keys(TAX_BASIS_LABEL) as TaxBasis[]).map((k) => (
+                {(TAX_BASIS_OPTIONS[o.ownerType] ?? []).map((k) => (
                   <option key={k} value={k}>{TAX_BASIS_LABEL[k]}</option>
                 ))}
               </select>
