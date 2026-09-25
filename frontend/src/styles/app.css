@@ -5831,6 +5831,23 @@ a.calpill.p-overdue:hover {
   flex-wrap: wrap;
   padding-bottom: var(--s4);
 }
+/* The trailing group — "Clear all", the match count, Export — as one flex
+   item rather than three loose ones. Three loose items wrap wherever the
+   row happens to run out of space, which could (and did) split "Clear all"
+   onto its own line while the count and Export landed further right on
+   that same line, with a wide gap between them that meant nothing. As one
+   item it either fits after the last pill or wraps as a whole; wrapped
+   alone on its own line, `flex: 1 1 auto` gives it the full width, and its
+   own internal `.u-spacer` puts "Clear all" and the count/Export pair at
+   opposite ends of THAT line — the two-row look the split used to reach by
+   accident, now on purpose. */
+.filters__trail {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  flex: 1 1 auto;
+  min-width: 280px;
+}
 
 .workload {
   display: flex;

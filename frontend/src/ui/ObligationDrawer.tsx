@@ -11,7 +11,7 @@
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { Obligation, TaxBasis } from "../domain/types.ts";
+import type { Channel, Obligation, TaxBasis } from "../domain/types.ts";
 import { STAFF } from "../domain/book.ts";
 import { DEF_BY_CODE } from "../domain/catalog.ts";
 import {
@@ -73,6 +73,10 @@ export function ObligationDrawer({
   const o = current;
   const client = ownerOf(o);
   const def = DEF_BY_CODE[o.defCode];
+  const reminderChannels: Channel[] = [
+    ...(client.whatsapp ? (["WhatsApp"] as const) : []),
+    ...(client.emailEnabled ? (["Email"] as const) : []),
+  ];
 
   const close = () => {
     setAsking(null);
@@ -114,8 +118,12 @@ export function ObligationDrawer({
             <button
               type="button"
               className="btn"
+              disabled={reminderChannels.length === 0}
+              title={reminderChannels.length === 0
+                ? "This client has opted out of both WhatsApp and email"
+                : undefined}
               onClick={() => {
-                sendReminders([o.id], client.whatsapp ? ["WhatsApp", "Email"] : ["Email"]);
+                sendReminders([o.id], reminderChannels);
                 toast(`Reminder queued for ${client.name}`);
               }}
             >

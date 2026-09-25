@@ -77,6 +77,10 @@ export interface Party {
   /** Whether this record accepts WhatsApp — affects reminder channel */
   whatsapp: boolean;
   email: string;
+  /** Whether this record accepts email reminders — same idea as `whatsapp`,
+   *  the other reminder channel. A record with both off gets no automatic
+   *  reminder on either channel; it still shows up everywhere else. */
+  emailEnabled: boolean;
   phone: string;
 }
 
@@ -477,9 +481,6 @@ export interface ReminderSettings {
 
 export interface FirmProfile {
   name: string;
-  /** ICAI Firm Registration Number. */
-  frn: string;
-  membershipNo: string;
   pan: string;
   gstin: string;
   addressLine: string;

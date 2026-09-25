@@ -675,14 +675,14 @@ function buildBook(): { clients: Client[]; gstEntities: GstEntity[]; tdsDeductor
   function emit(
     id: string, name: string, legalName: string, state: string, staff: string,
     archetypeLabel: string, profile: SeedProfile, pan: string,
-    whatsapp: boolean, email: string, phone: string,
+    whatsapp: boolean, email: string, phone: string, emailEnabled: boolean,
   ) {
     const st = stateOf(state);
     clients.push({
       id, name, legalName, pan,
       cin: profile.entityType === "Company" ? makeCin(r, st.code) : undefined,
       state, assigneeId: staff, archetype: archetypeLabel, profile: toClientProfile(profile),
-      whatsapp, email, phone,
+      whatsapp, email, emailEnabled, phone,
     });
 
     if (profile.gstRegType !== "Unregistered") {
@@ -691,7 +691,7 @@ function buildBook(): { clients: Client[]; gstEntities: GstEntity[]; tdsDeductor
       gstEntities.push({
         id: gid, name, legalName, state, assigneeId: staff, archetype: archetypeLabel,
         gstin: makeGstin(r, st.code), profile: toGstProfile(profile),
-        whatsapp, email, phone,
+        whatsapp, email, emailEnabled, phone,
       });
     }
 
@@ -701,7 +701,7 @@ function buildBook(): { clients: Client[]; gstEntities: GstEntity[]; tdsDeductor
       tdsDeductors.push({
         id: did, name, legalName, state, assigneeId: staff, archetype: archetypeLabel,
         tan: makeTan(r, legalName), profile: toDeductorProfile(profile),
-        whatsapp, email, phone,
+        whatsapp, email, emailEnabled, phone,
       });
     }
   }
@@ -717,7 +717,7 @@ function buildBook(): { clients: Client[]; gstEntities: GstEntity[]; tdsDeductor
     emit(
       `C${String(i + 1).padStart(3, "0")}`, w.name, w.legalName, st.name, w.staff, arc.label, profile, pan,
       true, `${w.legalName.toLowerCase().replace(/[^a-z]+/g, ".")}@example.in`,
-      `+91 9${String(Math.floor(r() * 900000000) + 100000000)}`,
+      `+91 9${String(Math.floor(r() * 900000000) + 100000000)}`, true,
     );
   });
 
@@ -776,7 +776,7 @@ function buildBook(): { clients: Client[]; gstEntities: GstEntity[]; tdsDeductor
     emit(
       `C${String(i + 1).padStart(3, "0")}`, name, legalName, st.name, assigneeId, arc.label, profile, pan,
       r() < 0.88, `${legalName.toLowerCase().replace(/[^a-z]+/g, ".").slice(0, 26)}@example.in`,
-      `+91 9${String(Math.floor(r() * 900000000) + 100000000)}`,
+      `+91 9${String(Math.floor(r() * 900000000) + 100000000)}`, r() < 0.95,
     );
   }
 

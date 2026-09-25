@@ -898,8 +898,6 @@ let SETTINGS: ReminderSettings = {
 
 let FIRM: FirmProfile = {
   name: "KDK Software",
-  frn: "012345C",
-  membershipNo: "402198",
   pan: "AABCK1234M",
   gstin: "08AABCK1234M1Z5",
   addressLine: "2nd Floor, Shanti Tower, Ajmer Road",
@@ -1321,6 +1319,7 @@ function materialise(send: ScheduledSend, at: string, origin: OutboxEntry["origi
     if (!owner) continue;
     for (const ch of send.step.channels) {
       if (ch === "WhatsApp" && !owner.whatsapp) continue;
+      if (ch === "Email" && !owner.emailEnabled) continue;
       entries.push(entryFor(o, ch, send.step.stage, send.step.id, at, origin, by ? { sentBy: by } : {}));
     }
   }
@@ -1369,6 +1368,7 @@ export function sendReminders(
       : kind === "t0" ? "Due-date sent" : kind === "t3" ? "T-3 sent" : "T-7 sent";
     for (const ch of channels) {
       if (ch === "WhatsApp" && !owner.whatsapp) continue;
+      if (ch === "Email" && !owner.emailEnabled) continue;
       entries.push(entryFor(o, ch, stage, kind, at, "Manual", { sentBy: by }));
     }
   }
@@ -1516,6 +1516,7 @@ export function getOutbox(): OutboxEntry[] {
       const at = stamp(dateOf(send.fireAt), send.step.sendAt, Math.floor(r * 58));
       for (const ch of send.step.channels) {
         if (ch === "WhatsApp" && !owner.whatsapp) continue;
+        if (ch === "Email" && !owner.emailEnabled) continue;
         entries.push(entryFor(o, ch, send.step.stage, send.step.id, at, "Automatic"));
       }
     }

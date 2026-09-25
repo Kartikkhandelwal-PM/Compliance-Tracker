@@ -291,7 +291,7 @@ export function FilterPillMulti({
  * fields rather than instead of them.
  */
 export function DateRangePill({
-  from, to, onChange, presets, clearable = true,
+  from, to, onChange, presets, clearable = true, defaultFrom, defaultTo,
 }: {
   from: string;
   to: string;
@@ -302,8 +302,14 @@ export function DateRangePill({
    *  for an × to clear it back to. The range can still be changed to any
    *  preset or custom span; it just can never be removed outright. */
   clearable?: boolean;
+  /** The range this pill opens on — only meaningful when `clearable` is
+   *  false. Without it, "active" fell back to "holds any value at all",
+   *  which is always true for a mandatory default, so the pill highlighted
+   *  green on every plain visit before anyone had touched it. */
+  defaultFrom?: string;
+  defaultTo?: string;
 }) {
-  const active = !!(from || to);
+  const active = clearable ? !!(from || to) : (from !== defaultFrom || to !== defaultTo);
   const summary = from && to
     ? (from === to ? fmtShort(from) : `${fmtShort(from)} – ${fmtShort(to)}`)
     : from ? `from ${fmtShort(from)}`

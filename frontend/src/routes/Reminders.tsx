@@ -30,7 +30,7 @@ import { ClearFilters, DateRangePill, FilterPill, type PillOption } from "../ui/
 import { exportXlsx } from "../ui/exportXlsx.ts";
 import { BrandIcon, Icon } from "../ui/Icon.tsx";
 import { MessagePreview } from "../ui/MessagePreview.tsx";
-import type { OutboxEntry } from "../domain/types.ts";
+import type { Channel, OutboxEntry } from "../domain/types.ts";
 
 /* Delivery state is not compliance state, so it gets its own four tones rather
    than borrowing filed/pending/overdue. Read and Delivered in particular must
@@ -372,6 +372,8 @@ function LogTab() {
              arrived with no date restriction keeps the ×, since removing a
              range the reader picked by hand is a real, valid action there. */
           clearable={arrivedViaSlice}
+          defaultFrom={DEFAULT_FROM}
+          defaultTo={DEFAULT_TO}
           presets={[
             { label: "Today", from: TODAY, to: TODAY },
             { label: "Last 7 days", from: addDays(TODAY, -6), to: TODAY },
@@ -379,14 +381,16 @@ function LogTab() {
             { label: "This month", from: `${TODAY.slice(0, 7)}-01`, to: TODAY },
           ]}
         />
-        <ClearFilters count={filterCount} onClear={clearAll} />
-        <span className="u-spacer" />
-        <span className="u-mute num" style={{ fontSize: "var(--t-12)" }}>
-          {rows.length} of {filtered.length} matching
-        </span>
-        <button type="button" className="btn btn--sm" onClick={exportXlsxFile}>
-          <Icon name="download" size={14} /> Export
-        </button>
+        <div className="filters__trail">
+          <ClearFilters count={filterCount} onClear={clearAll} />
+          <span className="u-spacer" />
+          <span className="u-mute num" style={{ fontSize: "var(--t-12)" }}>
+            {rows.length} of {filtered.length} matching
+          </span>
+          <button type="button" className="btn btn--sm" onClick={exportXlsxFile}>
+            <Icon name="download" size={14} /> Export
+          </button>
+        </div>
       </div>
 
       {/* ---- Bulk actions, and only where they are the thing being looked at.
@@ -609,12 +613,52 @@ function ScheduledTab() {
   const { toast, me } = useApp();
   const sends = useEngine(() => scheduledSends(45));
   const settings = useEngine(getReminderSettings);
-  const [head, setHead] = useState("all");
+  const [q, setQ] = useState("");
+  const [scope, setScope] = useState("all");
+  const [channel, setChannel] = useState("all");
+  const [status, setStatus] = useState("all");
 
-  const rows = useMemo(
-    () => (head === "all" ? sends : sends.filter((s) => s.head === head)),
-    [sends, head],
-  );
+  /* Same "Head and Compliance are one question" merge the Log tab uses —
+     grouped by head, only the compliances actually queued in the next 45
+     days rather than every form in the catalogue. */
+  const scopeOptions = useMemo(() => {
+    const byHead = new Map<string, Map<string, string>>();
+    for (const s of sends) {
+      let forms = byHead.get(s.head);
+      if (!forms) byHead.set(s.head, (forms = new Map()));
+      forms.set(s.defCode, s.form);
+    }
+    const out: PillOption[] = [{ value: "all", label: "All compliances" }];
+    for (const hd of HEADS) {
+      const forms = byHead.get(hd);
+      if (!forms) continue;
+      out.push({ value: `head:${hd}`, label: `All of ${hd}`, group: hd });
+      for (const [code, form] of [...forms].sort((a, b) => a[1].localeCompare(b[1]))) {
+        out.push({ value: `def:${code}`, label: form, group: hd, indent: true });
+      }
+    }
+    return out;
+  }, [sends]);
+
+  const rows = useMemo(() => {
+    let list = sends;
+    if (scope.startsWith("head:")) {
+      const hd = scope.slice(5);
+      list = list.filter((s) => s.head === hd);
+    } else if (scope.startsWith("def:")) {
+      const code = scope.slice(4);
+      list = list.filter((s) => s.defCode === code);
+    }
+    if (channel !== "all") list = list.filter((s) => s.step.channels.includes(channel as Channel));
+    if (status === "queued") list = list.filter((s) => !s.skipped);
+    else if (status === "skipped") list = list.filter((s) => s.skipped);
+    const needle = q.trim().toLowerCase();
+    if (needle) list = list.filter((s) => s.form.toLowerCase().includes(needle));
+    return list;
+  }, [sends, scope, channel, status, q]);
+
+  const filterCount = (scope !== "all" ? 1 : 0) + (channel !== "all" ? 1 : 0) + (status !== "all" ? 1 : 0);
+  const clearAll = () => { setScope("all"); setChannel("all"); setStatus("all"); };
 
   const live = sends.filter((s) => !s.skipped);
   const messages = live.reduce(
@@ -664,24 +708,59 @@ function ScheduledTab() {
       ) : null}
 
       <div className="filters">
+        <div className="field field--search">
+          <Icon name="search" size={16} />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search compliance"
+            aria-label="Search scheduled batches"
+          />
+          {q ? (
+            <button type="button" className="field__x" onClick={() => setQ("")} aria-label="Clear search">
+              <Icon name="close" size={13} />
+            </button>
+          ) : null}
+        </div>
         <FilterPill<string>
-          field="Head" value={head} none="all" onChange={setHead}
-          options={[{ value: "all", label: "All heads" }, ...HEADS.map((hd) => ({ value: hd, label: hd }))]}
+          field="Compliance" value={scope} none="all" onChange={setScope}
+          options={scopeOptions}
         />
-        <ClearFilters count={head !== "all" ? 1 : 0} onClear={() => setHead("all")} />
-        <span className="u-spacer" />
-        <button
-          type="button"
-          className="btn btn--sm"
-          onClick={() => {
-            const n = runScheduler();
-            toast(n > 0
-              ? `Sent ${n} ${n === 1 ? "message" : "messages"}`
-              : "No reminders are due");
-          }}
-        >
-          <Icon name="bolt" size={14} /> Send anything due
-        </button>
+        <FilterPill<string>
+          field="Channel" value={channel} none="all" onChange={setChannel}
+          options={[
+            { value: "all", label: "All channels" },
+            { value: "WhatsApp", label: "WhatsApp", icon: <BrandIcon name="whatsapp" size={15} /> },
+            { value: "Email", label: "Email", icon: <BrandIcon name="email" size={15} /> },
+          ]}
+        />
+        <FilterPill<string>
+          field="Status" value={status} none="all" onChange={setStatus}
+          options={[
+            { value: "all", label: "All" },
+            { value: "queued", label: "Queued" },
+            { value: "skipped", label: "Skipped" },
+          ]}
+        />
+        <div className="filters__trail">
+          <ClearFilters count={filterCount} onClear={clearAll} />
+          <span className="u-spacer" />
+          <span className="u-mute num" style={{ fontSize: "var(--t-12)" }}>
+            {rows.length} of {sends.length} matching
+          </span>
+          <button
+            type="button"
+            className="btn btn--sm"
+            onClick={() => {
+              const n = runScheduler();
+              toast(n > 0
+                ? `Sent ${n} ${n === 1 ? "message" : "messages"}`
+                : "No reminders are due");
+            }}
+          >
+            <Icon name="bolt" size={14} /> Send anything due
+          </button>
+        </div>
       </div>
 
       <div className="sheet">

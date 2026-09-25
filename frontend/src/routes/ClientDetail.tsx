@@ -181,23 +181,40 @@ export function ClientDetailPage() {
           </div>
           <div className="cprofile__contact">
             <span className="cprofile__k">Reachable on</span>
-            <a href={`mailto:${record.email}`} className="cprofile__ch">
+            {/* Both channels get the same treatment: a switch to record consent,
+                not a tag reporting a fact nobody could change. Turning a channel
+                off here is what actually stops that channel's reminders — see
+                `whatsapp` / `emailEnabled` gating the send in engine.ts. A row
+                is no longer a plain mailto/tel link because of it — the address
+                itself still is, just as inline text within the row now, so the
+                switch has somewhere to sit that isn't inside an anchor. */}
+            <span className="cprofile__ch">
               <BrandIcon name="email" size={14} />
-              <span className="u-truncate">{record.email}</span>
-            </a>
+              <a href={`mailto:${record.email}`} className="u-truncate" style={{ color: "inherit" }}>
+                {record.email}
+              </a>
+              <span className="u-row" style={{ marginLeft: "auto", gap: 6 }}>
+                <span className="u-mute" style={{ fontSize: "var(--t-11)" }}>
+                  {record.emailEnabled ? "Opted in" : "Turned off"}
+                </span>
+                <button
+                  type="button"
+                  className={`switch${record.emailEnabled ? " is-on" : ""}`}
+                  onClick={() => updateParty(ownerType, record.id, { emailEnabled: !record.emailEnabled })}
+                  aria-pressed={record.emailEnabled}
+                  aria-label="Email opt-in"
+                  title={record.emailEnabled
+                    ? "Opted in to email. Click to stop sending this client email reminders"
+                    : "Email reminders are off for this client. Click to turn them back on"}
+                />
+              </span>
+            </span>
             <span className="cprofile__ch">
               <BrandIcon name="whatsapp" size={14} />
               <span className="num">{record.phone}</span>
-              {/* A tag reporting a fact nobody could change was a dead end —
-                  the only way to fix a client wrongly marked opted in (or to
-                  record that they've now agreed to it) was to edit the seed
-                  data. This is the one place that consent gets recorded, so
-                  it has to be a control. A switch, not a clickable tag — a
-                  coloured chip that happens to respond to a click reads as a
-                  status label, not as something to act on. */}
               <span className="u-row" style={{ marginLeft: "auto", gap: 6 }}>
                 <span className="u-mute" style={{ fontSize: "var(--t-11)" }}>
-                  {record.whatsapp ? "Opted in" : "Email only"}
+                  {record.whatsapp ? "Opted in" : "Turned off"}
                 </span>
                 <button
                   type="button"
@@ -206,8 +223,8 @@ export function ClientDetailPage() {
                   aria-pressed={record.whatsapp}
                   aria-label="WhatsApp opt-in"
                   title={record.whatsapp
-                    ? "Opted in to WhatsApp. Click to switch this client to email only"
-                    : "Email only. Click if this client has agreed to WhatsApp"}
+                    ? "Opted in to WhatsApp. Click to turn WhatsApp reminders off for this client"
+                    : "WhatsApp reminders are off for this client. Click to turn them back on"}
                 />
               </span>
             </span>

@@ -299,12 +299,6 @@ function FirmSection() {
       >
         <div className="sgrid">
           <Row label="Firm name" wide><Text value={firm.name} onChange={set("name")} /></Row>
-          <Row label="Firm Registration No." hint="FRN">
-            <Text value={firm.frn} onChange={set("frn")} mono />
-          </Row>
-          <Row label="Membership no.">
-            <Text value={firm.membershipNo} onChange={set("membershipNo")} mono />
-          </Row>
           <Row label="PAN"><Text value={firm.pan} onChange={set("pan")} mono /></Row>
           <Row label="GSTIN"><Text value={firm.gstin} onChange={set("gstin")} mono /></Row>
         </div>
