@@ -577,6 +577,12 @@ export function applicableGstCompliances(entity: GstEntity): Applicable[] {
       condition: "Composition scheme taxpayer: quarterly tax payment through CMP-08 and an annual return in GSTR-4.",
       facts: gstFacts,
     });
+  } else if (p.gstRegType === "ISD") {
+    add("GSTR-6", {
+      ruleRef: "GST Return Type Mapping · s.39(4)",
+      condition: "Input Service Distributor (section 39(4)): monthly GSTR-6, distributing input tax credit to its branches.",
+      facts: gstFacts,
+    });
   } else if (p.gstRegType === "TDS Deductor") {
     add("GSTR-7", {
       ruleRef: "GST Return Type Mapping · s.51",
