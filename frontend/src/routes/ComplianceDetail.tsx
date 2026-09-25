@@ -16,7 +16,7 @@ import { useObligations } from "../ui/app-state.tsx";
 import {
   CORR_BASE_CODE, DEF_BY_CODE, FY_OPTIONS, FY_START, OCCURRENCES_BY_FY, SEEDED_FYS, fyLabel, headClass,
 } from "../domain/catalog.ts";
-import { TODAY, fmtLong, inrShort, iso } from "../domain/dates.ts";
+import { TODAY, countdown, fmtLong, inrShort, iso } from "../domain/dates.ts";
 import { Countdown, Empty, PageHead, Pbar } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
 
@@ -300,14 +300,15 @@ export function ComplianceDetailPage() {
                       >
                         Not open yet
                       </span>
+                    ) : p.pending === 0 && p.overdue === 0 ? (
+                      /* Nothing left open this period — filed (or ruled not
+                         applicable) across the board. `Countdown` colours
+                         purely off the calendar date, so a past due date
+                         still painted itself red here even with nothing
+                         outstanding, which read as a problem where there
+                         wasn't one. Same wording, neutral colour instead. */
+                      <span className="cd cd--calm">{countdown(p.dueDate)}</span>
                     ) : (
-                      /* Same plain countdown whether or not anyone's still
-                         open this period — the pill used to appear only when
-                         p.overdue > 0, so an identical past-due date read
-                         two different ways depending on whether every client
-                         happened to have filed. The Open and Late fees
-                         columns already carry that signal; this one just
-                         says how far from the due date. */
                       <Countdown due={p.dueDate} />
                     )}
                   </td>
