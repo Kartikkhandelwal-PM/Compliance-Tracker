@@ -405,7 +405,7 @@ export const DEFS: ComplianceDef[] = [
     description: "Income tax return filing — no business or professional income",
     frequency: "Annual",
     dueRule: "31 July following the financial year",
-    applicability: "Individual / HUF not requiring audit, with no business or professional income (ITR-1 / ITR-2)",
+    applicability: "ITR-1 / ITR-2 (Individual, HUF); ITR-5 (other than Individual, HUF or Company, not eligible for ITR-7) — none requiring audit",
     lateFee: { kind: "s234f", note: "Late fee ₹1,000–₹5,000 u/s 234F plus interest u/s 234A." },
     clientFacing: true,
   },

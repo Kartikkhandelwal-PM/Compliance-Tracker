@@ -238,12 +238,15 @@ export type FilingStatus = "Filed" | "Pending" | "Overdue" | "Not Applicable";
 
 /** The ways of arriving at a tax liability figure — see the note on
  *  `Obligation.taxBasis`. TDS offers books/challan/quarterCompare; GST
- *  offers books/yearAgo. Which subset applies to a given obligation is
- *  `TAX_BASIS_OPTIONS[ownerType]`, not every value here at once.
- *  `yearAgo` is the same period one year back — April 2026 compares
- *  against April 2025, Apr-Jun 2026 against Apr-Jun 2025, and so on for
- *  the annual GSTR-9 — never the period immediately before. */
-export type TaxBasis = "books" | "challan" | "quarterCompare" | "yearAgo";
+ *  offers books/yearAgo; ITR offers books/ais26as/yearAgo. Which subset
+ *  applies to a given obligation is `TAX_BASIS_OPTIONS[ownerType]`, not
+ *  every value here at once. `yearAgo` is the same period one year back —
+ *  April 2026 compares against April 2025, Apr-Jun 2026 against Apr-Jun
+ *  2025, and so on for an annual return — never the period immediately
+ *  before. `ais26as` is the pre-filled figure from the AIS, TIS and Form
+ *  26AS — data the department already has on the taxpayer, as opposed to
+ *  what their own books say. */
+export type TaxBasis = "books" | "challan" | "quarterCompare" | "yearAgo" | "ais26as";
 
 export type StatusBasis =
   /** The engine itself decided the compliance does not apply. */

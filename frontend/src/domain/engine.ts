@@ -151,15 +151,17 @@ export const TAX_BASIS_LABEL: Record<TaxBasis, string> = {
   challan: "From challan payment",
   quarterCompare: "As per previous-quarter liability comparison",
   yearAgo: "As per same period last year",
+  ais26as: "From AIS, TIS & Form 26AS",
 };
 
-/** Which of the four `TaxBasis` values a given owner's obligations actually
+/** Which of the five `TaxBasis` values a given owner's obligations actually
  *  offer, and the order they're shown in — TDS keeps its three, GST gets
- *  its own two. Neither list is "every basis that exists," so the drawer
- *  reads this rather than every key of `TAX_BASIS_LABEL`. */
+ *  two, ITR gets its own two. Neither list is "every basis that exists," so
+ *  the drawer reads this rather than every key of `TAX_BASIS_LABEL`. */
 export const TAX_BASIS_OPTIONS: Partial<Record<RecordType, TaxBasis[]>> = {
   TdsDeductor: ["books", "challan", "quarterCompare"],
   GstEntity: ["books", "yearAgo"],
+  Client: ["books", "ais26as", "yearAgo"],
 };
 
 /** TDS tax liability, by basis.
@@ -203,6 +205,19 @@ function gstLiabilityFor(id: string, turnover: number, periodsPerYear: number, b
   const fromBooks = (turnover * netRate) / periodsPerYear;
   if (basis === "yearAgo") return Math.round(fromBooks * (0.85 + h(`${id}|yearago`) * 0.3));
   return Math.round(fromBooks);
+}
+
+/** ITR tax liability, by basis — the same placeholder-jitter pattern as
+ *  TDS and GST's own basis figures, varying `estimatedTax()`'s slab-based
+ *  formula rather than replacing it. "From books" is that figure as-is;
+ *  "AIS/TIS/26AS" stands in for the pre-filled figure the department's own
+ *  data would show, which won't exactly match what the client's books say;
+ *  "same period last year" is last year's return for the same client. Swap
+ *  for real reads once each integration exists. */
+function itrLiabilityFor(id: string, estTax: number, basis: TaxBasis): number {
+  if (basis === "ais26as") return Math.round(estTax * (0.9 + h(`${id}|ais26as`) * 0.2));
+  if (basis === "yearAgo") return Math.round(estTax * (0.85 + h(`${id}|yearago`) * 0.3));
+  return Math.round(estTax);
 }
 
 /** Every screen that needs a record's name/contact/owner reaches it through
@@ -327,17 +342,21 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
         const effOverdue = status === "Overdue" ? daysOverdue : 0;
         const ctx = exposureContextFor(ownerType, owner.id);
         const exp = estimateExposure(def, effOverdue, ctx);
-        /* TDS and GST (GSTR-3B/9 only) each carry a choice of basis — ITR's
-           figure is a single formula (estimatedTax) with nothing to switch.
+        /* TDS, GST (GSTR-3B/9 only) and ITR each carry a choice of basis.
            GSTR-1 and its correction stay at 0: nothing is paid with either,
            the period's whole liability sits on that period's GSTR-3B instead. */
         const gstPeriods = ownerType === "GstEntity" ? GST_LIABILITY_PERIODS[def.code] : undefined;
         const taxBasis: TaxBasis | undefined =
-          ownerType === "TdsDeductor" ? "books" : gstPeriods ? "books" : undefined;
+          ownerType === "TdsDeductor" ? "books"
+          : gstPeriods ? "books"
+          : ownerType === "Client" ? "books"
+          : undefined;
         const taxLiability = ownerType === "TdsDeductor" && taxBasis
           ? tdsLiabilityFor(id, ctx.tdsPerQuarter, taxBasis)
           : gstPeriods && taxBasis
           ? gstLiabilityFor(id, ctx.turnover, gstPeriods, taxBasis)
+          : ownerType === "Client" && taxBasis
+          ? itrLiabilityFor(id, ctx.estimatedTax, taxBasis)
           : ctx.estimatedTax;
 
         out.push({
@@ -428,7 +447,8 @@ function makeDerivedObligation(
     daysOverdue: 0,
     exposure: 0,
     exposureFormula: def.lateFee.note,
-    taxLiability: estimatedTax(owner.profile),
+    taxLiability: itrLiabilityFor(id, estimatedTax(owner.profile), "books"),
+    taxBasis: "books",
     filedOn,
     filedBy,
     reminderStage: reminderStageFor(status, occ.dueDate, def.clientFacing),
@@ -805,6 +825,10 @@ export function setTaxBasis(id: string, basis: TaxBasis) {
       if (!periods) return o;
       const g = GST_ENTITY_BY_ID[o.clientId];
       return { ...o, taxBasis: basis, taxLiability: gstLiabilityFor(o.id, g.profile.turnover, periods, basis) };
+    }
+    if (o.ownerType === "Client") {
+      const c = CLIENT_BY_ID[o.clientId];
+      return { ...o, taxBasis: basis, taxLiability: itrLiabilityFor(o.id, estimatedTax(c.profile), basis) };
     }
     return o;
   });
