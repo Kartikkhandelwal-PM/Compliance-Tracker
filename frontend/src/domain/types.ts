@@ -260,7 +260,11 @@ export type StatusBasis =
   | "Filed via KDK"
   | "Manually marked"
   | "Due date not passed"
-  | "Due date passed";
+  | "Due date passed"
+  /** The rule-excluded reason for IFF/GSTR-1A once their due date passes
+   *  unfiled — nothing was wrong, the facility they never used just isn't
+   *  open anymore. See `NO_LATE_VALUE_CODES` in engine.ts. */
+  | "Window closed";
 
 export interface Obligation {
   id: string;

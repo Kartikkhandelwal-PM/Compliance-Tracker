@@ -239,6 +239,17 @@ export function ownerIdOf(o: { ownerType: RecordType; clientId: string }): { lab
   return { label: "PAN", value: CLIENT_BY_ID[o.clientId]?.pan ?? "" };
 }
 
+/** Facilities where missing the due date closes the opportunity rather than
+ *  making the filing late — IFF's invoices and GSTR-1A's correction both
+ *  fold silently into the client's own next return the moment the window
+ *  passes, with nothing left to act on and no fee attached to either. Left
+ *  to the generic simulation below, a client who never used one would sit
+ *  "Overdue" forever, which reads as a live problem that in fact closed
+ *  itself out months or years ago. These are marked Not Applicable instead,
+ *  the same as any other rule-excluded obligation, once their due date
+ *  passes unfiled. */
+const NO_LATE_VALUE_CODES = new Set(["IFF", "GSTR-1A", "GSTR-1A-QRMP-A", "GSTR-1A-QRMP-B"]);
+
 /** One pass over one of the three unlinked arrays, applying its own
  *  applicability function and producing `Obligation`s tagged with its
  *  `ownerType`. The status-simulation logic below is identical for all
@@ -333,6 +344,9 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
                purpose — that is the gap, not an oversight in the seed. */
             if (basis !== "Manually marked") arn = synthAck(id, def.head, ownerType, owner.id, filedOn);
             else filedBy = staffOf(owner.assigneeId).name;
+          } else if (NO_LATE_VALUE_CODES.has(def.code)) {
+            status = "Not Applicable";
+            basis = "Window closed";
           } else {
             status = "Overdue";
             basis = "Due date passed";
