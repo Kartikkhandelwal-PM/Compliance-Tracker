@@ -243,6 +243,23 @@ export function ObligationDrawer({
           </div>
         ) : null}
 
+        {/* Interest — separate from the late fee above, and from tax
+            liability itself: it's what accrues on the tax when it's paid
+            late. Shown as a plain heads-up note until this filing is
+            actually late (overdue, or filed after its due date), at which
+            point it becomes a computed amount. */}
+        {o.interestAccrued ? (
+          <div className="obstate__interest">
+            <span className="obstate__k">Interest accrued</span>
+            <b className="num">₹{inr(o.interestAccrued)}</b>
+            <span className="obstate__feesub">{o.interestFormula}</span>
+          </div>
+        ) : o.interestNote ? (
+          <div className="obstate__interest">
+            <span className="obstate__interest--note">{o.interestNote}</span>
+          </div>
+        ) : null}
+
         {o.status === "Filed" ? (
           <div className="obstate__ack">
             <span className="obstate__k">Acknowledgement</span>

@@ -28,7 +28,7 @@ import {
   itrUApplicability, needsCorrections, revisedReturnApplicability, tdsCorrectionApplicability,
 } from "./rules.ts";
 import {
-  TODAY, addDays, dateOf, diffDays, inQuietHours, iso, nextSendableAt, stamp,
+  TODAY, addDays, dateOf, diffDays, inQuietHours, inr, iso, nextSendableAt, stamp,
 } from "./dates.ts";
 import type { Sender } from "./messages.ts";
 import { compose, getSender, setSender } from "./messages.ts";
@@ -250,6 +250,40 @@ export function ownerIdOf(o: { ownerType: RecordType; clientId: string }): { lab
  *  passes unfiled. */
 const NO_LATE_VALUE_CODES = new Set(["IFF", "GSTR-1A", "GSTR-1A-QRMP-A", "GSTR-1A-QRMP-B"]);
 
+/** Interest is separate from the late-filing fee above — it is what accrues
+ *  on the tax itself when it is paid late, not a penalty for filing late.
+ *  Keyed by `Head` rather than `defCode`: every GST/TDS/ITR obligation that
+ *  carries a `taxLiability` is exposed to the same statutory rate, so one
+ *  entry per head covers the whole family. `monthlyPct` is what
+ *  `interestAccrued` below is computed with; the note spells out the real
+ *  section(s) and rate for staff, since the monthly figure alone doesn't
+ *  distinguish e.g. TDS's 1%/1.5% split. */
+const INTEREST_BY_HEAD: Partial<Record<Head, { monthlyPct: number; note: string }>> = {
+  "GST": { monthlyPct: 1.5, note: "Interest may apply if paid late — 18% p.a. (1.5% per month) on tax payable, u/s 50." },
+  "TDS": { monthlyPct: 1.5, note: "Interest may apply if paid late — 1% per month for late deduction, 1.5% per month for late deposit, u/s 201(1A)." },
+  "Income Tax": { monthlyPct: 1, note: "Interest may apply if paid late — 1% per month on unpaid tax, u/s 234A/234B/234C." },
+};
+
+/** The note is a standing rule of the head, shown whatever the status is;
+ *  the accrued amount only exists once `lateDays` is positive, i.e. the tax
+ *  was actually paid late — still overdue, or filed after its due date.
+ *  Month-rounded-up, mirroring the `"interest"` late-fee kind's own formula
+ *  in `estimateExposure` (rules.ts) for consistency. */
+function interestFor(
+  head: Head, taxLiability: number, lateDays: number,
+): { interestNote?: string; interestAccrued?: number; interestFormula?: string } {
+  const rate = INTEREST_BY_HEAD[head];
+  if (!rate || taxLiability <= 0) return {};
+  if (lateDays <= 0) return { interestNote: rate.note };
+  const months = Math.ceil(lateDays / 30);
+  const interestAccrued = Math.round(taxLiability * (rate.monthlyPct / 100) * months);
+  return {
+    interestNote: rate.note,
+    interestAccrued,
+    interestFormula: `${rate.monthlyPct}% per month × ${months} ${months === 1 ? "month" : "months"} on ₹${inr(taxLiability)} = ₹${inr(interestAccrued)}.`,
+  };
+}
+
 /** One pass over one of the three unlinked arrays, applying its own
  *  applicability function and producing `Obligation`s tagged with its
  *  `ownerType`. The status-simulation logic below is identical for all
@@ -373,6 +407,13 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
           ? itrLiabilityFor(id, ctx.estimatedTax, taxBasis)
           : ctx.estimatedTax;
 
+        const lateDays = status === "Overdue"
+          ? effOverdue
+          : status === "Filed" && filedOn && filedOn > occ.dueDate
+          ? diffDays(occ.dueDate, filedOn)
+          : 0;
+        const { interestNote, interestAccrued, interestFormula } = interestFor(def.head, taxLiability, lateDays);
+
         out.push({
           id,
           ownerType,
@@ -394,6 +435,9 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
           exposureFormula: exp.formula,
           taxLiability,
           taxBasis,
+          interestNote,
+          interestAccrued,
+          interestFormula,
           filedOn,
           filedBy,
           arn,
@@ -705,6 +749,7 @@ export function markFiled(
   const arn = rec.arn?.trim();
   OBLIGATIONS = OBLIGATIONS.map((o) => {
     if (!set.has(o.id) || o.status === "Filed") return o;
+    const lateDays = TODAY > o.dueDate ? diffDays(o.dueDate, TODAY) : 0;
     return {
       ...o,
       status: "Filed",
@@ -715,6 +760,7 @@ export function markFiled(
       daysOverdue: 0,
       exposure: 0,
       exposureFormula: "Filed. Penalty no longer accruing.",
+      ...interestFor(o.head, o.taxLiability, lateDays),
       reminderStage: "Cancelled: resolved",
     };
   });
@@ -757,6 +803,7 @@ export function unmarkFiled(ids: string[]): number {
       daysOverdue: overdue,
       exposure: exp.amount,
       exposureFormula: exp.formula,
+      ...interestFor(o.head, o.taxLiability, overdue),
       reminderStage: reminderStageFor(status, o.dueDate, def.clientFacing),
     };
   });
@@ -830,19 +877,25 @@ export function setNote(id: string, text: string, by: string) {
 export function setTaxBasis(id: string, basis: TaxBasis) {
   OBLIGATIONS = OBLIGATIONS.map((o) => {
     if (o.id !== id || !o.taxBasis) return o;
+    const lateDays = o.status === "Overdue" ? o.daysOverdue
+      : o.status === "Filed" && o.filedOn && o.filedOn > o.dueDate ? diffDays(o.dueDate, o.filedOn)
+      : 0;
     if (o.ownerType === "TdsDeductor") {
       const d = TDS_DEDUCTOR_BY_ID[o.clientId];
-      return { ...o, taxBasis: basis, taxLiability: tdsLiabilityFor(o.id, d.profile.tdsPerQuarter, basis) };
+      const taxLiability = tdsLiabilityFor(o.id, d.profile.tdsPerQuarter, basis);
+      return { ...o, taxBasis: basis, taxLiability, ...interestFor(o.head, taxLiability, lateDays) };
     }
     if (o.ownerType === "GstEntity") {
       const periods = GST_LIABILITY_PERIODS[o.defCode];
       if (!periods) return o;
       const g = GST_ENTITY_BY_ID[o.clientId];
-      return { ...o, taxBasis: basis, taxLiability: gstLiabilityFor(o.id, g.profile.turnover, periods, basis) };
+      const taxLiability = gstLiabilityFor(o.id, g.profile.turnover, periods, basis);
+      return { ...o, taxBasis: basis, taxLiability, ...interestFor(o.head, taxLiability, lateDays) };
     }
     if (o.ownerType === "Client") {
       const c = CLIENT_BY_ID[o.clientId];
-      return { ...o, taxBasis: basis, taxLiability: itrLiabilityFor(o.id, estimatedTax(c.profile), basis) };
+      const taxLiability = itrLiabilityFor(o.id, estimatedTax(c.profile), basis);
+      return { ...o, taxBasis: basis, taxLiability, ...interestFor(o.head, taxLiability, lateDays) };
     }
     return o;
   });

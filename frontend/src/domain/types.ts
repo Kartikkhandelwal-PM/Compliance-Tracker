@@ -309,6 +309,17 @@ export interface Obligation {
    *  method, GST has none. Placeholder figures per basis until KDK supplies
    *  the real ones for each. */
   taxBasis?: TaxBasis;
+  /** Informational note on the interest that applies if this filing (or its
+   *  tax payment) is late — always present alongside a nonzero `taxLiability`
+   *  for GST, TDS and ITR, regardless of status, since it is a standing rule
+   *  of that head rather than a fact about this one obligation. See
+   *  `INTEREST_BY_HEAD` in engine.ts. */
+  interestNote?: string;
+  /** Interest actually accrued in ₹, computed once this obligation is either
+   *  still overdue or was filed after its due date. 0/undefined otherwise —
+   *  an on-time filing owes no interest. */
+  interestAccrued?: number;
+  interestFormula?: string;
   filedOn?: string;
   /** Who recorded the filing. Always set when a person marked it — including
    *  through a bulk action, where it is the only thing that can be captured.

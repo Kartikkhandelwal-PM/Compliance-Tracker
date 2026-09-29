@@ -6533,6 +6533,33 @@ a.cprofile__ch:hover {
   margin-top: 6px;
 }
 
+/* Interest. A further consequence of the tax itself being paid late, kept
+   separate from the late-filing fee above and styled like tax liability —
+   neutral, not the fee block's red — since it's the same kind of figure:
+   money owed, not a penalty. Generic note when nothing has accrued yet, so
+   it reads as a heads-up rather than a live number. */
+.obstate__interest {
+  padding: var(--s3) var(--s4) var(--s4);
+  border-top: 1px solid var(--rule);
+  background: var(--sunk);
+}
+.obstate__interest b {
+  display: block;
+  font-size: var(--t-16);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.obstate__interest .obstate__feesub {
+  color: var(--ink-2);
+}
+.obstate__interest--note {
+  font-size: var(--t-12);
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+
 /* Filing record. Occupies the same slot as the fee block but reads as a settled
    fact rather than a running risk, so no red and no oversized figure.
 
