@@ -190,43 +190,35 @@ export function ClientDetailPage() {
                 switch has somewhere to sit that isn't inside an anchor. */}
             <span className="cprofile__ch">
               <BrandIcon name="email" size={14} />
-              <a href={`mailto:${record.email}`} className="u-truncate" style={{ color: "inherit" }}>
+              <a href={`mailto:${record.email}`} className="u-truncate" style={{ color: "inherit", flex: 1 }}>
                 {record.email}
               </a>
-              <span className="u-row" style={{ marginLeft: "auto", gap: 6 }}>
-                <span className="u-mute" style={{ fontSize: "var(--t-11)" }}>
-                  {record.emailEnabled ? "Opted in" : "Turned off"}
-                </span>
-                <button
-                  type="button"
-                  className={`switch${record.emailEnabled ? " is-on" : ""}`}
-                  onClick={() => updateParty(ownerType, record.id, { emailEnabled: !record.emailEnabled })}
-                  aria-pressed={record.emailEnabled}
-                  aria-label="Email opt-in"
-                  title={record.emailEnabled
-                    ? "Opted in to email. Click to stop sending this client email reminders"
-                    : "Email reminders are off for this client. Click to turn them back on"}
-                />
-              </span>
+              <button
+                type="button"
+                className={`switch${record.emailEnabled ? " is-on" : ""}`}
+                style={{ marginLeft: "auto", flexShrink: 0 }}
+                onClick={() => updateParty(ownerType, record.id, { emailEnabled: !record.emailEnabled })}
+                aria-pressed={record.emailEnabled}
+                aria-label="Email opt-in"
+                title={record.emailEnabled
+                  ? "Opted in to email. Click to stop sending this client email reminders"
+                  : "Email reminders are off for this client. Click to turn them back on"}
+              />
             </span>
             <span className="cprofile__ch">
               <BrandIcon name="whatsapp" size={14} />
-              <span className="num">{record.phone}</span>
-              <span className="u-row" style={{ marginLeft: "auto", gap: 6 }}>
-                <span className="u-mute" style={{ fontSize: "var(--t-11)" }}>
-                  {record.whatsapp ? "Opted in" : "Turned off"}
-                </span>
-                <button
-                  type="button"
-                  className={`switch${record.whatsapp ? " is-on" : ""}`}
-                  onClick={() => updateParty(ownerType, record.id, { whatsapp: !record.whatsapp })}
-                  aria-pressed={record.whatsapp}
-                  aria-label="WhatsApp opt-in"
-                  title={record.whatsapp
-                    ? "Opted in to WhatsApp. Click to turn WhatsApp reminders off for this client"
-                    : "WhatsApp reminders are off for this client. Click to turn them back on"}
-                />
-              </span>
+              <span className="num u-truncate" style={{ flex: 1 }}>{record.phone}</span>
+              <button
+                type="button"
+                className={`switch${record.whatsapp ? " is-on" : ""}`}
+                style={{ marginLeft: "auto", flexShrink: 0 }}
+                onClick={() => updateParty(ownerType, record.id, { whatsapp: !record.whatsapp })}
+                aria-pressed={record.whatsapp}
+                aria-label="WhatsApp opt-in"
+                title={record.whatsapp
+                  ? "Opted in to WhatsApp. Click to turn WhatsApp reminders off for this client"
+                  : "WhatsApp reminders are off for this client. Click to turn them back on"}
+              />
             </span>
           </div>
         </div>
