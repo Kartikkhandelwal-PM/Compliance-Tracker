@@ -251,10 +251,11 @@ export function PageHead({
 }) {
   return (
     <header className="phead">
-      {icon ? <span className="phead__icon"><Icon name={icon} size={20} /></span> : null}
-      <h1>{title}</h1>
-      {note ? <p className="phead__note">{note}</p> : null}
-      <span className="u-spacer" />
+      <span className="phead__title">
+        {icon ? <span className="phead__icon"><Icon name={icon} size={20} /></span> : null}
+        <h1>{title}</h1>
+        {note ? <p className="phead__note">{note}</p> : null}
+      </span>
       {aside ? <div className="phead__aside">{aside}</div> : null}
     </header>
   );

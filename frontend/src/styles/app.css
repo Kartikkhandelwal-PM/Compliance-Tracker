@@ -1217,15 +1217,32 @@ a.railbtn {
   box-shadow: var(--shadow-1);
 }
 
-/* --- Page header: one compact band, not a title page ---------------------- */
+/* --- Page header: one compact band, not a title page -----------------------
+   `.phead` itself never wraps: it's title-block vs. aside, and aside always
+   stays flex:none, pinned to the right. All the wrapping happens one level
+   in, inside `.phead__title` — icon, h1 and note share one baseline-aligned
+   row that wraps *itself* if it has to (a long title, or a long note, or
+   both together), without ever dragging the aside buttons down onto their
+   own left-aligned line the way a single flat wrapping row used to. Most
+   pages have a short title and note, so most of the time this reads exactly
+   like one compact line — the wrap only shows up on the pages that need it. */
 .phead {
   display: flex;
-  align-items: baseline;
-  gap: var(--s3);
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
   padding-bottom: var(--s3);
   border-bottom: 1px solid var(--rule);
   margin-bottom: var(--s4);
+}
+.phead__title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  row-gap: 2px;
+  gap: var(--s3);
+  min-width: 0;
+  flex: 1;
 }
 /* Header icons: the glyph and nothing else.
    The first attempt boxed it — a filled, bordered, teal-tinted square butted
@@ -1233,8 +1250,8 @@ a.railbtn {
    rail already highlights the same glyph 200px to its left, so the chip was
    paying for information the reader had not lost. Bare, in the faintest ink,
    it reads as a mark belonging to the title rather than a widget parked next
-   to it. `align-self: center` because `.phead` aligns on the baseline, which
-   would otherwise hang the glyph off the serif's cap-height. */
+   to it. `align-self: center` because `.phead__title` aligns on the baseline,
+   which would otherwise hang the glyph off the serif's cap-height. */
 .phead__icon,
 .shead__icon {
   flex: none;
