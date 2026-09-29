@@ -254,27 +254,41 @@ const NO_LATE_VALUE_CODES = new Set(["IFF", "GSTR-1A", "GSTR-1A-QRMP-A", "GSTR-1
  *  on the tax itself when it is paid late, not a penalty for filing late.
  *  Keyed by `Head` rather than `defCode`: every GST/TDS/ITR obligation that
  *  carries a `taxLiability` is exposed to the same statutory rate, so one
- *  entry per head covers the whole family. `monthlyPct` is what
- *  `interestAccrued` below is computed with; the note spells out the real
- *  section(s) and rate for staff, since the monthly figure alone doesn't
- *  distinguish e.g. TDS's 1%/1.5% split. */
-const INTEREST_BY_HEAD: Partial<Record<Head, { monthlyPct: number; note: string }>> = {
-  "GST": { monthlyPct: 1.5, note: "Interest may apply if paid late — 18% p.a. (1.5% per month) on tax payable, u/s 50." },
-  "TDS": { monthlyPct: 1.5, note: "Interest may apply if paid late — 1% per month for late deduction, 1.5% per month for late deposit, u/s 201(1A)." },
-  "Income Tax": { monthlyPct: 1, note: "Interest may apply if paid late — 1% per month on unpaid tax, u/s 234A/234B/234C." },
+ *  entry per head covers the whole family.
+ *
+ *  The two statutes round differently, and that difference is real, not an
+ *  inconsistency to tidy up: TDS (s.201(1A)) and Income Tax (s.234A/234B/
+ *  234C) are both written as "for every month or part of a month," so a
+ *  single day of delay is charged a full month's interest. GST's s.50 has no
+ *  such rounding — it is 18% per annum accruing per calendar day of delay —
+ *  so GST is `basis: "daily"` and the other two stay `basis: "monthly"`. */
+const INTEREST_BY_HEAD: Partial<Record<Head,
+  | { basis: "daily"; annualPct: number; note: string }
+  | { basis: "monthly"; monthlyPct: number; note: string }
+>> = {
+  "GST": { basis: "daily", annualPct: 18, note: "Interest may apply if paid late — 18% p.a. on tax payable, accruing per day of delay, u/s 50." },
+  "TDS": { basis: "monthly", monthlyPct: 1.5, note: "Interest may apply if paid late — 1% per month for late deduction, 1.5% per month for late deposit, u/s 201(1A)." },
+  "Income Tax": { basis: "monthly", monthlyPct: 1, note: "Interest may apply if paid late — 1% per month on unpaid tax, u/s 234A/234B/234C." },
 };
 
 /** The note is a standing rule of the head, shown whatever the status is;
  *  the accrued amount only exists once `lateDays` is positive, i.e. the tax
- *  was actually paid late — still overdue, or filed after its due date.
- *  Month-rounded-up, mirroring the `"interest"` late-fee kind's own formula
- *  in `estimateExposure` (rules.ts) for consistency. */
+ *  was actually paid late — still overdue, or filed after its due date. */
 function interestFor(
   head: Head, taxLiability: number, lateDays: number,
 ): { interestNote?: string; interestAccrued?: number; interestFormula?: string } {
   const rate = INTEREST_BY_HEAD[head];
   if (!rate || taxLiability <= 0) return {};
   if (lateDays <= 0) return { interestNote: rate.note };
+
+  if (rate.basis === "daily") {
+    const interestAccrued = Math.round(taxLiability * (rate.annualPct / 100 / 365) * lateDays);
+    return {
+      interestNote: rate.note,
+      interestAccrued,
+      interestFormula: `${rate.annualPct}% p.a. × ${lateDays} ${lateDays === 1 ? "day" : "days"} on ₹${inr(taxLiability)} = ₹${inr(interestAccrued)}.`,
+    };
+  }
   const months = Math.ceil(lateDays / 30);
   const interestAccrued = Math.round(taxLiability * (rate.monthlyPct / 100) * months);
   return {
