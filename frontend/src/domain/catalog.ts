@@ -289,28 +289,35 @@ export const DEFS: ComplianceDef[] = [
     lateFee: { kind: "perDay", amount: 50, nilAmount: 20, cap: 5000, note: "Late fee plus interest as applicable." },
     clientFacing: true,
   },
-  {
-    code: "CMP-08",
-    head: "GST",
-    form: "CMP-08",
-    description: "Statement-cum-challan of tax payable",
-    frequency: "Quarterly",
-    dueRule: "18th of the month following the quarter",
-    applicability: "Composition scheme taxpayers",
-    lateFee: { kind: "perDay", amount: 50, nilAmount: 20, cap: 5000, note: "₹50/day (₹20/day if nil)." },
-    clientFacing: true,
-  },
-  {
-    code: "GSTR-7",
-    head: "GST",
-    form: "GSTR-7",
-    description: "TDS return under GST",
-    frequency: "Monthly",
-    dueRule: "10th of the following month",
-    applicability: "TDS deductors registered under GST (s.51)",
-    lateFee: { kind: "perDay", amount: 100, cap: 5000, note: "₹100/day (CGST+SGST combined), capped at ₹5,000." },
-    clientFacing: true,
-  },
+
+  /* Not supported yet — CMP-08, GSTR-7, GSTR-8, GSTR-4, everything under
+     ROC/MCA, ROC/MCA (LLP) and Other Statutory below. Re-enable a
+     compliance by uncommenting its DEF here and its occurrence generator
+     line(s) in `occurrencesForFY` below; the applicability rules in
+     rules.ts already handle it and need no change — they no-op on their
+     own while the DEF is absent. */
+  // {
+    // code: "CMP-08",
+    // head: "GST",
+    // form: "CMP-08",
+    // description: "Statement-cum-challan of tax payable",
+    // frequency: "Quarterly",
+    // dueRule: "18th of the month following the quarter",
+    // applicability: "Composition scheme taxpayers",
+    // lateFee: { kind: "perDay", amount: 50, nilAmount: 20, cap: 5000, note: "₹50/day (₹20/day if nil)." },
+    // clientFacing: true,
+  // },
+  // {
+    // code: "GSTR-7",
+    // head: "GST",
+    // form: "GSTR-7",
+    // description: "TDS return under GST",
+    // frequency: "Monthly",
+    // dueRule: "10th of the following month",
+    // applicability: "TDS deductors registered under GST (s.51)",
+    // lateFee: { kind: "perDay", amount: 100, cap: 5000, note: "₹100/day (CGST+SGST combined), capped at ₹5,000." },
+    // clientFacing: true,
+  // },
   {
     code: "GSTR-6",
     head: "GST",
@@ -322,28 +329,28 @@ export const DEFS: ComplianceDef[] = [
     lateFee: { kind: "perDay", amount: 100, cap: 5000, note: "₹100/day (CGST+SGST combined), capped at ₹5,000." },
     clientFacing: true,
   },
-  {
-    code: "GSTR-8",
-    head: "GST",
-    form: "GSTR-8",
-    description: "TCS return under GST",
-    frequency: "Monthly",
-    dueRule: "10th of the following month",
-    applicability: "E-commerce operators (s.52)",
-    lateFee: { kind: "perDay", amount: 100, cap: 5000, note: "₹100/day (CGST+SGST combined), capped at ₹5,000." },
-    clientFacing: true,
-  },
-  {
-    code: "GSTR-4",
-    head: "GST",
-    form: "GSTR-4",
-    description: "Annual return (composition)",
-    frequency: "Annual",
-    dueRule: "30 April following the financial year",
-    applicability: "Composition scheme taxpayers",
-    lateFee: { kind: "perDay", amount: 50, nilAmount: 20, cap: "turnoverPct", capPct: 0.0025, note: "₹50/day, capped at 0.25% of turnover." },
-    clientFacing: true,
-  },
+  // {
+    // code: "GSTR-8",
+    // head: "GST",
+    // form: "GSTR-8",
+    // description: "TCS return under GST",
+    // frequency: "Monthly",
+    // dueRule: "10th of the following month",
+    // applicability: "E-commerce operators (s.52)",
+    // lateFee: { kind: "perDay", amount: 100, cap: 5000, note: "₹100/day (CGST+SGST combined), capped at ₹5,000." },
+    // clientFacing: true,
+  // },
+  // {
+    // code: "GSTR-4",
+    // head: "GST",
+    // form: "GSTR-4",
+    // description: "Annual return (composition)",
+    // frequency: "Annual",
+    // dueRule: "30 April following the financial year",
+    // applicability: "Composition scheme taxpayers",
+    // lateFee: { kind: "perDay", amount: 50, nilAmount: 20, cap: "turnoverPct", capPct: 0.0025, note: "₹50/day, capped at 0.25% of turnover." },
+    // clientFacing: true,
+  // },
   {
     code: "GSTR-9",
     head: "GST",
@@ -612,119 +619,119 @@ export const DEFS: ComplianceDef[] = [
     clientFacing: false,
   },
 
-  /* ---- ROC / MCA -------------------------------------------------------- */
-  {
-    code: "AOC-4",
-    head: "ROC/MCA",
-    form: "AOC-4",
-    description: "Filing of financial statements (~30 days from AGM)",
-    frequency: "Annual",
-    dueRule: "30 days from the AGM",
-    applicability: "All companies",
-    lateFee: { kind: "perDay", amount: 100, note: "Additional fee ₹100/day of delay, uncapped." },
-    clientFacing: true,
-  },
-  {
-    code: "MGT-7",
-    head: "ROC/MCA",
-    form: "MGT-7 / MGT-7A",
-    description: "Annual return filing (~60 days from AGM)",
-    frequency: "Annual",
-    dueRule: "60 days from the AGM",
-    applicability: "All companies (MGT-7A for OPC / small companies)",
-    lateFee: { kind: "perDay", amount: 100, note: "Additional fee ₹100/day of delay, uncapped." },
-    clientFacing: true,
-  },
-  {
-    code: "DPT-3",
-    head: "ROC/MCA",
-    form: "DPT-3",
-    description: "Return of deposits / transactions not treated as deposits",
-    frequency: "Annual",
-    dueRule: "30 June every year",
-    applicability: "Companies other than government companies",
-    lateFee: { kind: "flat", amount: 20000, note: "Penalty on the company and officers under the Companies Act." },
-    clientFacing: true,
-  },
-  {
-    code: "MSME-1",
-    head: "ROC/MCA",
-    form: "MSME-1",
-    description: "Half-yearly return of outstanding payments to MSMEs",
-    frequency: "Half-yearly",
-    dueRule: "30 April and 31 October",
-    applicability: "Companies with MSME dues outstanding beyond 45 days",
-    lateFee: { kind: "flat", amount: 20000, note: "Penalty under the Companies Act for non-filing." },
-    clientFacing: true,
-  },
-  {
-    code: "DIR-3-KYC",
-    head: "ROC/MCA",
-    form: "DIR-3 KYC",
-    description: "Director KYC filing",
-    frequency: "Annual",
-    dueRule: "30 September every year",
-    applicability: "All DIN holders",
-    lateFee: { kind: "flat", amount: 5000, note: "Flat penalty ₹5,000 if filed late." },
-    clientFacing: true,
-  },
-  {
-    code: "LLP-11",
-    head: "ROC/MCA (LLP)",
-    form: "Form 11",
-    description: "Annual return of LLP",
-    frequency: "Annual",
-    dueRule: "30 May following the financial year",
-    applicability: "All LLPs",
-    lateFee: { kind: "perDay", amount: 100, note: "Additional fee ₹100/day, uncapped." },
-    clientFacing: true,
-  },
-  {
-    code: "LLP-8",
-    head: "ROC/MCA (LLP)",
-    form: "Form 8",
-    description: "Statement of Account and Solvency",
-    frequency: "Annual",
-    dueRule: "30 October following the financial year",
-    applicability: "All LLPs",
-    lateFee: { kind: "perDay", amount: 100, note: "Additional fee ₹100/day, uncapped." },
-    clientFacing: true,
-  },
+  // /* ---- ROC / MCA -------------------------------------------------------- */
+  // {
+    // code: "AOC-4",
+    // head: "ROC/MCA",
+    // form: "AOC-4",
+    // description: "Filing of financial statements (~30 days from AGM)",
+    // frequency: "Annual",
+    // dueRule: "30 days from the AGM",
+    // applicability: "All companies",
+    // lateFee: { kind: "perDay", amount: 100, note: "Additional fee ₹100/day of delay, uncapped." },
+    // clientFacing: true,
+  // },
+  // {
+    // code: "MGT-7",
+    // head: "ROC/MCA",
+    // form: "MGT-7 / MGT-7A",
+    // description: "Annual return filing (~60 days from AGM)",
+    // frequency: "Annual",
+    // dueRule: "60 days from the AGM",
+    // applicability: "All companies (MGT-7A for OPC / small companies)",
+    // lateFee: { kind: "perDay", amount: 100, note: "Additional fee ₹100/day of delay, uncapped." },
+    // clientFacing: true,
+  // },
+  // {
+    // code: "DPT-3",
+    // head: "ROC/MCA",
+    // form: "DPT-3",
+    // description: "Return of deposits / transactions not treated as deposits",
+    // frequency: "Annual",
+    // dueRule: "30 June every year",
+    // applicability: "Companies other than government companies",
+    // lateFee: { kind: "flat", amount: 20000, note: "Penalty on the company and officers under the Companies Act." },
+    // clientFacing: true,
+  // },
+  // {
+    // code: "MSME-1",
+    // head: "ROC/MCA",
+    // form: "MSME-1",
+    // description: "Half-yearly return of outstanding payments to MSMEs",
+    // frequency: "Half-yearly",
+    // dueRule: "30 April and 31 October",
+    // applicability: "Companies with MSME dues outstanding beyond 45 days",
+    // lateFee: { kind: "flat", amount: 20000, note: "Penalty under the Companies Act for non-filing." },
+    // clientFacing: true,
+  // },
+  // {
+    // code: "DIR-3-KYC",
+    // head: "ROC/MCA",
+    // form: "DIR-3 KYC",
+    // description: "Director KYC filing",
+    // frequency: "Annual",
+    // dueRule: "30 September every year",
+    // applicability: "All DIN holders",
+    // lateFee: { kind: "flat", amount: 5000, note: "Flat penalty ₹5,000 if filed late." },
+    // clientFacing: true,
+  // },
+  // {
+    // code: "LLP-11",
+    // head: "ROC/MCA (LLP)",
+    // form: "Form 11",
+    // description: "Annual return of LLP",
+    // frequency: "Annual",
+    // dueRule: "30 May following the financial year",
+    // applicability: "All LLPs",
+    // lateFee: { kind: "perDay", amount: 100, note: "Additional fee ₹100/day, uncapped." },
+    // clientFacing: true,
+  // },
+  // {
+    // code: "LLP-8",
+    // head: "ROC/MCA (LLP)",
+    // form: "Form 8",
+    // description: "Statement of Account and Solvency",
+    // frequency: "Annual",
+    // dueRule: "30 October following the financial year",
+    // applicability: "All LLPs",
+    // lateFee: { kind: "perDay", amount: 100, note: "Additional fee ₹100/day, uncapped." },
+    // clientFacing: true,
+  // },
 
-  /* ---- Other statutory -------------------------------------------------- */
-  {
-    code: "PF-ECR",
-    head: "Other Statutory",
-    form: "PF (EPF) Payment & ECR",
-    description: "Provident fund contribution deposit and ECR upload",
-    frequency: "Monthly",
-    dueRule: "15th of the following month",
-    applicability: "Establishments covered under the EPF Act",
-    lateFee: { kind: "interest", monthlyPct: 1, basis: "contribution", basisPct: 0.24, note: "Interest 12% p.a. plus damages under the EPF Act. Contribution taken at 24% of payroll (12% employee + 12% employer)." },
-    clientFacing: false,
-  },
-  {
-    code: "ESI",
-    head: "Other Statutory",
-    form: "ESI Payment & Return",
-    description: "ESI contribution deposit",
-    frequency: "Monthly",
-    dueRule: "15th of the following month",
-    applicability: "Establishments covered under the ESI Act",
-    lateFee: { kind: "interest", monthlyPct: 1, basis: "contribution", basisPct: 0.0325, note: "Interest 12% p.a. plus damages under the ESI Act. Contribution taken at 3.25% of wages (0.75% employee + 3.25% employer applies to covered wages)." },
-    clientFacing: false,
-  },
-  {
-    code: "PTAX",
-    head: "Other Statutory",
-    form: "Professional Tax",
-    description: "Enrolment / periodic return per state law",
-    frequency: "Annual",
-    dueRule: "Varies by state, commonly 30 June",
-    applicability: "Employers / self-employed persons in PT states",
-    lateFee: { kind: "flat", amount: 2500, note: "Varies significantly by state; verify locally." },
-    clientFacing: true,
-  },
+  // /* ---- Other statutory -------------------------------------------------- */
+  // {
+    // code: "PF-ECR",
+    // head: "Other Statutory",
+    // form: "PF (EPF) Payment & ECR",
+    // description: "Provident fund contribution deposit and ECR upload",
+    // frequency: "Monthly",
+    // dueRule: "15th of the following month",
+    // applicability: "Establishments covered under the EPF Act",
+    // lateFee: { kind: "interest", monthlyPct: 1, basis: "contribution", basisPct: 0.24, note: "Interest 12% p.a. plus damages under the EPF Act. Contribution taken at 24% of payroll (12% employee + 12% employer)." },
+    // clientFacing: false,
+  // },
+  // {
+    // code: "ESI",
+    // head: "Other Statutory",
+    // form: "ESI Payment & Return",
+    // description: "ESI contribution deposit",
+    // frequency: "Monthly",
+    // dueRule: "15th of the following month",
+    // applicability: "Establishments covered under the ESI Act",
+    // lateFee: { kind: "interest", monthlyPct: 1, basis: "contribution", basisPct: 0.0325, note: "Interest 12% p.a. plus damages under the ESI Act. Contribution taken at 3.25% of wages (0.75% employee + 3.25% employer applies to covered wages)." },
+    // clientFacing: false,
+  // },
+  // {
+    // code: "PTAX",
+    // head: "Other Statutory",
+    // form: "Professional Tax",
+    // description: "Enrolment / periodic return per state law",
+    // frequency: "Annual",
+    // dueRule: "Varies by state, commonly 30 June",
+    // applicability: "Employers / self-employed persons in PT states",
+    // lateFee: { kind: "flat", amount: 2500, note: "Varies significantly by state; verify locally." },
+    // clientFacing: true,
+  // },
 ];
 
 export const DEF_BY_CODE: Record<string, ComplianceDef> = Object.fromEntries(
@@ -732,19 +739,14 @@ export const DEF_BY_CODE: Record<string, ComplianceDef> = Object.fromEntries(
 );
 
 /** Compliances that start out switched off in Settings → Compliances,
- *  rather than the usual "on until a firm turns it off". These are the
- *  ones that only apply to a minority of practices (CMP-08's composition
- *  scheme, GSTR-4/7/8's own narrow filer types, the ROC forms) or that
- *  most firms handle outside this tracker entirely (payroll). A firm that
- *  does handle one just switches it back on — this only changes what a
- *  fresh install starts with, not what's possible. Read through
- *  `complianceSetting()`, never `.tracked` here directly, so an explicit
- *  override always wins over this default. */
-export const DEFAULT_UNTRACKED = new Set([
-  "CMP-08", "GSTR-7", "GSTR-8", "GSTR-4",
-  "AOC-4", "MGT-7", "DPT-3", "MSME-1", "DIR-3-KYC", "LLP-11", "LLP-8",
-  "PF-ECR", "ESI", "PTAX",
-]);
+ *  rather than the usual "on until a firm turns it off". Empty for now —
+ *  the compliances that used to sit here (CMP-08, GSTR-4/7/8, the ROC/MCA
+ *  and ROC/MCA (LLP) forms, PF-ECR/ESI/PTAX) are commented out of `DEFS`
+ *  above instead, since we don't support them at all yet rather than just
+ *  defaulting them off. Read through `complianceSetting()`, never
+ *  `.tracked` here directly, so an explicit override always wins over
+ *  this default. */
+export const DEFAULT_UNTRACKED = new Set<string>([]);
 
 /** Which of the three unlinked records (`Client`/`GstEntity`/`TdsDeductor`)
  *  owns a compliance's obligations. Mostly `def.head` — "GST" is always a
@@ -784,14 +786,15 @@ const marchChallanOverride = (y: number, m: number) => (m === 3 ? iso(y, 4, 30) 
 export function occurrencesForFY(fyStart: number): Occurrence[] {
   const prevFY = fyLabel(fyStart - 1);
   const prevKey = `FY${fyStart - 1}-${String(fyStart % 100).padStart(2, "0")}`;
-  const thisKey = `FY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
+  // Only used by the disabled generators below (GSTR-4, MSME-1, DIR-3-KYC, PTAX).
+  // const thisKey = `FY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`;
 
   return [
     ...monthlyFollowing(fyStart, "GSTR-1", 11),
     ...monthlyFollowing(fyStart, "GSTR-1A", 20),
     ...monthlyFollowing(fyStart, "GSTR-3B", 20),
-    ...monthlyFollowing(fyStart, "GSTR-7", 10),
-    ...monthlyFollowing(fyStart, "GSTR-8", 10),
+    // ...monthlyFollowing(fyStart, "GSTR-7", 10),
+    // ...monthlyFollowing(fyStart, "GSTR-8", 10),
     ...monthlyFollowing(fyStart, "GSTR-6", 13),
     ...quarterlyFollowing(fyStart, "GSTR-1-QRMP", 13),
     ...iffMonths(fyStart, "IFF", 13),
@@ -799,15 +802,15 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
     ...quarterlyFollowing(fyStart, "GSTR-3B-QRMP-A", 22),
     ...quarterlyFollowing(fyStart, "GSTR-1A-QRMP-B", 24),
     ...quarterlyFollowing(fyStart, "GSTR-3B-QRMP-B", 24),
-    ...quarterlyFollowing(fyStart, "CMP-08", 18),
-    once("GSTR-4", fyStart, 4, 30, prevKey, prevFY, fyStart),
-    once("GSTR-4", fyStart + 1, 4, 30, thisKey, fyLabel(fyStart), fyStart),
+    // ...quarterlyFollowing(fyStart, "CMP-08", 18),
+    // once("GSTR-4", fyStart, 4, 30, prevKey, prevFY, fyStart),
+    // once("GSTR-4", fyStart + 1, 4, 30, thisKey, fyLabel(fyStart), fyStart),
     once("GSTR-9", fyStart, 12, 31, prevKey, prevFY, fyStart),
     once("GSTR-9C", fyStart, 12, 31, prevKey, prevFY, fyStart),
 
     ...monthlyFollowing(fyStart, "TDS-CHALLAN", 7, marchChallanOverride),
-    ...monthlyFollowing(fyStart, "PF-ECR", 15),
-    ...monthlyFollowing(fyStart, "ESI", 15),
+    // ...monthlyFollowing(fyStart, "PF-ECR", 15),
+    // ...monthlyFollowing(fyStart, "ESI", 15),
 
     {
       runId: "ADV-TAX::I1", defCode: "ADV-TAX", periodKey: "I1",
@@ -856,15 +859,15 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
       ]),
     ),
 
-    once("AOC-4", fyStart, 10, 29, prevKey, prevFY, fyStart),
-    once("MGT-7", fyStart, 11, 29, prevKey, prevFY, fyStart),
-    once("DPT-3", fyStart, 6, 30, prevKey, prevFY, fyStart),
-    once("MSME-1", fyStart, 4, 30, `H2${prevKey}`, `Oct ${fyStart - 1} – Mar ${fyStart}`, fyStart),
-    once("MSME-1", fyStart, 10, 31, `H1${thisKey}`, `Apr – Sep ${fyStart}`, fyStart),
-    once("DIR-3-KYC", fyStart, 9, 30, thisKey, fyLabel(fyStart), fyStart),
-    once("LLP-11", fyStart, 5, 30, prevKey, prevFY, fyStart),
-    once("LLP-8", fyStart, 10, 30, prevKey, prevFY, fyStart),
-    once("PTAX", fyStart, 6, 30, thisKey, fyLabel(fyStart), fyStart),
+    // once("AOC-4", fyStart, 10, 29, prevKey, prevFY, fyStart),
+    // once("MGT-7", fyStart, 11, 29, prevKey, prevFY, fyStart),
+    // once("DPT-3", fyStart, 6, 30, prevKey, prevFY, fyStart),
+    // once("MSME-1", fyStart, 4, 30, `H2${prevKey}`, `Oct ${fyStart - 1} – Mar ${fyStart}`, fyStart),
+    // once("MSME-1", fyStart, 10, 31, `H1${thisKey}`, `Apr – Sep ${fyStart}`, fyStart),
+    // once("DIR-3-KYC", fyStart, 9, 30, thisKey, fyLabel(fyStart), fyStart),
+    // once("LLP-11", fyStart, 5, 30, prevKey, prevFY, fyStart),
+    // once("LLP-8", fyStart, 10, 30, prevKey, prevFY, fyStart),
+    // once("PTAX", fyStart, 6, 30, thisKey, fyLabel(fyStart), fyStart),
   ].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 
@@ -920,6 +923,9 @@ export function headClass(head: string): string {
   }
 }
 
+/* "ROC/MCA", "ROC/MCA (LLP)" and "Other Statutory" are commented out along
+   with every DEF under them above — nothing left to filter or group by
+   until one of those is re-enabled. */
 export const HEADS: string[] = [
-  "GST", "Income Tax", "TDS", "ROC/MCA", "ROC/MCA (LLP)", "Other Statutory",
+  "GST", "Income Tax", "TDS",
 ];
