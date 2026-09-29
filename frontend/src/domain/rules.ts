@@ -407,11 +407,19 @@ export function applicableClientCompliances(c: Client): Applicable[] {
 
   const estTax = estimatedTax(p);
   if (estTax > 10000) {
-    add("ADV-TAX", {
-      ruleRef: "Income Tax · s.208",
-      condition: "Advance tax is payable where the estimated tax liability for the year is ₹10,000 or more.",
-      facts: [f("Estimated tax liability", money(estTax)), f("Total income", money(p.totalIncome))],
-    });
+    if (p.presumptiveOpted) {
+      add("ADV-TAX-44AD", {
+        ruleRef: "Income Tax · s.211(1)(b)",
+        condition: "Presumptive scheme (44AD/44ADA) assessee with estimated tax liability of ₹10,000 or more: the whole year's advance tax is payable in a single instalment by 15 March, not the general four-instalment schedule.",
+        facts: [f("Estimated tax liability", money(estTax)), f("Total income", money(p.totalIncome)), f("Presumptive scheme opted", true)],
+      });
+    } else {
+      add("ADV-TAX", {
+        ruleRef: "Income Tax · s.208",
+        condition: "Advance tax is payable where the estimated tax liability for the year is ₹10,000 or more.",
+        facts: [f("Estimated tax liability", money(estTax)), f("Total income", money(p.totalIncome))],
+      });
+    }
   }
 
   /* ---- ROC / MCA ------------------------------------------------------- */

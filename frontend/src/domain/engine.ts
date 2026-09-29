@@ -1042,14 +1042,64 @@ export function setEmailProvider(provider: "kdk" | "zeptomail") {
   emit();
 }
 
-/** Commits a ZeptoMail configuration, either connection method — the same
- *  token works for both, ZeptoMail just accepts it two different ways in.
- *  This app cannot itself confirm the sending domain is verified in
- *  ZeptoMail (that is a DNS check on their side), so `configured` records
- *  only that the firm saved a complete setup, not that it has been proven
- *  to work — "Send test email" is what actually exercises it. */
-export function saveZeptomail(config: Omit<Sender["zeptomail"], "configured">) {
-  setSender({ zeptomail: { ...config, configured: true } });
+/** Adds a firm's own sending domain under KDK's ZeptoMail account. The firm
+ *  never handles an API token or picks API vs SMTP — that is this app's own
+ *  concern, settled once per KDK's account, not a decision each firm makes.
+ *  All they get back is the pair of DNS records ZeptoMail issued for this
+ *  domain, which is real ZeptoMail behaviour: adding a domain always returns
+ *  a DKIM (TXT) record and a CNAME record to prove ownership. Swap the
+ *  record generation below for the real Add Domain API response once wired
+ *  up; the shape (host + value per record) is what that response returns. */
+export function addOwnDomain(domain: string, fromName: string, fromAddress: string) {
+  setSender({
+    zeptomail: {
+      domain, fromName, fromAddress,
+      dkim: { host: `zmverify._domainkey.${domain}`, value: `zmail.${domain.replace(/\./g, "-")}.verify` },
+      cname: { host: `zmail.${domain}`, value: "zeptomail.zoho.com" },
+      status: "pending", checkAttempts: 0,
+    },
+  });
+  emit();
+}
+
+/** Re-checks whether the two DNS records above have been found. Real DNS
+ *  propagation genuinely isn't instant — up to 24-48 hours — so a real
+ *  "Check now" can come back either way, and the button that triggered it
+ *  has to disappear while one is running rather than sit there clickable.
+ *  This prototype has no DNS to check against, so it fakes both of those:
+ *  a short "checking" delay, and the first check on any domain always
+ *  comes back "failed" (genuinely realistic — records are rarely found on
+ *  the very first check), with every check after that succeeding. Swap the
+ *  body of the timeout for a real status poll once ZeptoMail is wired up;
+ *  the three states around it (checking → failed/verified) don't change. */
+export function checkOwnDomain() {
+  const before = getSender();
+  if (before.zeptomail.status !== "pending" && before.zeptomail.status !== "failed") return;
+
+  setSender({ zeptomail: { ...before.zeptomail, status: "checking" } });
+  emit();
+
+  setTimeout(() => {
+    const s = getSender();
+    if (s.zeptomail.status !== "checking") return; // domain was cleared mid-check
+    const checkAttempts = s.zeptomail.checkAttempts + 1;
+    setSender({
+      zeptomail: { ...s.zeptomail, checkAttempts, status: checkAttempts >= 2 ? "verified" : "failed" },
+    });
+    emit();
+  }, 1400);
+}
+
+/** Backs out of a domain that was added but never (or no longer) wanted —
+ *  clears it back to the empty, unverified state so the form starts fresh. */
+export function clearOwnDomain() {
+  setSender({
+    zeptomail: {
+      domain: "", fromName: "", fromAddress: "",
+      dkim: { host: "", value: "" }, cname: { host: "", value: "" },
+      status: "unverified", checkAttempts: 0,
+    },
+  });
   emit();
 }
 

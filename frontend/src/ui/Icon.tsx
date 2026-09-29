@@ -8,7 +8,7 @@ export type IconName =
   | "collapse" | "expand" | "plus" | "clock" | "send" | "external" | "info"
   | "arrowRight" | "sort" | "user" | "bolt" | "ban" | "history" | "bell"
   | "tick" | "tickDouble" | "menu" | "settings" | "fullscreen" | "fullscreenExit"
-  | "sync" | "eye" | "eyeOff"
+  | "sync" | "eye" | "eyeOff" | "copy"
   /* Chat furniture — only used to make the WhatsApp preview read as a real
      thread rather than a quotation of one. */
   | "phone" | "video" | "dots" | "lock" | "mic" | "attach" | "smile" | "camera";
@@ -53,6 +53,10 @@ const P: Record<IconName, string> = {
   eye: "M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z"
     + "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
   eyeOff: "M2.5 12S6 5.5 12 5.5c1.6 0 3 .3 4.3.9M21.5 12s-1.3 2.5-3.7 4.3M9.4 9.6a3 3 0 0 0 5 3.3M3.5 3.5l17 17",
+  /* A value meant to be taken away and pasted elsewhere — two overlapping
+     sheets, the standard "copy" glyph. */
+  copy: "M8.5 8.5h9a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 7 19v-9a1.5 1.5 0 0 1 1.5-1.5Z"
+    + "M5 15.5H4.5A1.5 1.5 0 0 1 3 14v-9a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 15 5v.5",
   bell: "M18 8.5a6 6 0 1 0-12 0c0 5.2-1.6 6.8-2 7.2a.6.6 0 0 0 .4 1h15.2a.6.6 0 0 0 .4-1c-.4-.4-2-2-2-7.2ZM9.8 20a2.4 2.4 0 0 0 4.4 0",
   /* WhatsApp receipts. One tick = sent to the server, two = on the handset;
      the colour, not the count, is what says "read". */

@@ -654,13 +654,11 @@ nothing in the catalogue matches this code," with a link back to the full list.
   used the product plus the year ahead, the same list Calendar offers (section 2.3), followed
   by a "← All compliances" button, back to section 3.3. The current year is selected by
   default. Changing it re-runs section 3.9 and 3.10 for the newly picked year.
-- Underneath, four short facts in one row:
+- Underneath, three short facts in one row:
   - **Head**, with the same coloured dot used everywhere else for that head.
   - **Frequency**, how often this compliance recurs (e.g. Monthly, Quarterly, Annual).
   - **Due date rule**, in plain words.
-  - **Filed by**, either "Client files; firm sends reminders" or "Filed by the firm",
-    depending on whether this is one the client is responsible for filing themselves.
-- Below that, two longer facts side by side:
+- Below that, two longer facts, each on its own full-width line:
   - **Applies to**, in plain words.
   - **If missed**, the plain-language description of what the late fee or penalty is.
 

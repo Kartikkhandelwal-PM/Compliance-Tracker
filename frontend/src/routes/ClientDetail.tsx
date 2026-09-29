@@ -362,12 +362,6 @@ export function ClientDetailPage() {
                   <Row k="Foreign assets / income" v={client.profile.hasForeignAssets} />
                   <Row k="Partner in a firm" v={client.profile.isPartnerInFirm} />
                 </ProfileCard>
-
-                <ProfileCard title="ROC / MCA">
-                  <Row k="Deposits / exempt receipts" v={client.profile.hasDeposits} />
-                  <Row k="MSME dues beyond 45 days" v={client.profile.msmeDuesOverdue} />
-                  <Row k="Claims s.11 exemption" v={client.profile.claimsSection11} />
-                </ProfileCard>
               </>
             ) : null}
 
@@ -390,13 +384,6 @@ export function ClientDetailPage() {
                   <Row k="Nature of payments made" v={deductor.profile.paymentNatures.join(", ") || "—"} />
                   <Row k="TDS deducted per quarter" v={`₹${inr(deductor.profile.tdsPerQuarter)}`} mono hint="Caps the ₹200/day late fee under s.234E" />
                   <Row k="Turnover (preceding FY)" v={`₹${inr(deductor.profile.turnover)}`} mono hint="Drives the 27EQ (TCS) turnover threshold" />
-                </ProfileCard>
-
-                <ProfileCard title="Payroll & other statutory">
-                  <Row k="EPF covered" v={deductor.profile.epfCovered} />
-                  <Row k="ESI covered" v={deductor.profile.esiCovered} />
-                  <Row k="Monthly payroll" v={`₹${inr(deductor.profile.monthlyPayroll)}`} mono />
-                  <Row k="Professional tax state" v={deductor.profile.professionalTaxState ?? "Not applicable"} />
                 </ProfileCard>
               </>
             ) : null}

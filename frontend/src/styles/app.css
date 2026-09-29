@@ -5528,6 +5528,11 @@ a.calpill.p-overdue:hover {
 .sinput:focus-visible {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
 }
+/* The browser's own placeholder colour reads almost as dark as typed text —
+   every other hint in this app uses `--ink-4` for exactly this reason. */
+.sinput::placeholder {
+  color: var(--ink-4);
+}
 
 /* ---- A value shown but not editable --------------------------------------
    Sunk rather than raised, so it reads as a stated fact rather than an empty
@@ -5690,6 +5695,36 @@ a.calpill.p-overdue:hover {
   background: var(--hover);
 }
 
+/* ---- A field that only writes on a deliberate action ---------------------
+   Same shape as `.field-secret`'s reveal toggle — the button sits on top of
+   the input's own right edge, not beside it — but this one only appears
+   once there's an actual edit to commit, and reads as an action (the
+   `--focus` colour) rather than a passive toggle. */
+.field-savable {
+  position: relative;
+}
+.field-savable .sinput {
+  padding-right: 38px;
+}
+.field-savable__save {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: none;
+  border-radius: var(--radius);
+  color: var(--focus);
+  cursor: pointer;
+}
+.field-savable__save:hover {
+  background: color-mix(in srgb, var(--focus) 14%, transparent);
+}
+
 /* ---- Provider config footer: status on the left, actions on the right ---- */
 .providercfg__foot {
   display: flex;
@@ -5754,6 +5789,89 @@ a.calpill.p-overdue:hover {
 }
 .pfield .field-secret .sinput { padding-right: 42px; }
 
+/* ---- A field that fails its own validation, inline ------------------------
+   Same red as the overdue tag elsewhere — this is that same "something is
+   wrong" signal, not a new colour for the same idea. The message sits under
+   the input rather than replacing the hint above it, since the hint is
+   still true (it explains what the field is for); the error is additional,
+   not a replacement. */
+.sinput--invalid {
+  border-color: var(--st-overdue-line);
+}
+.sinput--invalid:focus,
+.sinput--invalid:focus-visible {
+  border-color: var(--st-overdue-solid);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-overdue-solid) 18%, transparent);
+}
+.pfield__err {
+  margin: 4px 0 0;
+  font-size: var(--t-12);
+  line-height: 1.35;
+  color: var(--st-overdue-fg);
+}
+
+/* ---- Email ID + domain, one joined field with a fixed addon --------------
+   The standard "input group" shape (a text box with a fixed suffix panel),
+   not a plain input with a label floating at its far right edge — giving
+   the domain its own shaded, bordered panel is what makes it read as a
+   fixed, attached fact rather than leftover empty space in an unfinished
+   box. The input only takes the width it plausibly needs, so the addon
+   sits right after what's typed instead of being pushed to the far edge. */
+.emailid {
+  display: flex;
+  align-items: stretch;
+  height: 36px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  overflow: hidden;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.emailid:focus-within {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 18%, transparent);
+}
+.emailid__input {
+  flex: none;
+  width: 42%;
+  min-width: 90px;
+  border: none;
+  background: none;
+  padding: 0 var(--s2) 0 var(--s3);
+  font: inherit;
+  font-size: var(--t-14);
+  color: var(--ink);
+}
+.emailid__input:focus {
+  outline: none;
+}
+.emailid__input::placeholder {
+  color: var(--ink-4);
+}
+.emailid__at {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--s3);
+  border-left: 1px solid var(--rule);
+  background: var(--sunk);
+  font-family: var(--f-mono);
+  font-size: var(--t-13);
+  /* This reads as real, filled-in data once a domain is actually typed —
+     `--ink-2` matches `.sinput.is-locked`'s own "stated fact" colour. Before
+     that, it's still just the placeholder example, so it drops to the same
+     `--ink-4` every other placeholder in this app uses, not a shade darker
+     that would make it look like text someone already entered. */
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.emailid__at--empty {
+  color: var(--ink-4);
+}
+
 /* A locked field inside a provider form — same sunk fill as `.sinput.is-locked`
    elsewhere, plus a lock glyph, because here it sits beside editable fields
    that look identical otherwise; a settings page with nothing else to compare
@@ -5771,6 +5889,73 @@ a.calpill.p-overdue:hover {
   transform: translateY(-50%);
   color: var(--ink-4);
   pointer-events: none;
+}
+
+/* ---- The two DNS records, shaped like a domain registrar's own DNS table -
+   Type / Name / Value columns, because that is the exact screen the reader
+   is about to go paste these into (GoDaddy, BigRock, and the rest all use
+   this same three-column shape) — matching it means recognising the target
+   fields on sight instead of re-mapping our layout onto theirs. A `.sinput`
+   at half width silently clipped a 40-60 character DKIM value; a table cell
+   wraps instead. */
+.dnstable-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+}
+.dnstable {
+  width: 100%;
+  border-collapse: collapse;
+}
+.dnstable th {
+  text-align: left;
+  font-size: var(--t-11);
+  font-weight: 650;
+  color: var(--ink-3);
+  padding: 8px var(--s3);
+  background: var(--sunk);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+}
+.dnstable td {
+  padding: 10px var(--s3);
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  font-size: var(--t-12);
+}
+.dnstable tr:last-child td {
+  border-bottom: none;
+}
+.dnstable__type {
+  font-weight: 650;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.dnstable__cell {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.dnstable__cell code {
+  font-family: var(--f-mono);
+  color: var(--ink);
+  word-break: break-all;
+}
+.dnsrec__copy {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: none;
+  background: none;
+  border-radius: var(--radius);
+  color: var(--ink-4);
+  cursor: pointer;
+}
+.dnsrec__copy:hover {
+  color: var(--ink-2);
+  background: var(--hover);
 }
 
 /* The channel identity block — the brand mark at real size, because that is

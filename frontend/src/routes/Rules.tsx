@@ -30,20 +30,21 @@
       one.
    ========================================================================== */
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { STAFF } from "../domain/book.ts";
 import { DEFS, HEADS, headClass } from "../domain/catalog.ts";
 import {
   complianceSetting, getDefaultAssignee, getFirm,
+  addOwnDomain, checkOwnDomain, clearOwnDomain,
   getNotificationSettings, getReminderSettings, getSchedule, getSenderProfile,
-  resetCompliances, resetSchedule, saveRampwin, saveZeptomail, setDefaultAssignee,
+  resetCompliances, resetSchedule, saveRampwin, setDefaultAssignee,
   setEmailProvider, setWaProvider, toggleStepChannel, updateCompliance, updateFirm,
   updateNotificationSettings, updateReminderSettings, updateSenderProfile, updateStep,
   untrackedCount,
 } from "../domain/engine.ts";
 import { useApp, useEngine } from "../ui/app-state.tsx";
-import { Avatar, Check, Empty, PageHead, Seg } from "../ui/bits.tsx";
+import { Avatar, Check, Empty, PageHead } from "../ui/bits.tsx";
 import { BrandIcon, Icon } from "../ui/Icon.tsx";
 import type { IconName } from "../ui/Icon.tsx";
 import type { Channel, FirmProfile, SenderProfile } from "../domain/types.ts";
@@ -130,16 +131,48 @@ function Row({ label, hint, children, wide }: {
   );
 }
 
-function Text({ value, onChange, placeholder, mono }: {
-  value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean;
+function Text({ value, onChange, placeholder, mono, invalid }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean; invalid?: boolean;
 }) {
   return (
     <input
-      className={`sinput${mono ? " num" : ""}`}
+      className={`sinput${mono ? " num" : ""}${invalid ? " sinput--invalid" : ""}`}
       value={value}
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
     />
+  );
+}
+
+/** A field that only writes on a deliberate action, not every keystroke —
+ *  a reply-to address is read back by whoever configured it days later, and
+ *  autosaving every partial keystroke ("kartik@g", "kartik@gm", …) into that
+ *  history reads as noise, and worse, briefly saves an invalid address. The
+ *  tick only appears once the draft actually differs from what's saved, so
+ *  an unedited field never shows an action with nothing to commit. Enter
+ *  saves too, for anyone used to a plain form field. */
+function SavableText({ value, onSave, placeholder, mono }: {
+  value: string; onSave: (v: string) => void; placeholder?: string; mono?: boolean;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const dirty = draft.trim() !== value.trim();
+  const save = () => { if (dirty) onSave(draft.trim()); };
+  return (
+    <div className="field-savable">
+      <input
+        className={`sinput${mono ? " num" : ""}`}
+        value={draft}
+        placeholder={placeholder}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") save(); }}
+      />
+      {dirty ? (
+        <button type="button" className="field-savable__save" onClick={save} aria-label="Save">
+          <Icon name="check" size={14} />
+        </button>
+      ) : null}
+    </div>
   );
 }
 
@@ -256,6 +289,67 @@ function PField({ label, hint, children }: {
          so the two inputs start level without faking the space. */}
       {hint ? <p className="pfield__hint">{hint}</p> : null}
       {children}
+    </div>
+  );
+}
+
+/** The two DNS records the firm needs to add, shaped like the DNS table a
+ *  registrar (GoDaddy, BigRock, …) already shows them — Type / Host / Value
+ *  columns, so the reader recognises the fields they're about to paste
+ *  these into rather than having to re-map an unfamiliar layout onto a
+ *  familiar one. Not a `PLocked`: a lock glyph says "this is fixed by us";
+ *  these are the opposite, values the reader takes away and pastes
+ *  somewhere else entirely — hence a copy button per value instead. */
+function DnsRecordTable({ rows }: { rows: { type: string; host: string; value: string }[] }) {
+  const { toast } = useApp();
+  const copy = (text: string, label: string) => {
+    void navigator.clipboard?.writeText(text);
+    toast(`${label} copied`);
+  };
+  return (
+    <div className="dnstable-wrap">
+      <table className="dnstable">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Host</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.type}>
+              <td className="dnstable__type">{r.type}</td>
+              <td>
+                <div className="dnstable__cell">
+                  <code>{r.host}</code>
+                  <button
+                    type="button"
+                    className="dnsrec__copy"
+                    onClick={() => copy(r.host, `${r.type} host`)}
+                    aria-label={`Copy ${r.type} host`}
+                  >
+                    <Icon name="copy" size={13} />
+                  </button>
+                </div>
+              </td>
+              <td>
+                <div className="dnstable__cell">
+                  <code>{r.value}</code>
+                  <button
+                    type="button"
+                    className="dnsrec__copy"
+                    onClick={() => copy(r.value, `${r.type} value`)}
+                    aria-label={`Copy ${r.type} value`}
+                  >
+                    <Icon name="copy" size={13} />
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -527,7 +621,17 @@ function WhatsAppCard({ s }: { s: SenderProfile }) {
   );
 }
 
-function EmailCard({ s }: { s: SenderProfile }) {
+/* Superseded 2026-09-29: this card used to ask the firm for a ZeptoMail
+   Send Mail token (or SMTP password) and a mail agent name — credentials
+   for an account the firm would have had to set up themselves in ZeptoMail
+   directly. That assumed a technical user. Our actual users are CAs with
+   little to no tech background, so the credential step has to disappear
+   entirely: the firm's domain is added under KDK's own ZeptoMail account,
+   and all the firm ever sees is the domain field and the two DNS records
+   that come back, per the (2026-09-29) discussion. Kept below, commented
+   out, as the record of the old shape; the replacement follows it.
+
+function EmailCard_credentialForm({ s }: { s: SenderProfile }) {
   const { toast } = useApp();
   const own = s.emailProvider === "zeptomail";
 
@@ -538,8 +642,6 @@ function EmailCard({ s }: { s: SenderProfile }) {
   const [fromAddress, setFromAddress] = useState(s.zeptomail.fromAddress);
   const [bounceAddress, setBounceAddress] = useState(s.zeptomail.bounceAddress);
 
-  /* Same reasoning as the WhatsApp card: a saved setup opens on its
-     summary, not a form with a live token field in it. */
   const [editing, setEditing] = useState(!s.zeptomail.configured);
 
   const valid = !!apiToken.trim() && !!fromName.trim() && !!fromAddress.trim();
@@ -587,9 +689,6 @@ function EmailCard({ s }: { s: SenderProfile }) {
         ) : null}
       </div>
 
-      {/* Two accounts, either one selectable — switching away from ZeptoMail
-          doesn't erase what was saved there; picking it again brings the
-          same setup straight back. */}
       <ConnChoice
         name="email-provider"
         value={s.emailProvider}
@@ -617,10 +716,6 @@ function EmailCard({ s }: { s: SenderProfile }) {
         </div>
       ) : !editing ? (
         <>
-          {/* Read-only, not the credential form — every field here is a
-              `PLocked` the same way KDK's own fields above are, so there is
-              nothing to mis-click into changing. The token itself is left
-              out entirely; "Configured" already says it's there. */}
           <div className="pgrid">
             <div className="pgrid__pair">
               <PField label="Connection" hint="How ZeptoMail sends these">
@@ -662,12 +757,6 @@ function EmailCard({ s }: { s: SenderProfile }) {
         </>
       ) : (
         <>
-          {/* Deliberately a small pill switch, not another pair of big cards
-              — this is a detail of HOW "Your own domain" sends, not a
-              second decision of the same weight as picking the account
-              above it. ZeptoMail genuinely accepts either wire, same token:
-              API is what they recommend, SMTP relay is for software that
-              only speaks SMTP. */}
           <div className="pmethod">
             <span className="pmethod__l">Connect via</span>
             <Seg
@@ -748,6 +837,319 @@ function EmailCard({ s }: { s: SenderProfile }) {
             <button type="button" className="btn btn--primary btn--sm" disabled={!valid} onClick={save}>
               Save changes
             </button>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+*/
+
+type ZeptoStatus = SenderProfile["zeptomail"]["status"];
+
+function statusLabel(status: ZeptoStatus): string {
+  switch (status) {
+    case "verified": return "Verified";
+    case "pending": return "Pending verification";
+    case "checking": return "Checking…";
+    case "failed": return "Not found yet";
+    default: return "Set up";
+  }
+}
+
+function statusTag(status: ZeptoStatus): string {
+  if (status === "verified") return "tag--filed";
+  if (status === "failed") return "tag--overdue";
+  return "tag--pending";
+}
+
+/** Free personal-email providers — never a domain the person typing this in
+ *  actually controls the DNS for, so ZeptoMail's two records could never be
+ *  added, and this would sit "pending" forever with no way out but Start
+ *  over. Caught here, before a domain even gets added, rather than left to
+ *  surface as an eternal, unexplained verification failure. Not exhaustive;
+ *  it only needs to catch the providers someone would plausibly type. */
+const PERSONAL_EMAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "outlook.com",
+  "hotmail.com", "live.com", "icloud.com", "rediffmail.com", "aol.com",
+  "protonmail.com", "yandex.com", "gmx.com", "mail.com", "zoho.com",
+]);
+
+function isPersonalEmailDomain(domain: string): boolean {
+  return PERSONAL_EMAIL_DOMAINS.has(domain.toLowerCase());
+}
+
+/** Five states, not two: entering a domain for the first time; waiting on
+ *  its DNS records; a check actually running; a check that came back
+ *  without finding them; and verified. No API token or mail agent ever
+ *  appears here — those belong to KDK's own ZeptoMail account, settled once
+ *  in the backend, not asked of every firm. */
+function EmailCard({ s }: { s: SenderProfile }) {
+  const { toast } = useApp();
+  const own = s.emailProvider === "zeptomail";
+  const z = s.zeptomail;
+
+  const [fromName, setFromName] = useState(z.fromName);
+  /* The domain is what actually gets added and verified; the email ID is
+     just the local part sitting on top of it. Asking for them as two
+     fields, domain first, is what lets the personal-email check land on
+     the field that's actually about domain ownership — "gmail.com" reads
+     as obviously wrong typed into "Your domain" in a way it didn't buried
+     inside a full email address. */
+  const [domain, setDomain] = useState(z.domain);
+  const [localPart, setLocalPart] = useState(z.fromAddress.split("@")[0] ?? "");
+
+  const isPersonalDomain = !!domain.trim() && isPersonalEmailDomain(domain.trim());
+  const valid = !!fromName.trim() && !!domain.trim() && !!localPart.trim() && !isPersonalDomain;
+
+  const addDomain = () => {
+    addOwnDomain(domain.trim(), fromName.trim(), `${localPart.trim()}@${domain.trim()}`);
+    toast("Domain added — add the two DNS records below to verify it");
+  };
+
+  /* A check's result only exists once the (simulated) DNS lookup finishes,
+     not the instant the button is clicked — so the toast that reports it
+     has to wait for that too. Firing it from `check()` itself said
+     "Domain verified" the moment the button was pressed, before the check
+     had even run, which is wrong regardless of what it actually finds. */
+  const prevStatus = useRef(z.status);
+  useEffect(() => {
+    if (prevStatus.current === "checking") {
+      if (z.status === "verified") toast("Domain verified. Sending will switch to it from now on.");
+      else if (z.status === "failed") toast("Still not found. DNS changes can take a day or two — try again later.");
+    }
+    prevStatus.current = z.status;
+  }, [z.status, toast]);
+
+  const startOver = () => {
+    clearOwnDomain();
+    setFromName("");
+    setDomain("");
+    setLocalPart("");
+  };
+
+  return (
+    <Card title="Email" note={own ? "Your own domain, via ZeptoMail" : "Managed by KDK"}>
+      <div className="sbrand">
+        <BrandIcon name="email" size={24} />
+        <div>
+          <div className="u-strong">
+            {own ? (z.fromAddress || "Not set up yet") : s.fromEmail}
+          </div>
+          <div className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+            {own
+              ? (z.domain ? `Domain: ${z.domain}` : "Sent via ZeptoMail")
+              : `Replies arrive at ${s.replyTo || "—"}`}
+          </div>
+        </div>
+        {own ? (
+          <>
+            <span className="u-spacer" />
+            <span className={`tag ${statusTag(z.status)}`}>
+              <i className="tag__dot" />
+              {statusLabel(z.status)}
+            </span>
+          </>
+        ) : null}
+      </div>
+
+      {/* Two accounts, either one selectable — switching away from ZeptoMail
+          doesn't erase what was saved there; picking it again brings the
+          same setup straight back. */}
+      <ConnChoice
+        name="email-provider"
+        value={s.emailProvider}
+        onChange={setEmailProvider}
+        options={[
+          { value: "kdk", title: "CA Connect", sub: "Managed by KDK" },
+          { value: "zeptomail", title: "Your own domain", sub: statusLabel(z.status) },
+        ]}
+      />
+
+      {!own ? (
+        <div className="pgrid">
+          <div className="pgrid__pair">
+            <PField label="From address" hint="Managed by KDK">
+              <PLocked value={s.fromEmail} />
+            </PField>
+            <PField label="Reply-to address" hint="Yours to set">
+              <SavableText value={s.replyTo} onSave={(v) => { updateSenderProfile({ replyTo: v }); toast("Reply-to address saved"); }} />
+            </PField>
+          </div>
+        </div>
+      ) : z.status === "unverified" ? (
+        <>
+          {/* Nothing to type but the domain and what clients should see —
+              no token, no connection method, no mail agent. Domain comes
+              first, since it's the one thing that's actually added and
+              verified; the email ID next to it is just a name on top of it,
+              with the domain echoed live so the full address is never a
+              guess. */}
+          <div className="pgrid">
+            <div className="pgrid__pair">
+              <PField label="Your domain" hint="What gets added and verified">
+                <Text
+                  value={domain}
+                  onChange={setDomain}
+                  placeholder="yourfirmname.com"
+                  mono
+                  invalid={isPersonalDomain}
+                />
+                {isPersonalDomain ? (
+                  <p className="pfield__err">
+                    {domain.trim()} is a personal email provider, not a domain you control — use
+                    your firm's own domain instead, like yourfirmname.com.
+                  </p>
+                ) : null}
+              </PField>
+              <PField label="Email ID" hint="Combines with the domain to its left">
+                <div className="emailid">
+                  <input
+                    className="emailid__input"
+                    value={localPart}
+                    onChange={(e) => setLocalPart(e.target.value)}
+                    placeholder="compliance"
+                  />
+                  <span className={`emailid__at${domain.trim() ? "" : " emailid__at--empty"}`}>
+                    @{domain.trim() || "yourfirmname.com"}
+                  </span>
+                </div>
+              </PField>
+            </div>
+            <PField label="From name" hint="What clients see as the sender">
+              <Text value={fromName} onChange={setFromName} placeholder="e.g. Sharma & Associates" />
+            </PField>
+            {/* Sending doesn't need a real inbox at the From address — only a
+                verified domain. But a client's reply has to land somewhere,
+                so this is what actually carries it, whether or not that
+                address is a mailbox anyone checks. Not locked to the domain
+                being added, and not re-verified when it changes: it's the
+                same field the KDK-managed card above uses. */}
+            <PField
+              label="Reply-to address"
+              hint="Where a client's reply lands — use an inbox you actually check if this domain has no mailbox of its own yet"
+            >
+              <SavableText
+                value={s.replyTo}
+                onSave={(v) => { updateSenderProfile({ replyTo: v }); toast("Reply-to address saved"); }}
+                placeholder="you@gmail.com"
+                mono
+              />
+            </PField>
+          </div>
+
+          <div className="providercfg__foot">
+            <span className="u-mute" style={{ fontSize: "var(--t-12)" }}>Not yet set up</span>
+            <span className="u-spacer" />
+            <button type="button" className="btn btn--primary btn--sm" disabled={!valid} onClick={addDomain}>
+              Add domain
+            </button>
+          </div>
+        </>
+      ) : z.status !== "verified" ? (
+        <>
+          <div className="pgrid">
+            <div className="pgrid__pair">
+              <PField label="From name" hint="What clients see as the sender">
+                <PLocked value={z.fromName} />
+              </PField>
+              <PField label="From address" hint="On the domain below">
+                <PLocked value={z.fromAddress} />
+              </PField>
+            </div>
+            <PField
+              label="Reply-to address"
+              hint="Where a client's reply lands — use an inbox you actually check if this domain has no mailbox of its own yet"
+            >
+              <SavableText
+                value={s.replyTo}
+                onSave={(v) => { updateSenderProfile({ replyTo: v }); toast("Reply-to address saved"); }}
+                placeholder="you@gmail.com"
+                mono
+              />
+            </PField>
+            <PField
+              label="Add these two records to your domain's DNS"
+              hint="Log into wherever you manage this domain (e.g. GoDaddy, BigRock) and add both. This can take up to a day or two to take effect."
+            >
+              <DnsRecordTable
+                rows={[
+                  { type: "TXT", host: z.dkim.host, value: z.dkim.value },
+                  { type: "CNAME", host: z.cname.host, value: z.cname.value },
+                ]}
+              />
+            </PField>
+          </div>
+
+          {z.status === "failed" ? (
+            <div className="note note--warn" style={{ marginTop: "var(--s3)" }}>
+              <Icon name="alert" size={15} />
+              <span>
+                We couldn't find these records yet. DNS changes can take up to a day or two to
+                take effect — double-check both records are on the right domain, then try again.
+              </span>
+            </div>
+          ) : null}
+
+          <div className="providercfg__foot">
+            <span className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+              {z.status === "checking"
+                ? "Checking your domain's DNS…"
+                : z.status === "failed"
+                ? "Not found yet"
+                : "Waiting on DNS records"}
+            </span>
+            <span className="u-spacer" />
+            <button type="button" className="btn btn--sm" disabled={z.status === "checking"} onClick={startOver}>
+              Start over
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              disabled={z.status === "checking"}
+              onClick={checkOwnDomain}
+            >
+              {z.status === "checking" ? "Checking…" : z.status === "failed" ? "Check again" : "Check now"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="pgrid">
+            <div className="pgrid__pair">
+              <PField label="From name" hint="What clients see as the sender">
+                <PLocked value={z.fromName} />
+              </PField>
+              <PField label="From address" hint="Verified and in use">
+                <PLocked value={z.fromAddress} />
+              </PField>
+            </div>
+            <PField
+              label="Reply-to address"
+              hint="Where a client's reply lands — use an inbox you actually check if this domain has no mailbox of its own yet"
+            >
+              <SavableText
+                value={s.replyTo}
+                onSave={(v) => { updateSenderProfile({ replyTo: v }); toast("Reply-to address saved"); }}
+                placeholder="you@gmail.com"
+                mono
+              />
+            </PField>
+          </div>
+
+          <div className="providercfg__foot">
+            <span className="u-mute" style={{ fontSize: "var(--t-12)" }}>
+              Sending through <b>your own domain</b>
+            </span>
+            <span className="u-spacer" />
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => toast(`Test email sent to ${z.fromAddress}`)}
+            >
+              <Icon name="send" size={14} /> Send test email
+            </button>
+            <button type="button" className="btn btn--sm" onClick={startOver}>Change domain</button>
           </div>
         </>
       )}

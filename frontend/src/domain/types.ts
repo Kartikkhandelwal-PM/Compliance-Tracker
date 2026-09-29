@@ -522,13 +522,19 @@ export interface SenderProfile {
     connected: boolean;
   };
   zeptomail: {
-    method: "api" | "smtp";
-    apiToken: string;
-    mailAgent: string;
+    domain: string;
     fromName: string;
     fromAddress: string;
-    bounceAddress: string;
-    configured: boolean;
+    dkim: { host: string; value: string };
+    cname: { host: string; value: string };
+    /** "checking" is its own state, not folded into "pending" — the button
+     *  that triggers a check needs to visibly go away while one is running,
+     *  or a second click mid-check reads as the first one having failed
+     *  silently. "failed" is its own state too, not a bounce back to
+     *  "pending": the reader just acted on this screen and needs to see
+     *  that the click did something, even when that something was "not yet". */
+    status: "unverified" | "pending" | "checking" | "verified" | "failed";
+    checkAttempts: number;
   };
 }
 

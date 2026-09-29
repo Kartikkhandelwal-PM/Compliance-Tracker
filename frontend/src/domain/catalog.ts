@@ -390,7 +390,23 @@ export const DEFS: ComplianceDef[] = [
     description: "Payment of estimated tax liability in instalments",
     frequency: "Quarterly",
     dueRule: "15 Jun (15%), 15 Sep (45%), 15 Dec (75%), 15 Mar (100%)",
-    applicability: "Taxpayers with estimated tax liability above ₹10,000",
+    applicability: "Taxpayers with estimated tax liability above ₹10,000, not on the presumptive scheme",
+    lateFee: { kind: "interest", monthlyPct: 1, basis: "taxDue", note: "Interest u/s 234C on the shortfall." },
+    clientFacing: true,
+  },
+  {
+    /* s.211(1)(b): a presumptive-scheme assessee (44AD/44ADA) pays the
+       whole year's advance tax in one instalment by 15 March, not the
+       general four-instalment schedule above — a different rule, not a
+       missing quarter of the same one, so it's its own card rather than a
+       fifth row on ADV-TAX. */
+    code: "ADV-TAX-44AD",
+    head: "Income Tax",
+    form: "Advance Tax Instalment (44AD)",
+    description: "Payment of estimated tax liability in a single instalment — presumptive scheme",
+    frequency: "Annual",
+    dueRule: "15 Mar (100%)",
+    applicability: "Taxpayers under the presumptive scheme (44AD/44ADA) with estimated tax liability above ₹10,000",
     lateFee: { kind: "interest", monthlyPct: 1, basis: "taxDue", note: "Interest u/s 234C on the shortfall." },
     clientFacing: true,
   },
@@ -719,14 +735,13 @@ export const DEF_BY_CODE: Record<string, ComplianceDef> = Object.fromEntries(
  *  rather than the usual "on until a firm turns it off". These are the
  *  ones that only apply to a minority of practices (CMP-08's composition
  *  scheme, GSTR-4/7/8's own narrow filer types, the ROC forms) or that
- *  most firms handle outside this tracker entirely (Advance Tax, payroll).
- *  A firm that does handle one just switches it back on — this only
- *  changes what a fresh install starts with, not what's possible. Read
- *  through `complianceSetting()`, never `.tracked` here directly, so an
- *  explicit override always wins over this default. */
+ *  most firms handle outside this tracker entirely (payroll). A firm that
+ *  does handle one just switches it back on — this only changes what a
+ *  fresh install starts with, not what's possible. Read through
+ *  `complianceSetting()`, never `.tracked` here directly, so an explicit
+ *  override always wins over this default. */
 export const DEFAULT_UNTRACKED = new Set([
   "CMP-08", "GSTR-7", "GSTR-8", "GSTR-4",
-  "ADV-TAX",
   "AOC-4", "MGT-7", "DPT-3", "MSME-1", "DIR-3-KYC", "LLP-11", "LLP-8",
   "PF-ECR", "ESI", "PTAX",
 ]);
@@ -809,6 +824,10 @@ export function occurrencesForFY(fyStart: number): Occurrence[] {
     {
       runId: "ADV-TAX::I4", defCode: "ADV-TAX", periodKey: "I4",
       periodLabel: "4th instalment · 100%", dueDate: iso(fyStart + 1, 3, 15), fy: fyStart,
+    },
+    {
+      runId: "ADV-TAX-44AD::I1", defCode: "ADV-TAX-44AD", periodKey: "I1",
+      periodLabel: "1st & only instalment · 100%", dueDate: iso(fyStart + 1, 3, 15), fy: fyStart,
     },
 
     once("ITR-NONAUDIT", fyStart, 7, 31, `AY${fyStart}-${String((fyStart + 1) % 100).padStart(2, "0")}`, ayLabel(fyStart), fyStart),

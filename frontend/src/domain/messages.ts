@@ -83,20 +83,20 @@ export interface Sender {
     channelId: string;
     connected: boolean;
   };
-  /** A firm's own ZeptoMail mail agent, sent either through ZeptoMail's
-   *  Send Mail API or its SMTP relay — same token either way, ZeptoMail
-   *  just accepts it two different ways in. `configured` is set on save,
-   *  once the fields each method needs are filled; it's cleared the moment
-   *  any of them changes, since the last save is the only thing this app can
-   *  actually vouch for. */
+  /** A firm's own sending domain, added under KDK's own ZeptoMail account —
+   *  the firm never sees or holds an API token; they only ever see the two
+   *  DNS records ZeptoMail hands back once the domain is added, and paste
+   *  those into whichever place they manage their domain's DNS. "pending"
+   *  means the domain was added and is waiting on those records to be found;
+   *  "verified" means they were. */
   zeptomail: {
-    method: "api" | "smtp";
-    apiToken: string;
-    mailAgent: string;
+    domain: string;
     fromName: string;
     fromAddress: string;
-    bounceAddress: string;
-    configured: boolean;
+    dkim: { host: string; value: string };
+    cname: { host: string; value: string };
+    status: "unverified" | "pending" | "checking" | "verified" | "failed";
+    checkAttempts: number;
   };
 }
 
@@ -111,8 +111,9 @@ let sender: Sender = {
   emailProvider: "kdk",
   rampwin: { displayName: "", apiKey: "", channelId: "", connected: false },
   zeptomail: {
-    method: "api", apiToken: "", mailAgent: "", fromName: "", fromAddress: "", bounceAddress: "",
-    configured: false,
+    domain: "", fromName: "", fromAddress: "",
+    dkim: { host: "", value: "" }, cname: { host: "", value: "" },
+    status: "unverified", checkAttempts: 0,
   },
 };
 
