@@ -237,16 +237,39 @@ export interface RuleHit {
 export type FilingStatus = "Filed" | "Pending" | "Overdue" | "Not Applicable";
 
 /** The ways of arriving at a tax liability figure — see the note on
- *  `Obligation.taxBasis`. TDS offers books/challan/quarterCompare; GST
- *  offers books/yearAgo; ITR offers books/ais26as/yearAgo. Which subset
- *  applies to a given obligation is `TAX_BASIS_OPTIONS[ownerType]`, not
- *  every value here at once. `yearAgo` is the same period one year back —
- *  April 2026 compares against April 2025, Apr-Jun 2026 against Apr-Jun
- *  2025, and so on for an annual return — never the period immediately
- *  before. `ais26as` is the pre-filled figure from the AIS, TIS and Form
- *  26AS — data the department already has on the taxpayer, as opposed to
- *  what their own books say. */
-export type TaxBasis = "books" | "challan" | "quarterCompare" | "yearAgo" | "ais26as";
+ *  `Obligation.taxBasis`. Grouped by compliance, not by owner type, because
+ *  GSTR-3B and GSTR-9 (both `GstEntity`) don't share a set, and nor do ITR
+ *  and Advance Tax (both `Client`) — see `TAX_BASIS_OPTIONS` in engine.ts
+ *  for exactly which compliance offers which.
+ *
+ *  - TDS doesn't offer a basis for the figure at all — it offers a
+ *    reconciliation state instead, since a deductor's real question isn't
+ *    "which number do I trust" but "what's actually mapped yet":
+ *    `challanUnmapped` (deductee-wise transactions are in the software,
+ *    but no challan has been matched to them — the most reliable of the
+ *    three, since the deductee data is the detailed source), then
+ *    `deducteeMissing` (a challan is in the software, but no deductee-wise
+ *    transactions are, so there's nothing to match it against yet), then
+ *    `partiallyMapped` (both exist, but matching between them is
+ *    incomplete).
+ *  - GSTR-3B: `g3bBooks` (books data is in the software), then
+ *    `g3bPortal` (not in the software, so taken from the government
+ *    portal's own auto-populated form), then `g3bNoGstr1` (no books, and
+ *    GSTR-1 for the period isn't even filed, so this is a rough estimate).
+ *  - GSTR-9: `g9BooksPortal` (books and portal data both in the
+ *    software), then `g9BooksOnly` (that combination isn't there, but
+ *    books data from the year's own filings is).
+ *  - ITR: `itrSoftware` (the client's own software has it), then
+ *    `itrAis` (taken from the AIS instead).
+ *  - Advance Tax: `advCalculator` (the Advance Tax Calculator has it),
+ *    then `advPrevYear` (it doesn't, so estimated from the previous
+ *    year's income). */
+export type TaxBasis =
+  | "challanUnmapped" | "deducteeMissing" | "partiallyMapped"
+  | "g3bBooks" | "g3bPortal" | "g3bNoGstr1"
+  | "g9BooksPortal" | "g9BooksOnly"
+  | "itrSoftware" | "itrAis"
+  | "advCalculator" | "advPrevYear";
 
 export type StatusBasis =
   /** The engine itself decided the compliance does not apply. */
@@ -303,11 +326,13 @@ export interface Obligation {
    *  the calculation once that spec is in; nothing that reads this field
    *  needs to change. */
   taxLiability: number;
-  /** Which of TDS's three ways of arriving at `taxLiability` is currently
-   *  selected — only set on TDS-owned obligations, where staff can switch
-   *  it (see `setTaxBasis`). Absent everywhere else: ITR's figure has one
-   *  method, GST has none. Placeholder figures per basis until KDK supplies
-   *  the real ones for each. */
+  /** Which basis (GST, ITR, Advance Tax) or reconciliation state (TDS) is
+   *  currently selected for `taxLiability` — set on GST, TDS and Income Tax
+   *  obligations alike, where staff can switch it (see `setTaxBasis`); see
+   *  `TAX_BASIS_OPTIONS` for which values a given *compliance* (not owner
+   *  type — GSTR-3B and GSTR-9 differ despite both being GST) offers.
+   *  Placeholder figures per basis until KDK supplies the real ones for
+   *  each. */
   taxBasis?: TaxBasis;
   /** Informational note on the interest that applies if this filing (or its
    *  tax payment) is late — always present alongside a nonzero `taxLiability`

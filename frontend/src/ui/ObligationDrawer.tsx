@@ -233,7 +233,7 @@ export function ObligationDrawer({
                   toast("Tax liability basis updated");
                 }}
               >
-                {(TAX_BASIS_OPTIONS[o.ownerType] ?? []).map((k) => (
+                {(TAX_BASIS_OPTIONS[o.defCode] ?? []).map((k) => (
                   <option key={k} value={k}>{TAX_BASIS_LABEL[k]}</option>
                 ))}
               </select>

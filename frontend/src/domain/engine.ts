@@ -140,43 +140,96 @@ function exposureContextFor(ownerType: RecordType, ownerId: string): ExposureCon
   };
 }
 
-/** The label shown for each way of arriving at a tax liability figure.
- *  `yearAgo` reads the same regardless of the compliance's own cadence —
- *  "same period last year" already means April 2025 for an April 2026
- *  return, Apr-Jun 2025 for a QRMP Apr-Jun 2026 return, and last year's
- *  figure for the annual GSTR-9 — so unlike a "previous period" wording,
- *  it needs no cadence-specific branching to stay correct. */
+/** The label shown for each way of arriving at a tax liability figure, or
+ *  (for TDS) each reconciliation state between deductee-wise transactions
+ *  and challans. Grouped by which compliance they belong to — GSTR-3B's
+ *  three are not GSTR-9's two, and ITR's two are not Advance Tax's two,
+ *  even though both sit under head "Income Tax" — see `TAX_BASIS_OPTIONS`. */
 export const TAX_BASIS_LABEL: Record<TaxBasis, string> = {
-  books: "From books",
-  challan: "From challan payment",
-  quarterCompare: "As per previous-quarter liability comparison",
-  yearAgo: "As per same period last year",
-  ais26as: "From AIS, TIS & Form 26AS",
+  // TDS — a reconciliation state between deductee-wise transactions and challans.
+  challanUnmapped: "Deductee data available, challan unmapped",
+  deducteeMissing: "Challan available, deductee data missing",
+  partiallyMapped: "Both available, partly unmapped",
+  // GSTR-3B.
+  g3bBooks: "From books",
+  g3bPortal: "From GST portal (auto-populated)",
+  g3bNoGstr1: "Estimated — no books, GSTR-1 not filed",
+  // GSTR-9.
+  g9BooksPortal: "From books + portal data",
+  g9BooksOnly: "From books only (portal data unavailable)",
+  // ITR.
+  itrSoftware: "From software",
+  itrAis: "From AIS",
+  // Advance Tax.
+  advCalculator: "From Advance Tax Calculator",
+  advPrevYear: "From previous year's income",
 };
 
-/** Which of the five `TaxBasis` values a given owner's obligations actually
- *  offer, and the order they're shown in — TDS keeps its three, GST gets
- *  two, ITR gets its own two. Neither list is "every basis that exists," so
- *  the drawer reads this rather than every key of `TAX_BASIS_LABEL`. */
-export const TAX_BASIS_OPTIONS: Partial<Record<RecordType, TaxBasis[]>> = {
-  TdsDeductor: ["books", "challan", "quarterCompare"],
-  GstEntity: ["books", "yearAgo"],
-  Client: ["books", "ais26as", "yearAgo"],
+const TDS_BASIS: TaxBasis[] = ["challanUnmapped", "deducteeMissing", "partiallyMapped"];
+const GSTR3B_BASIS: TaxBasis[] = ["g3bBooks", "g3bPortal", "g3bNoGstr1"];
+const GSTR9_BASIS: TaxBasis[] = ["g9BooksPortal", "g9BooksOnly"];
+const ITR_BASIS: TaxBasis[] = ["itrSoftware", "itrAis"];
+const ADV_TAX_BASIS: TaxBasis[] = ["advCalculator", "advPrevYear"];
+
+/** Compliances that work out their own tax liability by sharing the same
+ *  Advance Tax basis pair, rather than ITR's — both ADV-TAX forms are a
+ *  prepayment of the same estimated tax an ITR settles, but which data
+ *  source is trusted for estimating it is its own question, independent of
+ *  the ITR one. */
+const ADV_TAX_CODES = new Set(["ADV-TAX", "ADV-TAX-44AD"]);
+
+/** Which `TaxBasis` values a given compliance's obligations actually offer,
+ *  and the order they're shown in — one list per *compliance*, not per
+ *  owner type, because GSTR-3B and GSTR-9 (both `GstEntity`) don't share
+ *  one, and nor do ITR and Advance Tax (both `Client`). Each list is in the
+ *  priority KDK specified — first is tried first, the rest are fallbacks
+ *  for when an earlier one's data isn't there. Neither "every basis that
+ *  exists," so the drawer reads this rather than every key of
+ *  `TAX_BASIS_LABEL`. */
+export const TAX_BASIS_OPTIONS: Partial<Record<string, TaxBasis[]>> = {
+  "24Q": TDS_BASIS, "26Q": TDS_BASIS, "27Q": TDS_BASIS, "27EQ": TDS_BASIS,
+  "24Q-CORR": TDS_BASIS, "26Q-CORR": TDS_BASIS, "27Q-CORR": TDS_BASIS, "27EQ-CORR": TDS_BASIS,
+  "TDS-CHALLAN": TDS_BASIS,
+  "GSTR-3B": GSTR3B_BASIS, "GSTR-3B-QRMP-A": GSTR3B_BASIS, "GSTR-3B-QRMP-B": GSTR3B_BASIS,
+  "GSTR-9": GSTR9_BASIS,
+  "ADV-TAX": ADV_TAX_BASIS, "ADV-TAX-44AD": ADV_TAX_BASIS,
+  "ITR-NONAUDIT": ITR_BASIS, "ITR-NONAUDIT-BIZ": ITR_BASIS, "ITR-AUDIT": ITR_BASIS,
+  "ITR-TP": ITR_BASIS, "ITR-REVISED": ITR_BASIS, "ITR-U": ITR_BASIS,
 };
 
-/** TDS tax liability, by basis.
+/** TDS tax liability, by reconciliation state.
  *
  *  Placeholder until KDK supplies each of the three figures directly — none
  *  of them exist as real, separate numbers in this prototype's data, only
- *  one flat `tdsPerQuarter` average per deductor. Each basis is that one
- *  number varied by a stable per-obligation factor, so switching basis in
- *  the drawer visibly changes the figure instead of silently doing nothing.
- *  Swap the three branches for real reads once that integration exists;
- *  nothing that calls this needs to change. */
+ *  one flat `tdsPerQuarter` average per deductor. Each state is that one
+ *  number varied by a stable per-obligation factor, so switching it in the
+ *  drawer visibly changes the figure instead of silently doing nothing.
+ *  `challanUnmapped` keeps the exact figure — deductee-wise data is the
+ *  detailed source, so it's the most reliable of the three, the same way
+ *  the old "From books" was. Swap the three branches for real reads once
+ *  that integration exists; nothing that calls this needs to change. */
 function tdsLiabilityFor(id: string, tdsPerQuarter: number, basis: TaxBasis): number {
-  if (basis === "books") return Math.round(tdsPerQuarter);
-  if (basis === "challan") return Math.round(tdsPerQuarter * (0.85 + h(`${id}|challan`) * 0.3));
-  return Math.round(tdsPerQuarter * (0.8 + h(`${id}|qcompare`) * 0.4));
+  if (basis === "challanUnmapped") return Math.round(tdsPerQuarter);
+  if (basis === "deducteeMissing") return Math.round(tdsPerQuarter * (0.85 + h(`${id}|challan`) * 0.3));
+  return Math.round(tdsPerQuarter * (0.8 + h(`${id}|qcompare`) * 0.4)); // partiallyMapped
+}
+
+/** Which reconciliation state a TDS obligation starts on, checked in the
+ *  exact priority KDK specified: is deductee-wise transaction data there at
+ *  all, first; only if not, is a challan there; "both present but
+ *  incompletely matched" is the fallback when neither clearly wins, not an
+ *  independent coin flip. Placeholder until KDK's data tells us which is
+ *  genuinely true per deductor — this data doesn't exist in the prototype
+ *  any more than the three liability figures above do, so it's stood in
+ *  for the same way, a stable per-obligation factor rather than a fixed
+ *  default every obligation would otherwise share. Deliberately close to a
+ *  three-way split rather than a landslide majority for one state — this
+ *  is the one basis set meant to be seen varying from client to client in
+ *  ordinary use, not just in principle. */
+function tdsDefaultBasis(id: string): TaxBasis {
+  if (h(`${id}|deductee-avail`) >= 0.55) return "challanUnmapped";
+  if (h(`${id}|challan-avail`) >= 0.45) return "deducteeMissing";
+  return "partiallyMapped";
 }
 
 /** GSTR-3B (all three cadences) and GSTR-9 carry a real tax liability — net
@@ -188,36 +241,82 @@ const GST_LIABILITY_PERIODS: Record<string, number> = {
   "GSTR-3B": 12, "GSTR-3B-QRMP-A": 4, "GSTR-3B-QRMP-B": 4, "GSTR-9": 1,
 };
 
-/** GST tax liability, one period's share of an annual estimate, by basis.
+/** GST tax liability, one period's share of an annual estimate, by basis —
+ *  GSTR-3B's three and GSTR-9's two alike, since both ultimately scale the
+ *  same underlying estimate.
  *
  *  Placeholder until KDK supplies the real net-payable figure — this data
  *  only has turnover to work from, not actual outward tax and ITC, so it's
  *  modelled as a stable per-entity effective rate (6-10% of turnover,
  *  roughly what net GST liability runs to after ITC for a typical
- *  business) split evenly across the year's periods. "From books" is that
- *  figure as-is; "yearAgo" — the same period one year back — varies it by
- *  a stable per-obligation factor, the same way TDS's own comparison basis
- *  does, so switching in the drawer visibly changes the number. Swap for
- *  real reads once that integration exists; nothing that calls this needs
- *  to change. */
+ *  business) split evenly across the year's periods. The first option in
+ *  each pair/triple (`g3bBooks`, `g9BooksPortal`) keeps that figure as-is;
+ *  the rest vary it by a stable per-obligation factor, so switching in the
+ *  drawer visibly changes the number. Swap for real reads once that
+ *  integration exists; nothing that calls this needs to change. */
 function gstLiabilityFor(id: string, turnover: number, periodsPerYear: number, basis: TaxBasis): number {
   const netRate = 0.06 + h(`${id}|gstrate`) * 0.04;
   const fromBooks = (turnover * netRate) / periodsPerYear;
-  if (basis === "yearAgo") return Math.round(fromBooks * (0.85 + h(`${id}|yearago`) * 0.3));
-  return Math.round(fromBooks);
+  if (basis === "g3bPortal") return Math.round(fromBooks * (0.85 + h(`${id}|portal`) * 0.3));
+  if (basis === "g3bNoGstr1") return Math.round(fromBooks * (0.7 + h(`${id}|noGstr1`) * 0.5));
+  if (basis === "g9BooksOnly") return Math.round(fromBooks * (0.9 + h(`${id}|g9booksonly`) * 0.2));
+  return Math.round(fromBooks); // g3bBooks, g9BooksPortal
+}
+
+/** Which of GSTR-3B's three states an obligation starts on — books data
+ *  first (the common case); if not, whether GSTR-1 for the period was even
+ *  filed decides between the other two, since the portal's auto-populated
+ *  form is itself built from GSTR-1 data: no GSTR-1, nothing for the
+ *  portal to populate, so that's checked ahead of "use the portal" rather
+ *  than after it, even though it's listed third. Same placeholder reasoning
+ *  as `tdsDefaultBasis` — this data doesn't exist yet either. */
+function gstr3bDefaultBasis(id: string): TaxBasis {
+  if (h(`${id}|g3b-books-avail`) >= 0.35) return "g3bBooks";
+  if (h(`${id}|g3b-gstr1-filed`) < 0.4) return "g3bNoGstr1";
+  return "g3bPortal";
+}
+
+/** Which of GSTR-9's two states an obligation starts on — same placeholder
+ *  reasoning as `gstr3bDefaultBasis`. */
+function gstr9DefaultBasis(id: string): TaxBasis {
+  return h(`${id}|g9-books-portal-avail`) >= 0.4 ? "g9BooksPortal" : "g9BooksOnly";
 }
 
 /** ITR tax liability, by basis — the same placeholder-jitter pattern as
  *  TDS and GST's own basis figures, varying `estimatedTax()`'s slab-based
- *  formula rather than replacing it. "From books" is that figure as-is;
- *  "AIS/TIS/26AS" stands in for the pre-filled figure the department's own
- *  data would show, which won't exactly match what the client's books say;
- *  "same period last year" is last year's return for the same client. Swap
- *  for real reads once each integration exists. */
+ *  formula rather than replacing it. "From software" is that figure as-is;
+ *  "From AIS" stands in for the pre-filled figure the department's own data
+ *  would show, which won't exactly match what the client's books say. Swap
+ *  for real reads once that integration exists. */
 function itrLiabilityFor(id: string, estTax: number, basis: TaxBasis): number {
-  if (basis === "ais26as") return Math.round(estTax * (0.9 + h(`${id}|ais26as`) * 0.2));
-  if (basis === "yearAgo") return Math.round(estTax * (0.85 + h(`${id}|yearago`) * 0.3));
-  return Math.round(estTax);
+  if (basis === "itrAis") return Math.round(estTax * (0.9 + h(`${id}|ais`) * 0.2));
+  return Math.round(estTax); // itrSoftware
+}
+
+/** Which of ITR's two states an obligation starts on — same placeholder
+ *  reasoning as `tdsDefaultBasis`. */
+function itrDefaultBasis(id: string): TaxBasis {
+  return h(`${id}|itr-software-avail`) >= 0.3 ? "itrSoftware" : "itrAis";
+}
+
+/** Advance Tax's own version of the same placeholder-jitter pattern — a
+ *  separate function from `itrLiabilityFor`, not just a separate basis
+ *  pair, because the two compliances must never share a swap-in point:
+ *  the day a real Advance Tax Calculator integration lands, it should be
+ *  possible to wire it in here without touching ITR's own figure at all,
+ *  and vice versa. "From Advance Tax Calculator" keeps the figure as-is;
+ *  "From previous year's income" varies it, standing in for a rougher
+ *  estimate than the calculator's own. */
+function advTaxLiabilityFor(id: string, estTax: number, basis: TaxBasis): number {
+  if (basis === "advPrevYear") return Math.round(estTax * (0.85 + h(`${id}|advprevyear`) * 0.3));
+  return Math.round(estTax); // advCalculator
+}
+
+/** Which of Advance Tax's two states an obligation starts on — its own
+ *  function, not `itrDefaultBasis`, for the same reason
+ *  `advTaxLiabilityFor` is its own function and not `itrLiabilityFor`. */
+function advTaxDefaultBasis(id: string): TaxBasis {
+  return h(`${id}|adv-calc-avail`) >= 0.35 ? "advCalculator" : "advPrevYear";
 }
 
 /** Every screen that needs a record's name/contact/owner reaches it through
@@ -408,17 +507,22 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
            GSTR-1 and its correction stay at 0: nothing is paid with either,
            the period's whole liability sits on that period's GSTR-3B instead. */
         const gstPeriods = ownerType === "GstEntity" ? GST_LIABILITY_PERIODS[def.code] : undefined;
+        const basisOptions = TAX_BASIS_OPTIONS[def.code];
         const taxBasis: TaxBasis | undefined =
-          ownerType === "TdsDeductor" ? "books"
-          : gstPeriods ? "books"
-          : ownerType === "Client" ? "books"
+          ownerType === "TdsDeductor" ? tdsDefaultBasis(id)
+          : def.code === "GSTR-9" ? gstr9DefaultBasis(id)
+          : gstPeriods ? gstr3bDefaultBasis(id)
+          : ADV_TAX_CODES.has(def.code) ? advTaxDefaultBasis(id)
+          : ownerType === "Client" && basisOptions ? itrDefaultBasis(id)
           : undefined;
         const taxLiability = ownerType === "TdsDeductor" && taxBasis
           ? tdsLiabilityFor(id, ctx.tdsPerQuarter, taxBasis)
           : gstPeriods && taxBasis
           ? gstLiabilityFor(id, ctx.turnover, gstPeriods, taxBasis)
           : ownerType === "Client" && taxBasis
-          ? itrLiabilityFor(id, ctx.estimatedTax, taxBasis)
+          ? (ADV_TAX_CODES.has(def.code)
+            ? advTaxLiabilityFor(id, ctx.estimatedTax, taxBasis)
+            : itrLiabilityFor(id, ctx.estimatedTax, taxBasis))
           : ctx.estimatedTax;
 
         const lateDays = status === "Overdue"
@@ -483,6 +587,7 @@ function makeDerivedObligation(
 ): Obligation {
   const def = DEF_BY_CODE[defCode];
   const id = `${owner.id}::${occ.runId}`;
+  const taxBasis = itrDefaultBasis(id);
   let status: FilingStatus;
   let basis: StatusBasis;
   let filedOn: string | undefined;
@@ -519,8 +624,8 @@ function makeDerivedObligation(
     daysOverdue: 0,
     exposure: 0,
     exposureFormula: def.lateFee.note,
-    taxLiability: itrLiabilityFor(id, estimatedTax(owner.profile), "books"),
-    taxBasis: "books",
+    taxLiability: itrLiabilityFor(id, estimatedTax(owner.profile), taxBasis),
+    taxBasis,
     filedOn,
     filedBy,
     reminderStage: reminderStageFor(status, occ.dueDate, def.clientFacing),
@@ -572,6 +677,7 @@ function makeDerivedTdsObligation(
 ): Obligation {
   const def = DEF_BY_CODE[defCode];
   const id = `${owner.id}::${occ.runId}`;
+  const taxBasis = tdsDefaultBasis(id);
   let status: FilingStatus;
   let basis: StatusBasis;
   let filedOn: string | undefined;
@@ -608,8 +714,8 @@ function makeDerivedTdsObligation(
     daysOverdue: 0,
     exposure: 0,
     exposureFormula: def.lateFee.note,
-    taxLiability: tdsLiabilityFor(id, owner.profile.tdsPerQuarter, "books"),
-    taxBasis: "books",
+    taxLiability: tdsLiabilityFor(id, owner.profile.tdsPerQuarter, taxBasis),
+    taxBasis,
     filedOn,
     filedBy,
     reminderStage: reminderStageFor(status, occ.dueDate, def.clientFacing),
@@ -885,9 +991,9 @@ export function setNote(id: string, text: string, by: string) {
 }
 
 /** Switch which way this filing's tax liability is arrived at, and
- *  recompute it — TDS's three bases or GST's two, per `TAX_BASIS_OPTIONS`.
- *  Only meaningful on an obligation that already has a `taxBasis` — a
- *  no-op otherwise. */
+ *  recompute it — TDS's three reconciliation states, GST's two bases, or
+ *  ITR's two, per `TAX_BASIS_OPTIONS`. Only meaningful on an obligation
+ *  that already has a `taxBasis` — a no-op otherwise. */
 export function setTaxBasis(id: string, basis: TaxBasis) {
   OBLIGATIONS = OBLIGATIONS.map((o) => {
     if (o.id !== id || !o.taxBasis) return o;
@@ -908,7 +1014,10 @@ export function setTaxBasis(id: string, basis: TaxBasis) {
     }
     if (o.ownerType === "Client") {
       const c = CLIENT_BY_ID[o.clientId];
-      const taxLiability = itrLiabilityFor(o.id, estimatedTax(c.profile), basis);
+      const estTax = estimatedTax(c.profile);
+      const taxLiability = ADV_TAX_CODES.has(o.defCode)
+        ? advTaxLiabilityFor(o.id, estTax, basis)
+        : itrLiabilityFor(o.id, estTax, basis);
       return { ...o, taxBasis: basis, taxLiability, ...interestFor(o.head, taxLiability, lateDays) };
     }
     return o;
