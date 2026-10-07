@@ -156,7 +156,7 @@ export const TAX_BASIS_LABEL: Record<TaxBasis, string> = {
   g3bNoGstr1: "Estimated — no books, GSTR-1 not filed",
   // GSTR-9.
   g9BooksPortal: "From books + portal data",
-  g9BooksOnly: "From books only (portal data unavailable)",
+  g9Snapshot: "From books + portal data (snapshot)",
   // ITR.
   itrSoftware: "From software",
   itrAis: "From AIS",
@@ -167,7 +167,7 @@ export const TAX_BASIS_LABEL: Record<TaxBasis, string> = {
 
 const TDS_BASIS: TaxBasis[] = ["challanUnmapped", "deducteeMissing", "partiallyMapped"];
 const GSTR3B_BASIS: TaxBasis[] = ["g3bBooks", "g3bPortal", "g3bNoGstr1"];
-const GSTR9_BASIS: TaxBasis[] = ["g9BooksPortal", "g9BooksOnly"];
+const GSTR9_BASIS: TaxBasis[] = ["g9BooksPortal", "g9Snapshot"];
 const ITR_BASIS: TaxBasis[] = ["itrSoftware", "itrAis"];
 const ADV_TAX_BASIS: TaxBasis[] = ["advCalculator", "advPrevYear"];
 
@@ -259,7 +259,7 @@ function gstLiabilityFor(id: string, turnover: number, periodsPerYear: number, b
   const fromBooks = (turnover * netRate) / periodsPerYear;
   if (basis === "g3bPortal") return Math.round(fromBooks * (0.85 + h(`${id}|portal`) * 0.3));
   if (basis === "g3bNoGstr1") return Math.round(fromBooks * (0.7 + h(`${id}|noGstr1`) * 0.5));
-  if (basis === "g9BooksOnly") return Math.round(fromBooks * (0.9 + h(`${id}|g9booksonly`) * 0.2));
+  if (basis === "g9Snapshot") return Math.round(fromBooks * (0.9 + h(`${id}|g9snapshot`) * 0.2));
   return Math.round(fromBooks); // g3bBooks, g9BooksPortal
 }
 
@@ -279,7 +279,7 @@ function gstr3bDefaultBasis(id: string): TaxBasis {
 /** Which of GSTR-9's two states an obligation starts on — same placeholder
  *  reasoning as `gstr3bDefaultBasis`. */
 function gstr9DefaultBasis(id: string): TaxBasis {
-  return h(`${id}|g9-books-portal-avail`) >= 0.4 ? "g9BooksPortal" : "g9BooksOnly";
+  return h(`${id}|g9-books-portal-avail`) >= 0.4 ? "g9BooksPortal" : "g9Snapshot";
 }
 
 /** ITR tax liability, by basis — the same placeholder-jitter pattern as

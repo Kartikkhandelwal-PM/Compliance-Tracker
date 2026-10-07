@@ -257,8 +257,9 @@ export type FilingStatus = "Filed" | "Pending" | "Overdue" | "Not Applicable";
  *    portal's own auto-populated form), then `g3bNoGstr1` (no books, and
  *    GSTR-1 for the period isn't even filed, so this is a rough estimate).
  *  - GSTR-9: `g9BooksPortal` (books and portal data both in the
- *    software), then `g9BooksOnly` (that combination isn't there, but
- *    books data from the year's own filings is).
+ *    software), then `g9Snapshot` (that combination isn't there in the
+ *    software, but both books and portal data are available in the
+ *    snapshot instead).
  *  - ITR: `itrSoftware` (the client's own software has it), then
  *    `itrAis` (taken from the AIS instead).
  *  - Advance Tax: `advCalculator` (the Advance Tax Calculator has it),
@@ -267,7 +268,7 @@ export type FilingStatus = "Filed" | "Pending" | "Overdue" | "Not Applicable";
 export type TaxBasis =
   | "challanUnmapped" | "deducteeMissing" | "partiallyMapped"
   | "g3bBooks" | "g3bPortal" | "g3bNoGstr1"
-  | "g9BooksPortal" | "g9BooksOnly"
+  | "g9BooksPortal" | "g9Snapshot"
   | "itrSoftware" | "itrAis"
   | "advCalculator" | "advPrevYear";
 
