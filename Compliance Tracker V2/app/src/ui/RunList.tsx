@@ -58,7 +58,7 @@ const COLUMNS: Column[] = [
   { key: null, label: "" },
 ];
 
-function compare(a: FilingRun, b: FilingRun, key: RunSort): number {
+function compare(a: FilingRun, b: FilingRun, key: RunSort, money: Money): number {
   switch (key) {
     case "form":
       return a.def.form.localeCompare(b.def.form) || a.dueDate.localeCompare(b.dueDate);
@@ -67,13 +67,18 @@ function compare(a: FilingRun, b: FilingRun, key: RunSort): number {
     case "open":
       return (a.pending + a.overdue) - (b.pending + b.overdue) || a.dueDate.localeCompare(b.dueDate);
     case "exposure":
-      return a.exposure - b.exposure || a.dueDate.localeCompare(b.dueDate);
+      return a[money] - b[money] || a.dueDate.localeCompare(b.dueDate);
   }
 }
 
+/** Which rupee figure the last column shows: the late fees accruing, or the
+ *  tax still payable. The dashboard shows tax; the calendar keeps late fees. */
+export type Money = "exposure" | "liability";
+
 export function RunList({
-  runs, emptyTitle, emptyBody, head = false, defaultSort = "due", defaultDesc,
+  runs, emptyTitle, emptyBody, head = false, defaultSort = "due", defaultDesc, money = "exposure",
 }: {
+  money?: Money;
   runs: FilingRun[];
   emptyTitle?: string;
   emptyBody?: string;
@@ -97,7 +102,7 @@ export function RunList({
 
   const ordered = useMemo(() => {
     if (!head) return runs; /* caller's order is authoritative when unheaded */
-    const out = [...runs].sort((a, b) => compare(a, b, sort));
+    const out = [...runs].sort((a, b) => compare(a, b, sort, money));
     return desc ? out.reverse() : out;
   }, [runs, sort, desc, head]);
 
@@ -134,7 +139,7 @@ export function RunList({
                 }`}
                 onClick={() => toggle(col)}
               >
-                {col.label}
+                {col.key === "exposure" && money === "liability" ? "Tax liability" : col.label}
                 <Icon
                   name="chevronDown"
                   size={12}
@@ -143,7 +148,7 @@ export function RunList({
               </button>
             ) : (
               <span key={i} className={`runhead__c${col.right ? " is-right" : ""}`} role="columnheader">
-                {col.label}
+                {col.key === "exposure" && money === "liability" ? "Tax liability" : col.label}
               </span>
             ),
           )}
@@ -184,8 +189,8 @@ export function RunList({
               <Pbar filed={r.filed} pending={r.pending} overdue={r.overdue} />
             </span>
 
-            <span className={`run__money${r.exposure > 0 ? "" : " is-nil"}`}>
-              {r.exposure > 0 ? inrShort(r.exposure) : "—"}
+            <span className={`run__money${r[money] > 0 ? "" : " is-nil"}`}>
+              {r[money] > 0 ? inrShort(r[money]) : "—"}
             </span>
 
             <span className="run__chev"><Icon name="chevronRight" size={16} /></span>

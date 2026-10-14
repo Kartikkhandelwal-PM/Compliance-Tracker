@@ -19,9 +19,9 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useApp, useObligations, useOutbox } from "../ui/app-state.tsx";
-import { AppStrip, BigDeadlinesCard, CorrectionsCard, RemindersCard, RiskyClientsCard } from "../ui/EntryPanels.tsx";
+import { AppStrip, BigDeadlinesCard, CorrectionsCard, NoticesCard, RemindersCard, TaxLiabilityCard } from "../ui/EntryPanels.tsx";
 import { fyLabel } from "../domain/catalog.ts";
-import { buildRuns, dayLoads, summarise } from "../domain/engine.ts";
+import { buildRuns, dayLoads, summarise, taxLiabilitySummary } from "../domain/engine.ts";
 import { FY_START } from "../domain/catalog.ts";
 import { MONTHS, TODAY, addDays, dow, fmtLong, fmtShort, inrShort, urgency } from "../domain/dates.ts";
 import { CountUp, PageHead, Stat } from "../ui/bits.tsx";
@@ -101,6 +101,7 @@ export function TodayPage() {
   );
 
   const summary = useMemo(() => summarise(obligations), [obligations]);
+  const liability = useMemo(() => taxLiabilitySummary(obligations), [obligations]);
   const runs = useMemo(() => buildRuns(obligations), [obligations]);
   /* 30 days: a week of arrears behind, the rest of the month ahead. */
   const loads = useMemo(() => dayLoads(obligations, addDays(TODAY, -7), 30), [obligations]);
@@ -248,14 +249,14 @@ export function TodayPage() {
         {/* Every tile goes somewhere. A figure you cannot open is a poster. */}
         <div className="dashkpi">
           <Stat
-            label="In arrears"
-            action="See late filings"
-            value={<CountUp n={summary.overdueCount} />}
-            tone="overdue"
-            icon="alert"
-            onClick={() => nav("/tracker?status=late")}
-            sub={`${summary.overdueClients.toLocaleString("en-IN")} clients · ${inrShort(summary.exposure)} late fees`}
-            hint="Filings past their statutory due date. The late-fee figure is estimated from each compliance's own penalty rule."
+            label="Tax liability"
+            action="See open work"
+            value={inrShort(liability.total)}
+            tone="cool"
+            icon="rules"
+            onClick={() => nav("/tracker?status=open")}
+            sub={`${liability.clients.toLocaleString("en-IN")} clients · ${inrShort(liability.overdue)} on overdue filings`}
+            hint="Estimated tax payable on filings still open: GST, TDS, income tax and advance tax. Filings with no tax figure are not counted."
           />
           <Stat
             label="Open"
@@ -295,7 +296,7 @@ export function TodayPage() {
         </div>
       </div>
 
-      <h2 className="ep-section">Needs action now<span>Late filings, money leaking and correction windows closing</span></h2>
+      <h2 className="ep-section">Needs action now<span>Late filings, tax due and correction windows closing</span></h2>
 
       {/* ---- One work queue, three tabs ---------------------------------
            These were three stacked lists (arrears, this week, horizon) which
@@ -339,6 +340,7 @@ export function TodayPage() {
 
         <RunList
           head
+          money="liability"
           defaultSort={active.sort}
           defaultDesc={active.desc}
           runs={activeQueue}
@@ -355,8 +357,9 @@ export function TodayPage() {
         ) : null}
       </div>
 
-      <div className="ep-grid2">
-        <RiskyClientsCard obligations={obligations} />
+      <div className="ep-grid3">
+        <NoticesCard />
+        <TaxLiabilityCard obligations={obligations} />
         <CorrectionsCard obligations={obligations} />
       </div>
 
@@ -367,6 +370,7 @@ export function TodayPage() {
       <Runway loads={loads} selected={pickedDay} onSelect={setPickedDay}>
         <RunList
           head
+          money="liability"
           defaultSort="open"
           defaultDesc
           runs={dayRuns}

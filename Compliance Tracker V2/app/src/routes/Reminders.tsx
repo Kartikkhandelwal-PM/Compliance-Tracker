@@ -1,10 +1,11 @@
 /* ============================================================================
    REMINDERS
    ----------------------------------------------------------------------------
-   Two tabs, both operational:
+   Three tabs:
 
      Log         what went out, and did it land
      Scheduled   what is about to go out, and can I stop it
+     Templates   the pre-approved wording, to read and copy
 
    Configuration is NOT here. An earlier version added an "Automation" tab
    holding the cadence ladder and the sending guards, which then duplicated the
@@ -25,8 +26,9 @@ import {
 import {
   TODAY, addDays, dateOf, fmtAgo, fmtAgoIfFresh, fmtDate, fmtDateTime, fmtShort, fmtStampShort, fmtTime,
 } from "../domain/dates.ts";
+import { TemplatesTab } from "./Templates.tsx";
 import { Avatar, Check, CountUp, Empty, PageHead, Seg, Stat } from "../ui/bits.tsx";
-import { ClearFilters, DateRangePill, FilterPill, type PillOption } from "../ui/Filters.tsx";
+import { ClearFilters, DateRangePill, FilterPill, FilterPillMulti, type PillOption } from "../ui/Filters.tsx";
 import { exportXlsx } from "../ui/exportXlsx.ts";
 import { BrandIcon, Icon } from "../ui/Icon.tsx";
 import { MessagePreview } from "../ui/MessagePreview.tsx";
@@ -72,18 +74,20 @@ const STATUS_PARAM: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-type Tab = "log" | "scheduled";
+type Tab = "log" | "scheduled" | "templates";
 
 export function RemindersPage() {
   const [params] = useSearchParams();
-  const [tab, setTab] = useState<Tab>(params.get("tab") === "scheduled" ? "scheduled" : "log");
+  const [tab, setTab] = useState<Tab>(
+    params.get("tab") === "scheduled" ? "scheduled" : params.get("tab") === "templates" ? "templates" : "log",
+  );
   const outbox = useOutbox();
 
   /* A link that changes the tab while this page is already open has to move
      it — mounting state alone only covers arriving from elsewhere. */
   useEffect(() => {
     const t = params.get("tab");
-    if (t === "scheduled" || t === "log") setTab(t);
+    if (t === "scheduled" || t === "log" || t === "templates") setTab(t);
   }, [params]);
   const upcoming = useEngine(() => scheduledSends(45));
 
@@ -116,12 +120,14 @@ export function RemindersPage() {
           options={[
             { value: "log", label: `Log (${outbox.length})` },
             { value: "scheduled", label: `Scheduled (${live})` },
+            { value: "templates", label: "Templates" },
           ]}
         />
       </div>
 
       {tab === "log" ? <LogTab /> : null}
       {tab === "scheduled" ? <ScheduledTab /> : null}
+      {tab === "templates" ? <TemplatesTab /> : null}
     </div>
   );
 }
@@ -135,14 +141,16 @@ function LogTab() {
   const { toast, me } = useApp();
   const [params] = useSearchParams();
   const [q, setQ] = useState("");
-  const [channel, setChannel] = useState<string>(() => params.get("channel") ?? "all");
+  /* Channel, delivery status and sender each take several values; empty means
+     all. (Compliance stays a single choice: it is a two-level list.) */
+  const [channels, setChannels] = useState<string[]>(() => (params.get("channel") ? [params.get("channel")!] : []));
   /* Head and form were two pills asking one question. They are now one value:
      `all`, `head:GST` (everything under a head) or `def:GSTR3B` (one form). */
   const [scope, setScope] = useState(() => params.get("scope") ?? "all");
-  const [status, setStatus] = useState(
-    () => STATUS_PARAM[params.get("status") ?? ""] ?? "all",
+  const [statuses, setStatuses] = useState<string[]>(
+    () => (STATUS_PARAM[params.get("status") ?? ""] ? [STATUS_PARAM[params.get("status") ?? ""]] : []),
   );
-  const [sender, setSender] = useState(() => params.get("sender") ?? "all");
+  const [senders, setSenders] = useState<string[]>(() => (params.get("sender") ? [params.get("sender")!] : []));
   /* A deep link that already names a slice (the bell's "18 reminders failed
      to send", for example) promises an exact count computed with no date
      restriction at all — silently also clipping it to the default week
@@ -157,9 +165,9 @@ function LogTab() {
   /* Follow the URL when it changes under an already-open page. */
   useEffect(() => {
     const s = params.get("status");
-    if (s && STATUS_PARAM[s]) setStatus(STATUS_PARAM[s]);
+    if (s && STATUS_PARAM[s]) setStatuses([STATUS_PARAM[s]]);
     const c = params.get("channel");
-    if (c) setChannel(c);
+    if (c) setChannels([c]);
     const sc = params.get("scope");
     if (sc) setScope(sc);
   }, [params]);
@@ -194,7 +202,6 @@ function LogTab() {
   const senderOptions = useMemo(() => {
     const ids = new Set(outbox.map((e) => e.sentBy).filter(Boolean) as string[]);
     return [
-      { value: "all", label: "Anyone" },
       { value: "auto", label: "Automatic", icon: <Icon name="bolt" size={14} /> },
       ...[...ids].map((id) => ({
         value: `s:${id}`,
@@ -212,7 +219,7 @@ function LogTab() {
      reason to also truncate the file someone actually asked for. */
   const filtered = useMemo(() => {
     let list = outbox;
-    if (channel !== "all") list = list.filter((e) => e.channel === channel);
+    if (channels.length) list = list.filter((e) => channels.includes(e.channel));
     if (scope.startsWith("head:")) {
       const hd = scope.slice(5);
       list = list.filter((e) => e.head === hd);
@@ -220,11 +227,9 @@ function LogTab() {
       const code = scope.slice(4);
       list = list.filter((e) => e.defCode === code);
     }
-    if (status !== "all") list = list.filter((e) => e.status === status);
-    if (sender === "auto") list = list.filter((e) => e.origin === "Automatic");
-    else if (sender.startsWith("s:")) {
-      const id = sender.slice(2);
-      list = list.filter((e) => e.sentBy === id);
+    if (statuses.length) list = list.filter((e) => statuses.includes(e.status));
+    if (senders.length) {
+      list = list.filter((e) => senders.some((x) => (x === "auto" ? e.origin === "Automatic" : e.sentBy === x.slice(2))));
     }
     if (from) list = list.filter((e) => dateOf(e.sentAt) >= from);
     if (to) list = list.filter((e) => dateOf(e.sentAt) <= to);
@@ -237,7 +242,7 @@ function LogTab() {
       });
     }
     return list;
-  }, [outbox, channel, scope, status, sender, from, to, q]);
+  }, [outbox, channels, scope, statuses, senders, from, to, q]);
 
   const rows = useMemo(() => filtered.slice(0, 250), [filtered]);
 
@@ -249,12 +254,17 @@ function LogTab() {
   const queued = outbox.filter((e) => e.status.startsWith("Queued")).length;
   const failed = outbox.filter((e) => e.status === "Failed").length;
 
-  const filterCount = (channel !== "all" ? 1 : 0) + (scope !== "all" ? 1 : 0)
-    + (status !== "all" ? 1 : 0) + (sender !== "all" ? 1 : 0)
+  /* The bulk "Retry all" / "Release held" bars only make sense when the log is
+     narrowed to exactly that one status. */
+  const onlyFailed = statuses.length === 1 && statuses[0] === "Failed";
+  const onlyQueued = statuses.length === 1 && statuses[0].startsWith("Queued");
+
+  const filterCount = (channels.length ? 1 : 0) + (scope !== "all" ? 1 : 0)
+    + (statuses.length ? 1 : 0) + (senders.length ? 1 : 0)
     + (from !== DEFAULT_FROM || to !== DEFAULT_TO ? 1 : 0);
 
   const clearAll = () => {
-    setChannel("all"); setScope("all"); setStatus("all"); setSender("all");
+    setChannels([]); setScope("all"); setStatuses([]); setSenders([]);
     setFrom(DEFAULT_FROM); setTo(DEFAULT_TO);
   };
 
@@ -303,7 +313,7 @@ function LogTab() {
           value={<CountUp n={queued} />}
           tone={queued ? "soon" : undefined}
           icon="clock"
-          onClick={queued ? () => setStatus("Queued (quiet hours)") : undefined}
+          onClick={queued ? () => setStatuses(["Queued (quiet hours)"]) : undefined}
           sub={queued ? "awaiting sending window" : "None"}
         />
         <Stat
@@ -311,7 +321,7 @@ function LogTab() {
           value={<CountUp n={failed} />}
           tone={failed ? "overdue" : undefined}
           icon="alert"
-          onClick={failed ? () => setStatus("Failed") : undefined}
+          onClick={failed ? () => setStatuses(["Failed"]) : undefined}
           sub={failed ? "Not delivered" : "All delivered"}
         />
       </div>
@@ -339,18 +349,16 @@ function LogTab() {
           field="Compliance" value={scope} none="all" onChange={setScope}
           options={scopeOptions}
         />
-        <FilterPill<string>
-          field="Channel" value={channel} none="all" onChange={setChannel}
+        <FilterPillMulti
+          field="Channel" noun="channels" values={channels} onChange={setChannels}
           options={[
-            { value: "all", label: "All channels" },
             { value: "WhatsApp", label: "WhatsApp", icon: <BrandIcon name="whatsapp" size={15} /> },
             { value: "Email", label: "Email", icon: <BrandIcon name="email" size={15} /> },
           ]}
         />
-        <FilterPill<string>
-          field="Delivery" value={status} none="all" onChange={setStatus}
+        <FilterPillMulti
+          field="Delivery" noun="statuses" values={statuses} onChange={setStatuses}
           options={[
-            { value: "all", label: "All" },
             { value: "Read", label: "Read" },
             { value: "Delivered", label: "Delivered, not read" },
             { value: "Queued (quiet hours)", label: "Held" },
@@ -358,9 +366,9 @@ function LogTab() {
             { value: "Failed", label: "Failed" },
           ]}
         />
-        <FilterPill<string>
-          field="Sent by" value={sender} none="all" onChange={setSender}
-          options={senderOptions}
+        <FilterPillMulti
+          field="Sent by" noun="senders" values={senders} onChange={setSenders}
+          searchPlaceholder="Search staff" options={senderOptions}
         />
         <DateRangePill
           from={from}
@@ -401,8 +409,8 @@ function LogTab() {
           against a screen already showing only what it would act on. That way
           the destructive-ish action is never one stray click from a full
           200-row view. */}
-      {(picked.size > 0 || (status === "Failed" && rows.length > 0)
-        || (status.startsWith("Queued") && rows.length > 0)) ? (
+      {(picked.size > 0 || (onlyFailed && rows.length > 0)
+        || (onlyQueued && rows.length > 0)) ? (
         <div className="actionbar">
           {picked.size > 0 ? (
             <>
@@ -422,7 +430,7 @@ function LogTab() {
                 Clear
               </button>
             </>
-          ) : status === "Failed" ? (
+          ) : onlyFailed ? (
             <>
               <span className="actionbar__n">
                 <b>{failed}</b> were not delivered
@@ -615,7 +623,7 @@ function ScheduledTab() {
   const settings = useEngine(getReminderSettings);
   const [q, setQ] = useState("");
   const [scope, setScope] = useState("all");
-  const [channel, setChannel] = useState("all");
+  const [channels, setChannels] = useState<string[]>([]);
   const [status, setStatus] = useState("all");
 
   /* Same "Head and Compliance are one question" merge the Log tab uses —
@@ -649,16 +657,16 @@ function ScheduledTab() {
       const code = scope.slice(4);
       list = list.filter((s) => s.defCode === code);
     }
-    if (channel !== "all") list = list.filter((s) => s.step.channels.includes(channel as Channel));
+    if (channels.length) list = list.filter((s) => channels.some((c) => s.step.channels.includes(c as Channel)));
     if (status === "queued") list = list.filter((s) => !s.skipped);
     else if (status === "skipped") list = list.filter((s) => s.skipped);
     const needle = q.trim().toLowerCase();
     if (needle) list = list.filter((s) => s.form.toLowerCase().includes(needle));
     return list;
-  }, [sends, scope, channel, status, q]);
+  }, [sends, scope, channels, status, q]);
 
-  const filterCount = (scope !== "all" ? 1 : 0) + (channel !== "all" ? 1 : 0) + (status !== "all" ? 1 : 0);
-  const clearAll = () => { setScope("all"); setChannel("all"); setStatus("all"); };
+  const filterCount = (scope !== "all" ? 1 : 0) + (channels.length ? 1 : 0) + (status !== "all" ? 1 : 0);
+  const clearAll = () => { setScope("all"); setChannels([]); setStatus("all"); };
 
   const live = sends.filter((s) => !s.skipped);
   const messages = live.reduce(
@@ -726,10 +734,9 @@ function ScheduledTab() {
           field="Compliance" value={scope} none="all" onChange={setScope}
           options={scopeOptions}
         />
-        <FilterPill<string>
-          field="Channel" value={channel} none="all" onChange={setChannel}
+        <FilterPillMulti
+          field="Channel" noun="channels" values={channels} onChange={setChannels}
           options={[
-            { value: "all", label: "All channels" },
             { value: "WhatsApp", label: "WhatsApp", icon: <BrandIcon name="whatsapp" size={15} /> },
             { value: "Email", label: "Email", icon: <BrandIcon name="email" size={15} /> },
           ]}

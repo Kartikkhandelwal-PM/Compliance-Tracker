@@ -9,18 +9,19 @@
    penalty figure was arrived at.
    ========================================================================== */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Channel, Obligation, TaxBasis } from "../domain/types.ts";
-import { STAFF } from "../domain/book.ts";
+import { clientPath } from "../domain/book.ts";
 import { DEF_BY_CODE } from "../domain/catalog.ts";
 import {
-  TAX_BASIS_LABEL, TAX_BASIS_OPTIONS, markFiled, markNotApplicable, ownerOf, reassign, reinstate,
+  TAX_BASIS_LABEL, TAX_BASIS_OPTIONS, markFiled, markNotApplicable, ownerIdOf, ownerOf, reassign, reinstate,
   sendReminders, setNote, setTaxBasis, unmarkFiled,
 } from "../domain/engine.ts";
 import { fmtLong, inr } from "../domain/dates.ts";
 import { Countdown, StatusTag } from "./bits.tsx";
 import { Drawer } from "./Drawer.tsx";
+import { OwnerSelect } from "./OwnerSelect.tsx";
 import { Icon } from "./Icon.tsx";
 import { useApp, useObligations } from "./app-state.tsx";
 
@@ -47,6 +48,10 @@ export function ObligationDrawer({
   const [arn, setArn] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [asking, setAsking] = useState<"na" | "reinstate" | "filed" | "note" | null>(null);
+  /* Which filings "not applicable" covers. Left unchosen on purpose: it is
+     asked for, never assumed, because the two answers differ by a whole
+     year of filings. */
+  const [scope, setScope] = useState<"one" | "all" | null>(null);
 
   /* `obligation` is a snapshot handed in by whichever screen opened the
      drawer, and that caller has no reason to refresh its own reference
@@ -69,6 +74,19 @@ export function ObligationDrawer({
     [current],
   );
 
+  /* A prompt (not applicable, add back, record filing) opens at the foot of the
+     drawer, which can be below the fold. Bring it into view when it opens, and
+     again when the reason is chosen, since that adds the "Apply to" options and
+     pushes the buttons down. Above the early return, like the other hooks. */
+  const reasonReady = reason.trim().length >= 4;
+  useEffect(() => {
+    if (!asking) return;
+    const id = requestAnimationFrame(() => {
+      document.querySelector(".obprompt")?.scrollIntoView({ behavior: "smooth", block: "end" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [asking, reasonReady]);
+
   if (!current) return null;
   const o = current;
   const client = ownerOf(o);
@@ -78,8 +96,20 @@ export function ObligationDrawer({
     ...(client.emailEnabled ? (["Email"] as const) : []),
   ];
 
+  /* This compliance on this registration that are still open: what "all of
+     them" means. Filed ones are history and stay as they are, and ones
+     already marked not applicable need nothing more. */
+  const series = live
+    .filter((x) => x.clientId === o.clientId && x.ownerType === o.ownerType && x.defCode === o.defCode
+      && x.status !== "Filed" && x.status !== "Not Applicable")
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const regId = ownerIdOf(o);
+  /* With only this one filing open there is nothing to choose between. */
+  const askScope = series.length > 1;
+
   const close = () => {
     setAsking(null);
+    setScope(null);
     setReason("");
     setNaChoice("");
     setArn("");
@@ -95,7 +125,7 @@ export function ObligationDrawer({
       subtitle={
         <>
           <Link
-            to={`/clients/${client.id}?type=${o.ownerType}`}
+            to={clientPath(o.ownerType, o.clientId)}
             onClick={close}
             style={{ display: "inline-flex", alignItems: "center", gap: 2, textDecoration: "underline", textUnderlineOffset: 3 }}
           >
@@ -195,14 +225,12 @@ export function ObligationDrawer({
           </div>
           <div className="obstate__own">
             <span className="obstate__k">Owner</span>
-            <select
-              className="plain plain--sm"
+            <OwnerSelect
+              size="sm"
               value={o.assigneeId}
-              onChange={(e) => { reassign([o.id], e.target.value); toast("Owner updated"); }}
-            >
-              <option value="none">Unassigned</option>
-              {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
+              onChange={(id) => { reassign([o.id], id); toast("Owner updated"); }}
+              ariaLabel="Owner"
+            />
           </div>
         </div>
 
@@ -407,7 +435,7 @@ export function ObligationDrawer({
            Who marked it is NOT asked for. The signed-in staff member is
            already known, so it is recorded on every path including bulk. */}
       {asking === "filed" ? (
-        <div className="sheet" style={{ marginTop: "var(--s4)" }}>
+        <div className="sheet obprompt" style={{ marginTop: "var(--s4)" }}>
           <div className="sheet__head">
             <span className="sheet__title">Record this filing</span>
           </div>
@@ -458,7 +486,7 @@ export function ObligationDrawer({
 
       {/* ---- Override prompt ---------------------------------------------- */}
       {asking === "na" || asking === "reinstate" ? (
-        <div className="sheet" style={{ marginTop: "var(--s4)" }}>
+        <div className="sheet obprompt" style={{ marginTop: "var(--s4)" }}>
           <div className="sheet__head">
             <span className="sheet__title">
               {asking === "na" ? "Remove this compliance" : "Add this compliance back"}
@@ -485,6 +513,35 @@ export function ObligationDrawer({
                 </select>
               </div>
             ) : null}
+            {asking === "na" && askScope && reason.trim().length >= 4 ? (
+              <div className="scope" role="radiogroup" aria-label="Which filings">
+                <span className="scope__k">Apply to</span>
+                <button
+                  type="button" role="radio" aria-checked={scope === "one"}
+                  className={`scope__opt${scope === "one" ? " is-on" : ""}`}
+                  onClick={() => setScope("one")}
+                >
+                  <span className="scope__radio" />
+                  <span className="scope__txt">
+                    <b>Only this filing</b>
+                    <small>{o.form} · {o.periodLabel}. The other periods stay as they are.</small>
+                  </span>
+                </button>
+                <button
+                  type="button" role="radio" aria-checked={scope === "all"}
+                  className={`scope__opt${scope === "all" ? " is-on" : ""}`}
+                  onClick={() => setScope("all")}
+                >
+                  <span className="scope__radio" />
+                  <span className="scope__txt">
+                    <b>All {series.length} open {o.form} filings for this {regId.label}</b>
+                    <small>
+                      {series[0].periodLabel} to {series[series.length - 1].periodLabel}. Filings already made are kept.
+                    </small>
+                  </span>
+                </button>
+              </div>
+            ) : null}
             {asking === "reinstate" || naChoice === "other" ? (
               <div className="field" style={{ height: 36 }}>
                 <input
@@ -501,17 +558,24 @@ export function ObligationDrawer({
               <button
                 type="button"
                 className="btn btn--primary"
-                disabled={reason.trim().length < 4}
+                disabled={reason.trim().length < 4 || (asking === "na" && askScope && scope === null)}
                 onClick={() => {
-                  if (asking === "na") markNotApplicable([o.id], reason.trim(), me.name);
-                  else reinstate([o.id], reason.trim(), me.name);
-                  toast(asking === "na" ? "Marked not applicable" : "Compliance reinstated");
+                  if (asking === "na") {
+                    const ids = askScope && scope === "all" ? series.map((x) => x.id) : [o.id];
+                    markNotApplicable(ids, reason.trim(), me.name);
+                    toast(ids.length > 1
+                      ? `${ids.length} ${o.form} filings marked not applicable`
+                      : "Marked not applicable");
+                  } else {
+                    reinstate([o.id], reason.trim(), me.name);
+                    toast("Compliance reinstated");
+                  }
                   close();
                 }}
               >
                 Save override
               </button>
-              <button type="button" className="btn" onClick={() => { setAsking(null); setNaChoice(""); setReason(""); }}>
+              <button type="button" className="btn" onClick={() => { setAsking(null); setNaChoice(""); setReason(""); setScope(null); }}>
                 Cancel
               </button>
             </div>

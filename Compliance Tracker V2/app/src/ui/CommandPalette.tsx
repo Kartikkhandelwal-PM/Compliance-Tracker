@@ -4,8 +4,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { RecordType } from "../domain/types.ts";
-import { CLIENTS, GST_ENTITIES, TDS_DEDUCTORS, staffOf } from "../domain/book.ts";
+import { CLIENTS, GSTINS_BY_CLIENT, TANS_BY_CLIENT, clientPath, staffOf } from "../domain/book.ts";
 import { DEFS } from "../domain/catalog.ts";
 import { untrackedCodes } from "../domain/engine.ts";
 import { useEngine } from "./app-state.tsx";
@@ -36,6 +35,7 @@ const NAV: Item[] = [
   { group: "Go to", label: "Compliances", sub: "the catalogue", icon: "rules", to: "/compliances" },
   { group: "Go to", label: "Tracker", sub: "every client × every compliance", icon: "matrix", to: "/tracker" },
   { group: "Go to", label: "Clients", sub: "everyone you file for", icon: "clients", to: "/clients" },
+  { group: "Go to", label: "Notices", sub: "department notices and reply dates", icon: "notice", to: "/notices" },
   { group: "Go to", label: "Reminders", sub: "what clients were told", icon: "outbox", to: "/reminders" },
   { group: "Go to", label: "Settings", sub: "firm configuration", icon: "settings", to: "/settings" },
 ];
@@ -61,35 +61,30 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
     const out: Item[] = NAV.filter((n) => n.label.toLowerCase().includes(needle));
 
-    /* Client, Firm and Deductor are unrelated records with their own id
-       (PAN/GSTIN/TAN) — searched together here since the palette's job is
-       "find the record", not "find it within one bucket", but each result
-       still links to its own type so the detail page opens on the right one. */
-    const books: [RecordType, { id: string; name: string; legalName: string; assigneeId: string }[], string][] = [
-      ["Client", CLIENTS, "pan"],
-      ["GstEntity", GST_ENTITIES, "gstin"],
-      ["TdsDeductor", TDS_DEDUCTORS, "tan"],
-    ];
-    for (const [type, list, idField] of books) {
-      for (const c of list as (typeof list[number] & Record<string, string>)[]) {
-        if (out.length > 40) break;
-        const idValue: string = c[idField] ?? "";
-        if (
-          c.name.toLowerCase().includes(needle) ||
-          c.legalName.toLowerCase().includes(needle) ||
-          idValue.toLowerCase().includes(needle)
-        ) {
-          out.push({
-            group: "Clients",
-            label: c.name,
-            sub: idValue,
-            icon: "clients",
-            avatar: initialsOf(c.name),
-            owner: staffOf(c.assigneeId).initials,
-            to: `/clients/${c.id}?type=${type}`,
-          });
-        }
+    /* One result per client. A client matches on its name, its PAN, or any
+       of its GSTINs or TANs; when the match was a GSTIN or TAN, the result
+       shows that number and opens the client with it selected. */
+    for (const c of CLIENTS) {
+      if (out.length > 40) break;
+      const named = c.name.toLowerCase().includes(needle) || c.legalName.toLowerCase().includes(needle);
+      let sub = c.pan;
+      let to = clientPath("Client", c.id);
+      if (!named && !c.pan.toLowerCase().includes(needle)) {
+        const g = (GSTINS_BY_CLIENT[c.id] ?? []).find((x) => x.gstin.toLowerCase().includes(needle));
+        const t = g ? undefined : (TANS_BY_CLIENT[c.id] ?? []).find((x) => x.tan.toLowerCase().includes(needle));
+        if (!g && !t) continue;
+        sub = g ? `GSTIN ${g.gstin}` : `TAN ${t!.tan}`;
+        to = g ? clientPath("GstEntity", g.id) : clientPath("TdsDeductor", t!.id);
       }
+      out.push({
+        group: "Clients",
+        label: c.name,
+        sub,
+        icon: "clients",
+        avatar: initialsOf(c.name),
+        owner: staffOf(c.assigneeId).initials,
+        to,
+      });
     }
 
     for (const d of DEFS) {

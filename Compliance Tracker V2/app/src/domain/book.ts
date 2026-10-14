@@ -1,22 +1,19 @@
 /* ============================================================================
-   THE BOOK — three unlinked feeds: Client (PAN/ITR), GstEntity (GSTIN/GST,
-   labelled "Firm"), TdsDeductor (TAN/TDS + payroll)
+   THE BOOK — one client per PAN, each with its own GSTINs (GST) and TANs
+   (TDS + payroll)
    ----------------------------------------------------------------------------
-   In production these come from three separate KDK modules that share no
-   common ID — the TDS module never carries a PAN, only a TAN — so this seed
-   generates three genuinely independent arrays rather than one client with
-   three sub-records.
+   In production the KDK backend supplies the link between a PAN and its
+   registrations. Here one generation pass per client walks the weighted
+   archetypes (a "salaried individual", a "private company", ...) and decides
+   whether that client also holds a GST registration and/or a TAN, exactly as
+   a real business might have an ITR filing, a GST registration, both, or
+   neither. Every GSTIN and TAN stores the `clientId` of its PAN.
 
-   To keep the simulated book believable, one generation pass still walks the
-   same weighted archetypes as before (a "salaried individual", a "private
-   company", ...) and decides, per pass, whether that pass ALSO produces a
-   GstEntity and/or a TdsDeductor row — exactly as a real business might have
-   an ITR filing, a GST registration, both, or neither. But each row that
-   comes out the other end gets its own fresh id and its own independently
-   generated registration number; nothing stores a link back to the others.
-   Shared display names across the three arrays are a seeding convenience for
-   a believable demo, not a structural relationship — nowhere does the code
-   read one array to affect another.
+   A second, separately seeded pass then gives some larger businesses more
+   than one registration: additional GSTINs in other states and branch TANs.
+   It runs after the main pass, on its own random sequence, so adding it did
+   not reshuffle a single field of the existing book (in particular the ten
+   worked examples, which get no extra registrations at all).
 
    • The ten named archetypes are the exact profiles from the "Client Mapping
      Worked Examples" workbook, so a domain reviewer can look up a client they
@@ -31,7 +28,7 @@
 
 import type {
   Client, ClientProfile, CompanyType, DeductorProfile, EntityType, GstEntity,
-  GstProfile, GstRegType, PaymentNature, Residential, Staff, StateCategory, TdsDeductor,
+  GstProfile, GstRegType, PaymentNature, RecordType, Residential, Staff, StateCategory, TdsDeductor,
 } from "./types.ts";
 
 /* ---- Seeded PRNG (mulberry32) ------------------------------------------- */
@@ -152,13 +149,15 @@ function makePan(r: () => number, fourth: string, surname: string): string {
   return `${l()}${l()}${l()}${fourth}${surname[0].toUpperCase()}${d()}${d()}${d()}${d()}${l()}`;
 }
 
-/** A GSTIN always structurally embeds a PAN, but a `GstEntity` has none of
- *  its own to embed — there is no Client record it is allowed to borrow one
- *  from. So this fabricates a plausible-looking, independently-random
- *  pseudo-PAN purely to shape the GSTIN, and never stores or exposes it. */
-function makeGstin(r: () => number, stateCode: string): string {
-  const pseudoPan = makePan(r, pick(r, ["P", "C", "F"]), pick(r, LAST));
-  return `${stateCode}${pseudoPan}1Z${PAN_LETTERS[Math.floor(r() * 26)]}`;
+/** A GSTIN is the state code, the holder's PAN, an entity number for that
+ *  state ("1" for the first registration there), "Z", and a check character.
+ *
+ *  The pseudo-PAN drawn below is discarded. Earlier GSTINs carried a random
+ *  PAN of their own, and the draw is kept so the seeded sequence after it
+ *  (every later client's profile) comes out exactly as before. */
+function makeGstin(r: () => number, stateCode: string, pan: string, entityNo = 1): string {
+  makePan(r, pick(r, ["P", "C", "F"]), pick(r, LAST));
+  return `${stateCode}${pan}${entityNo}Z${PAN_LETTERS[Math.floor(r() * 26)]}`;
 }
 
 /** TAN: 4 letters (jurisdiction + deductor initial) + 5 digits + 1 check letter. */
@@ -691,11 +690,10 @@ function buildBook(): { clients: Client[]; gstEntities: GstEntity[]; tdsDeductor
   const stateOf = (name: string) => STATES.find((s) => s.name === name) ?? STATES[0];
   const arcOf = (key: string) => ARCHETYPES.find((a) => a.key === key)!;
 
-  /** Every pass always yields a Client row (the entity's own ITR/ROC filing
-   *  is universal), and independently yields a GstEntity row when the
-   *  simulated profile carries a GST registration, and a TdsDeductor row
-   *  when it carries any TDS-liable payment nature — the same two signals
-   *  `rules.ts` used to gate GST/TDS applicability before the split. */
+  /** Every pass always yields a Client (the PAN's own ITR/ROC filing is
+   *  universal), plus its principal GSTIN when the simulated profile carries
+   *  a GST registration, and its head-office TAN when it carries any
+   *  TDS-liable payment nature. */
   function emit(
     id: string, name: string, legalName: string, state: string, staff: string,
     archetypeLabel: string, profile: SeedProfile, pan: string,
@@ -713,8 +711,9 @@ function buildBook(): { clients: Client[]; gstEntities: GstEntity[]; tdsDeductor
       gstSeq++;
       const gid = `G${String(gstSeq).padStart(3, "0")}`;
       gstEntities.push({
-        id: gid, name, legalName, state, assigneeId: staff, archetype: archetypeLabel,
-        gstin: makeGstin(r, st.code), profile: toGstProfile(profile),
+        id: gid, clientId: id, label: "Principal place",
+        name, legalName, state, assigneeId: staff, archetype: archetypeLabel,
+        gstin: makeGstin(r, st.code, pan), profile: toGstProfile(profile),
         whatsapp, email, emailEnabled, phone,
       });
     }
@@ -723,7 +722,8 @@ function buildBook(): { clients: Client[]; gstEntities: GstEntity[]; tdsDeductor
       tdsSeq++;
       const did = `D${String(tdsSeq).padStart(3, "0")}`;
       tdsDeductors.push({
-        id: did, name, legalName, state, assigneeId: staff, archetype: archetypeLabel,
+        id: did, clientId: id, label: "Head office",
+        name, legalName, state, assigneeId: staff, archetype: archetypeLabel,
         tan: makeTan(r, legalName), profile: toDeductorProfile(profile),
         whatsapp, email, emailEnabled, phone,
       });
@@ -804,7 +804,112 @@ function buildBook(): { clients: Client[]; gstEntities: GstEntity[]; tdsDeductor
     );
   }
 
+  addExtraRegistrations(clients, gstEntities, tdsDeductors, gstSeq, tdsSeq);
+
   return { clients, gstEntities, tdsDeductors };
+}
+
+const BRANCH_CITIES: Record<string, string> = {
+  Maharashtra: "Pune", Karnataka: "Bengaluru", Gujarat: "Ahmedabad", "Tamil Nadu": "Chennai",
+  Telangana: "Hyderabad", Kerala: "Kochi", "Madhya Pradesh": "Indore", "Andhra Pradesh": "Visakhapatnam",
+  Delhi: "Delhi", "Uttar Pradesh": "Noida", Rajasthan: "Jaipur", "West Bengal": "Kolkata",
+  Haryana: "Gurugram", Punjab: "Ludhiana", Bihar: "Patna", Odisha: "Bhubaneswar",
+};
+
+/**
+ * Give some larger businesses more than one registration: GSTINs in other
+ * states (a GSTIN is per state, so a business selling from three states holds
+ * three) and branch TANs. Only businesses that already hold a principal GSTIN
+ * or head-office TAN qualify, never the ten worked examples, and only
+ * Company / LLP / Firm, which is where multi-state operations actually sit.
+ *
+ * Its own seed, run after the main pass, so the main book is untouched.
+ */
+function addExtraRegistrations(
+  clients: Client[], gstEntities: GstEntity[], tdsDeductors: TdsDeductor[],
+  gstSeq: number, tdsSeq: number,
+) {
+  const r = rng(20261014);
+  const gstByClient = new Map(gstEntities.map((g) => [g.clientId, g]));
+  const tdsByClient = new Map(tdsDeductors.map((d) => [d.clientId, d]));
+  const multi = new Set<EntityType>(["Company", "LLP", "Firm"]);
+  const domainOf = (c: Client) => c.email.split("@")[1] ?? "example.in";
+  const phone = () => `+91 9${String(Math.floor(r() * 900000000) + 100000000)}`;
+  const person = () => `${pick(r, FIRST)} ${pick(r, LAST)}`;
+
+  for (const c of clients.slice(WORKED.length)) {
+    if (!multi.has(c.profile.entityType)) continue;
+    const big = c.profile.turnover >= 5e7;
+
+    const principal = gstByClient.get(c.id);
+    /* Some businesses hand GST to a separate desk with its own contact. */
+    if (principal && r() < 0.3) {
+      Object.assign(principal, {
+        contactName: `${person()} (GST desk)`, email: `gst@${domainOf(c)}`, phone: phone(),
+      });
+    }
+    if (principal && r() < (big ? 0.55 : 0.2)) {
+      const extra = 1 + Math.floor(r() * (big ? 3 : 1.6));
+      const used = new Set([c.state]);
+      for (let i = 0; i < extra; i++) {
+        const st = pick(r, STATES.filter((x) => !used.has(x.name)));
+        used.add(st.name);
+        gstSeq++;
+        const share = 0.15 + r() * 0.35;
+        gstEntities.push({
+          ...principal,
+          id: `G${String(gstSeq).padStart(3, "0")}`,
+          label: "Additional place",
+          state: st.name,
+          contactName: `${person()} (${BRANCH_CITIES[st.name] ?? st.name} office)`,
+          email: `accounts.${(BRANCH_CITIES[st.name] ?? st.name).toLowerCase().replace(/[^a-z]+/g, "")}@${domainOf(c)}`,
+          phone: phone(),
+          whatsapp: r() < 0.85,
+          gstin: makeGstin(r, st.code, c.pan),
+          profile: {
+            ...principal.profile,
+            gstStateCategory: st.cat,
+            turnover: Math.round(principal.profile.turnover * share),
+            /* A branch office tends to file a little later than head office. */
+            discipline: Math.max(0.3, principal.profile.discipline - r() * 0.2),
+          },
+        });
+      }
+    }
+
+    const head = tdsByClient.get(c.id);
+    if (head && head.profile.monthlyPayroll > 0 && r() < (big ? 0.35 : 0.1)) {
+      const extra = 1 + Math.floor(r() * (big ? 2 : 1.3));
+      const used = new Set([c.state]);
+      for (let i = 0; i < extra; i++) {
+        const st = pick(r, STATES.filter((x) => !used.has(x.name)));
+        used.add(st.name);
+        tdsSeq++;
+        const share = 0.2 + r() * 0.3;
+        tdsDeductors.push({
+          ...head,
+          id: `D${String(tdsSeq).padStart(3, "0")}`,
+          label: `${BRANCH_CITIES[st.name] ?? st.name} branch`,
+          state: st.name,
+          contactName: `${person()} (branch accountant)`,
+          email: `tds.${(BRANCH_CITIES[st.name] ?? st.name).toLowerCase().replace(/[^a-z]+/g, "")}@${domainOf(c)}`,
+          phone: phone(),
+          whatsapp: r() < 0.85,
+          tan: makeTan(r, c.legalName),
+          profile: {
+            ...head.profile,
+            /* A branch deducts on salary and rent; contractor and
+               professional payments usually go through head office. */
+            paymentNatures: head.profile.paymentNatures.filter((n) => n === "Salary" || n === "Rent"),
+            professionalTaxState: head.profile.professionalTaxState ? st.name : undefined,
+            tdsPerQuarter: Math.round(head.profile.tdsPerQuarter * share),
+            monthlyPayroll: Math.round(head.profile.monthlyPayroll * share),
+            discipline: Math.max(0.3, head.profile.discipline - r() * 0.2),
+          },
+        });
+      }
+    }
+  }
 }
 
 const BOOK = buildBook();
@@ -822,6 +927,36 @@ export const GST_ENTITY_BY_ID: Record<string, GstEntity> = Object.fromEntries(
 export const TDS_DEDUCTOR_BY_ID: Record<string, TdsDeductor> = Object.fromEntries(
   TDS_DEDUCTORS.map((d) => [d.id, d]),
 );
+
+/** A client's GSTINs, principal place first then by state. */
+export const GSTINS_BY_CLIENT: Record<string, GstEntity[]> = {};
+for (const g of GST_ENTITIES) (GSTINS_BY_CLIENT[g.clientId] ??= []).push(g);
+for (const list of Object.values(GSTINS_BY_CLIENT)) {
+  list.sort((a, b) => (a.label === "Principal place" ? -1 : b.label === "Principal place" ? 1 : a.state.localeCompare(b.state)));
+}
+
+/** A client's TANs, head office first. */
+export const TANS_BY_CLIENT: Record<string, TdsDeductor[]> = {};
+for (const d of TDS_DEDUCTORS) (TANS_BY_CLIENT[d.clientId] ??= []).push(d);
+for (const list of Object.values(TANS_BY_CLIENT)) {
+  list.sort((a, b) => (a.label === "Head office" ? -1 : b.label === "Head office" ? 1 : a.label.localeCompare(b.label)));
+}
+
+/** The PAN client a record belongs to: itself for a Client, its parent for a
+ *  GSTIN or TAN. Anything that groups by client (the Clients list, "clients
+ *  losing the most", the team's client count) goes through this. */
+export function parentClientId(ownerType: RecordType, id: string): string {
+  if (ownerType === "GstEntity") return GST_ENTITY_BY_ID[id]?.clientId ?? id;
+  if (ownerType === "TdsDeductor") return TDS_DEDUCTOR_BY_ID[id]?.clientId ?? id;
+  return id;
+}
+
+/** Where to open a record: always the client page, with a GSTIN or TAN
+ *  selected in its tree when that is what was clicked. */
+export function clientPath(ownerType: RecordType, id: string): string {
+  if (ownerType === "Client") return `/clients/${id}`;
+  return `/clients/${parentClientId(ownerType, id)}?reg=${id}`;
+}
 
 export const WORKED_EXAMPLE_IDS = WORKED.map((_, i) => `C${String(i + 1).padStart(3, "0")}`);
 export const ALL_STATES = STATES.map((s) => s.name);

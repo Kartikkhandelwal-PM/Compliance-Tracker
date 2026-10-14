@@ -13,7 +13,7 @@ import { Link, useParams } from "react-router-dom";
 import type { FilingStatus, Obligation, TaxBasis } from "../domain/types.ts";
 import { TAX_BASIS_LABEL, TAX_BASIS_OPTIONS, setTaxBasisMany } from "../domain/engine.ts";
 import { useApp, useObligations } from "../ui/app-state.tsx";
-import { STAFF, staffOf } from "../domain/book.ts";
+import { staffOf } from "../domain/book.ts";
 import { DEF_BY_CODE } from "../domain/catalog.ts";
 import {
   markFiled, ownerIdOf, ownerOf, reassign, sendReminders, unmarkFiled,
@@ -24,6 +24,9 @@ import {
 } from "../ui/bits.tsx";
 import { exportXlsx } from "../ui/exportXlsx.ts";
 import { Icon } from "../ui/Icon.tsx";
+import { OwnerSelect } from "../ui/OwnerSelect.tsx";
+import { FilterPillMulti } from "../ui/Filters.tsx";
+import { OWNER_OPTIONS } from "../ui/ownerOptions.ts";
 import { ObligationDrawer } from "../ui/ObligationDrawer.tsx";
 
 type Filter = "all" | "open" | "overdue" | "filed" | "na";
@@ -54,7 +57,7 @@ export function RunDetailPage() {
 
   const [filter, setFilter] = useState<Filter>("open");
   const [q, setQ] = useState("");
-  const [owner, setOwner] = useState("all");
+  const [owners, setOwners] = useState<string[]>([]);
   /* V2: one tax-liability basis for the whole page. "auto" keeps each
      client on its own default (whichever source has data). */
   const [basisMode, setBasisMode] = useState<"auto" | TaxBasis>("auto");
@@ -112,7 +115,7 @@ export function RunDetailPage() {
       else if (filter === "filed") list = list.filter((o) => o.status === "Filed");
     }
 
-    if (owner !== "all") list = list.filter((o) => o.assigneeId === owner);
+    if (owners.length) list = list.filter((o) => owners.includes(o.assigneeId));
 
     const needle = q.trim().toLowerCase();
     if (needle) {
@@ -144,7 +147,7 @@ export function RunDetailPage() {
         b.exposure - a.exposure ||
         ownerOf(a).name.localeCompare(ownerOf(b).name),
     );
-  }, [items, filter, owner, q, sortCol, sortDir]);
+  }, [items, filter, owners, q, sortCol, sortDir]);
 
   if (items.length === 0) {
     return (
@@ -277,11 +280,10 @@ export function RunDetailPage() {
             ),
           )}
         </div>
-        <select className="plain" value={owner} onChange={(e) => setOwner(e.target.value)}>
-          <option value="all">Any owner</option>
-          <option value="none">Unassigned</option>
-          {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        <FilterPillMulti
+          field="Owner" noun="owners" values={owners} onChange={setOwners}
+          searchPlaceholder="Search staff" options={OWNER_OPTIONS}
+        />
         {/* Tax-liability basis for the whole page, labelled inside the control
             so it lines up with the other filters. */}
         {basisOptions.length > 1 ? (
@@ -458,20 +460,17 @@ export function RunDetailPage() {
           >
             <Icon name="send" size={14} /> Remind
           </button>
-          <select
-            className="plain"
-            style={{ height: 26, fontSize: "var(--t-12)" }}
+          <OwnerSelect
+            size="sm"
             value=""
-            onChange={(e) => {
-              if (!e.target.value) return;
-              reassign(selectedIds, e.target.value);
+            placeholder="Assign to…"
+            onChange={(id) => {
+              reassign(selectedIds, id);
               toast(`Reassigned ${selectedIds.length} items`);
               setSelected(new Set());
             }}
-          >
-            <option value="">Assign to…</option>
-            {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
+            ariaLabel="Assign selected to"
+          />
           <button type="button" className="btn btn--sm btn--ghost" onClick={() => setSelected(new Set())} aria-label="Clear selection">
             <Icon name="close" size={14} />
           </button>

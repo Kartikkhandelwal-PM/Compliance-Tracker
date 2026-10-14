@@ -37,10 +37,11 @@ import type { IconName } from "./ui/Icon.tsx";
 import { CommandPalette } from "./ui/CommandPalette.tsx";
 import { useApp, useEngine, useObligations, useOutbox } from "./ui/app-state.tsx";
 import {
-  getFirm, getNotificationSettings, getViewedNotifs, markNotifViewed, summarise,
+  getFirm, getNotices, getNotificationSettings, getViewedNotifs, markNotifViewed, summarise,
 } from "./domain/engine.ts";
+import { urgencyOf } from "./domain/notices.ts";
 import {
-  CLIENTS, CLIENT_BY_ID, GST_ENTITIES, GST_ENTITY_BY_ID, TDS_DEDUCTORS, TDS_DEDUCTOR_BY_ID,
+  CLIENTS, CLIENT_BY_ID,
 } from "./domain/book.ts";
 import { DEFS, FY_START } from "./domain/catalog.ts";
 import { TODAY, addDays, fmtDate } from "./domain/dates.ts";
@@ -57,6 +58,7 @@ import { MatrixPage } from "./routes/Matrix.tsx";
 import { TeamPage } from "./routes/Team.tsx";
 import { RulesPage } from "./routes/Rules.tsx";
 import { RemindersPage } from "./routes/Reminders.tsx";
+import { NoticesPage } from "./routes/Notices.tsx";
 import { CompliancesPage } from "./routes/Compliances.tsx";
 import { ComplianceDetailPage } from "./routes/ComplianceDetail.tsx";
 
@@ -135,6 +137,11 @@ export function App() {
   }, [location.pathname]);
 
   const summary = useMemo(() => summarise(obligations), [obligations]);
+  const notices = useEngine(getNotices);
+  /* The menu badge counts only replies that have gone overdue, in red, and
+     disappears when there are none. Counting every open notice would put a
+     big red number there all the time. */
+  const noticeLate = notices.filter((n) => urgencyOf(n) === "overdue").length;
 
   const dueSoonRuns = useMemo(() => {
     const horizon = addDays(TODAY, 7);
@@ -168,7 +175,8 @@ export function App() {
     /* The badge covers all three record types the page opens on (GST/TDS/
        ITR), not just the ITR bucket — CLIENTS.length alone under-reported
        what "Clients" actually holds once the other two tabs exist. */
-    { to: "/clients", label: "Clients", icon: "clients", count: CLIENTS.length + GST_ENTITIES.length + TDS_DEDUCTORS.length },
+    { to: "/clients", label: "Clients", icon: "clients", count: CLIENTS.length },
+    { to: "/notices", label: "Notices", icon: "notice", count: noticeLate || undefined, alarm: noticeLate > 0 },
     { to: "/reminders", label: "Reminders", icon: "outbox" },
     { to: "/settings", label: "Settings", icon: "settings" },
   ];
@@ -546,6 +554,7 @@ export function App() {
           <Route path="/tracker" element={<MatrixPage />} />
           <Route path="/matrix" element={<MatrixPage />} />
           <Route path="/team" element={<TeamPage />} />
+          <Route path="/notices" element={<NoticesPage />} />
           <Route path="/reminders" element={<RemindersPage />} />
           {/* Settings holds only what a person can change — currently the
               reminder engine's two guards. The ITR ladder and status
@@ -581,6 +590,7 @@ function breadcrumbs(path: string): { label: string; to?: string }[] {
     team: "Team",
     rules: "Settings",
     reminders: "Reminders",
+    notices: "Notices",
     settings: "Settings",
   };
   /* Settings is a real parent, so its child keeps a readable label rather
@@ -600,11 +610,6 @@ function breadcrumbs(path: string): { label: string; to?: string }[] {
   /* Resolve a client's internal id to their name. Internal ids are never shown
      to users, and the URL segment would otherwise surface one here. */
   const child = decodeURIComponent(seg[1]);
-  /* The path alone doesn't say which of the three unlinked records this id
-     belongs to (that lives in the `?type=` query string, not the pathname),
-     so this checks all three id-spaces — they never overlap. */
-  const label = first === "clients"
-    ? (CLIENT_BY_ID[child]?.name ?? GST_ENTITY_BY_ID[child]?.name ?? TDS_DEDUCTOR_BY_ID[child]?.name ?? "Client")
-    : child;
+  const label = first === "clients" ? (CLIENT_BY_ID[child]?.name ?? "Client") : child;
   return [head, { label }];
 }

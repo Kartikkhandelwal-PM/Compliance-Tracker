@@ -26,7 +26,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import type { Obligation, RecordType } from "../domain/types.ts";
 import { useApp, useObligations, useOutbox } from "../ui/app-state.tsx";
 import { CellHoverCard } from "../ui/CellHoverCard.tsx";
-import { STAFF, staffOf } from "../domain/book.ts";
+import { clientPath, staffOf } from "../domain/book.ts";
+import { OWNER_OPTIONS } from "../ui/ownerOptions.ts";
 import { ownerOf, ownerIdOf } from "../domain/engine.ts";
 import { FY_OPTIONS, FY_START, HEADS, fyLabel, headClass } from "../domain/catalog.ts";
 import { MONTHS, TODAY, addDays, fmtShort, inrShort, monthLabelLong, parts } from "../domain/dates.ts";
@@ -100,7 +101,8 @@ export function MatrixPage() {
   const nav = useNavigate();
 
   const [params] = useSearchParams();
-  const [head, setHead] = useState(() => params.get("head") ?? "all");
+  /* Several heads at once; empty means all. */
+  const [heads, setHeads] = useState<string[]>(() => (params.get("head") ? [params.get("head")!] : []));
   /* Empty = every owner. Levelling work means comparing desks, so this is
      a set rather than a single pick. */
   const [owners, setOwners] = useState<string[]>(() => {
@@ -117,7 +119,7 @@ export function MatrixPage() {
     const st = params.get("status");
     if (st) setStatus(st as StatusFilter);
     const h = params.get("head");
-    if (h) setHead(h);
+    if (h) setHeads([h]);
     const o = params.get("owner");
     if (o) setOwners([o]);
   }, [params]);
@@ -183,7 +185,7 @@ export function MatrixPage() {
          this year's window"; the tag check used to run first and exclude
          them before that had a chance to matter. */
       if (o.dueDate < from || o.dueDate > to) continue;
-      if (head !== "all" && o.head !== head) continue;
+      if (heads.length && !heads.includes(o.head)) continue;
       if (!seen.has(o.runId)) {
         seen.set(o.runId, {
           runId: o.runId, form: o.form, period: o.periodLabel, head: o.head, due: o.dueDate,
@@ -201,7 +203,7 @@ export function MatrixPage() {
       list.sort((a, b) => a.due.localeCompare(b.due) || a.form.localeCompare(b.form));
     }
     return list;
-  }, [obligations, head, win, group, fy, isCurrentYear]);
+  }, [obligations, heads, win, group, fy, isCurrentYear]);
 
   const colIndex = useMemo(() => new Map(columns.map((c, i) => [c.runId, i])), [columns]);
 
@@ -393,22 +395,16 @@ export function MatrixPage() {
           ]}
         />
       ) : null}
-      <FilterPill<string>
-        field="Head"
-        value={head}
-        none="all"
-        onChange={setHead}
-        options={[{ value: "all", label: "All heads" }, ...HEADS.map((h) => ({ value: h, label: h }))]}
+      <FilterPillMulti
+        field="Head" noun="heads" values={heads} onChange={setHeads}
+        options={HEADS.map((h) => ({ value: h, label: h }))}
       />
       <FilterPillMulti
         field="Owner"
         values={owners}
         onChange={(v) => { setOwners(v); setLimit(ROWS); }}
         searchPlaceholder="Search staff"
-        options={[
-          { value: "none", label: "Unassigned", avatar: "—" },
-          ...STAFF.map((st) => ({ value: st.id, label: st.name, avatar: st.initials, sub: st.role })),
-        ]}
+        options={OWNER_OPTIONS}
       />
       <FilterPill<StatusFilter>
         field="Status"
@@ -434,10 +430,10 @@ export function MatrixPage() {
         ]}
       />
       <ClearFilters
-        count={(head !== "all" ? 1 : 0) + (owners.length > 0 ? 1 : 0) + (status !== "all" ? 1 : 0)
+        count={(heads.length > 0 ? 1 : 0) + (owners.length > 0 ? 1 : 0) + (status !== "all" ? 1 : 0)
           + (isCurrentYear && win !== "year" ? 1 : 0) + (group !== "month" ? 1 : 0)}
         onClear={() => {
-          setHead("all"); setOwners([]); setStatus("all");
+          setHeads([]); setOwners([]); setStatus("all");
           setWin("year"); setGroup("month"); setLimit(ROWS);
         }}
       />
@@ -566,7 +562,7 @@ export function MatrixPage() {
                   return (
                     <tr key={r.clientId}>
                       <td className="trk__name">
-                        <button type="button" onClick={() => nav(`/clients/${c.id}?type=${r.ownerType}`)}>
+                        <button type="button" onClick={() => nav(clientPath(r.ownerType, r.clientId))}>
                           <span className="trk__cname">{c.name}</span>
                           <span className="trk__cmeta num">
                             {idValue}

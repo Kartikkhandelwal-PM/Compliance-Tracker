@@ -38,7 +38,7 @@ import {
   complianceSetting, getDefaultAssignee, getFirm,
   addOwnDomain, checkOwnDomain, clearOwnDomain,
   getNotificationSettings, getReminderSettings, getSchedule, getSenderProfile,
-  resetCompliances, resetSchedule, saveRampwin, setDefaultAssignee,
+  clearSmtp, resetCompliances, resetSchedule, saveRampwin, saveSmtp, setDefaultAssignee,
   setEmailProvider, setWaProvider, toggleStepChannel, updateCompliance, updateFirm,
   updateNotificationSettings, updateReminderSettings, updateSenderProfile, updateStep,
   untrackedCount,
@@ -46,6 +46,7 @@ import {
 import { useApp, useEngine } from "../ui/app-state.tsx";
 import { Avatar, Check, Empty, PageHead } from "../ui/bits.tsx";
 import { BrandIcon, Icon } from "../ui/Icon.tsx";
+import { OwnerSelect } from "../ui/OwnerSelect.tsx";
 import type { IconName } from "../ui/Icon.tsx";
 import type { Channel, FirmProfile, SenderProfile } from "../domain/types.ts";
 
@@ -215,14 +216,16 @@ function Card({ title, note, children, foot }: {
  *  styled as cards rather than dots — shown up front rather than behind a
  *  select, because "recommended" only means something next to the
  *  alternative it's being recommended over. */
-function ConnChoice<T extends string>({ name, value, onChange, options }: {
+function ConnChoice<T extends string>({ name, value, onChange, options, wide }: {
   name: string;
+  /** Spans the card instead of stopping at the form column's width. */
+  wide?: boolean;
   value: T;
   onChange: (v: T) => void;
   options: { value: T; title: string; sub: string }[];
 }) {
   return (
-    <div className="conn" role="radiogroup">
+    <div className={`conn${wide ? " conn--wide" : ""}`} role="radiogroup">
       {options.map((o) => (
         <label key={o.value} className={`conn__opt${value === o.value ? " is-on" : ""}`}>
           <input
@@ -884,9 +887,200 @@ function isPersonalEmailDomain(domain: string): boolean {
  *  without finding them; and verified. No API token or mail agent ever
  *  appears here — those belong to KDK's own ZeptoMail account, settled once
  *  in the backend, not asked of every firm. */
+function SmtpSection({ title, desc, children }: { title: string; desc: string; children: ReactNode }) {
+  return (
+    <section className="smtp__sec">
+      <div className="smtp__lead">
+        <h4>{title}</h4>
+        <p>{desc}</p>
+      </div>
+      <div className="smtp__body">{children}</div>
+    </section>
+  );
+}
+
+const SECURITY_LABEL = { starttls: "STARTTLS", ssl: "SSL/TLS", none: "No encryption" } as const;
+
+/** A firm's own mail server. Saved and tried in one step; until it connects,
+ *  mail keeps going from the shared address (see `emailFrom`), and the footer
+ *  says so. Reply-to is the same field the other two options use. */
+function SmtpPanel({ s }: { s: SenderProfile }) {
+  const { toast } = useApp();
+  const c = s.smtp;
+  const [host, setHost] = useState(c.host);
+  const [port, setPort] = useState(String(c.port));
+  const [security, setSecurity] = useState(c.security);
+  const [username, setUsername] = useState(c.username);
+  const [password, setPassword] = useState(c.password);
+  const [fromName, setFromName] = useState(c.fromName);
+  const [fromAddress, setFromAddress] = useState(c.fromAddress);
+  const [editing, setEditing] = useState(c.status !== "connected");
+
+  const defaultPort = (sec: typeof security) => (sec === "ssl" ? 465 : sec === "none" ? 25 : 587);
+  const pickSecurity = (sec: typeof security) => {
+    /* Follow the usual port for the chosen security, but only while the port
+       is still the previous default, so a port someone typed is never
+       overwritten. */
+    if (Number(port) === defaultPort(security)) setPort(String(defaultPort(sec)));
+    setSecurity(sec);
+  };
+  const emailOk = /^\S+@\S+\.\S+$/.test(fromAddress.trim());
+  const valid = !!host.trim() && Number(port) > 0 && !!username.trim() && !!password && !!fromName.trim() && emailOk;
+  const checking = c.status === "checking";
+
+  const save = () => {
+    saveSmtp({
+      host: host.trim(), port: Number(port), security, username: username.trim(), password,
+      fromName: fromName.trim(), fromAddress: fromAddress.trim(),
+    });
+    setEditing(false);
+  };
+
+  /* Toast the outcome when the check finishes, not when it starts. */
+  const prev = useRef(c.status);
+  useEffect(() => {
+    if (prev.current === "checking") {
+      if (c.status === "connected") toast("Connected. Email will go through your server from now on.");
+      else if (c.status === "failed") toast("Could not connect to your mail server");
+    }
+    prev.current = c.status;
+  }, [c.status, toast]);
+
+  const replyTo = (
+    <PField label="Reply-to address">
+      <SavableText
+        value={s.replyTo}
+        onSave={(v) => { updateSenderProfile({ replyTo: v }); toast("Reply-to address saved"); }}
+        placeholder="you@yourfirm.com"
+        mono
+      />
+    </PField>
+  );
+
+  /* ---- Connected: the same three sections, read only ---- */
+  if (c.status === "connected" && !editing) {
+    return (
+      <div className="smtp">
+        <SmtpSection title="Server" desc="Where your mail is handed over.">
+          <div className="smtp__row smtp__row--host">
+            <PField label="SMTP server"><PLocked value={c.host} /></PField>
+            <PField label="Port"><PLocked value={String(c.port)} /></PField>
+          </div>
+          <PField label="Security"><PLocked value={SECURITY_LABEL[c.security]} /></PField>
+        </SmtpSection>
+        <SmtpSection title="Login" desc="The account used to send.">
+          <PField label="Username"><PLocked value={c.username} /></PField>
+        </SmtpSection>
+        <SmtpSection title="Sender" desc="What clients see, and where their replies go.">
+          <div className="smtp__row">
+            <PField label="From name"><PLocked value={c.fromName} /></PField>
+            <PField label="From address"><PLocked value={c.fromAddress} /></PField>
+          </div>
+          {replyTo}
+        </SmtpSection>
+        <footer className="smtp__foot">
+          <span className="smtp__status is-ok"><Icon name="check" size={14} /> Connected. Email goes through your server.</span>
+          <span className="u-spacer" />
+          <button type="button" className="btn btn--sm" onClick={() => toast(`Test email sent to ${c.fromAddress}`)}>
+            <Icon name="send" size={14} /> Send test email
+          </button>
+          <button type="button" className="btn btn--sm" onClick={() => setEditing(true)}>Edit server</button>
+        </footer>
+      </div>
+    );
+  }
+
+  return (
+    <div className="smtp">
+      <SmtpSection title="Server" desc="The details your email provider gave you for sending mail.">
+        <div className="smtp__row smtp__row--host">
+          <PField label="SMTP server">
+            <Text value={host} onChange={setHost} placeholder="smtp.yourfirm.com" mono />
+          </PField>
+          <PField label="Port">
+            <Text value={port} onChange={(v) => setPort(v.replace(/\D/g, ""))} placeholder="587" mono />
+          </PField>
+        </div>
+        <PField label="Security">
+          <div className="smtp__opts" role="radiogroup" aria-label="Security">
+            {([
+              { v: "starttls", t: "STARTTLS", d: "Port 587. The usual choice" },
+              { v: "ssl", t: "SSL/TLS", d: "Port 465. Encrypted from the start" },
+              { v: "none", t: "None", d: "Port 25. Not encrypted" },
+            ] as const).map((o) => (
+              <button
+                type="button" key={o.v} role="radio" aria-checked={security === o.v}
+                className={`smtp__opt${security === o.v ? " is-on" : ""}`}
+                onClick={() => pickSecurity(o.v)}
+              >
+                <span className="smtp__radio" />
+                <span className="smtp__opt-txt">
+                  <b>{o.t}</b>
+                  <small>{o.d}</small>
+                </span>
+              </button>
+            ))}
+          </div>
+        </PField>
+      </SmtpSection>
+
+      <SmtpSection title="Login" desc="Usually your full email address. Some providers need an app password instead of your normal one.">
+        <div className="smtp__row">
+          <PField label="Username">
+            <Text value={username} onChange={setUsername} placeholder="compliance@yourfirm.com" mono />
+          </PField>
+          <PField label="Password">
+            <Secret value={password} onChange={setPassword} placeholder="SMTP password" />
+          </PField>
+        </div>
+      </SmtpSection>
+
+      <SmtpSection title="Sender" desc="What clients see as the sender, and where their replies land. The from address must be allowed by your server.">
+        <div className="smtp__row">
+          <PField label="From name">
+            <Text value={fromName} onChange={setFromName} placeholder="e.g. Sharma & Associates" />
+          </PField>
+          <PField label="From address">
+            <Text value={fromAddress} onChange={setFromAddress} placeholder="compliance@yourfirm.com" mono />
+          </PField>
+        </div>
+        {replyTo}
+      </SmtpSection>
+
+      <footer className="smtp__foot">
+        {c.status === "failed" && c.error ? (
+          <span className="smtp__status is-bad"><Icon name="alert" size={14} /> {c.error}</span>
+        ) : (
+          <span className="smtp__status">
+            {checking ? "Connecting to your server…" : "Until it connects, email keeps going from the shared address."}
+          </span>
+        )}
+        <span className="u-spacer" />
+        {c.status === "connected" ? (
+          <button type="button" className="btn btn--sm" onClick={() => setEditing(false)}>Cancel</button>
+        ) : (
+          <button
+            type="button" className="btn btn--sm" disabled={checking}
+            onClick={() => {
+              clearSmtp(); setHost(""); setPort("587"); setSecurity("starttls");
+              setUsername(""); setPassword(""); setFromName(""); setFromAddress("");
+            }}
+          >
+            Start over
+          </button>
+        )}
+        <button type="button" className="btn btn--primary btn--sm" disabled={!valid || checking} onClick={save}>
+          {checking ? "Connecting…" : "Save and connect"}
+        </button>
+      </footer>
+    </div>
+  );
+}
+
 function EmailCard({ s }: { s: SenderProfile }) {
   const { toast } = useApp();
   const own = s.emailProvider === "zeptomail";
+  const smtpOn = s.emailProvider === "smtp";
   const z = s.zeptomail;
 
   const [fromName, setFromName] = useState(z.fromName);
@@ -929,20 +1123,30 @@ function EmailCard({ s }: { s: SenderProfile }) {
   };
 
   return (
-    <Card title="Email" note={own ? "Your own domain, via ZeptoMail" : "Managed by KDK"}>
+    <Card title="Email" note={smtpOn ? "Your own SMTP server" : own ? "Your own domain, via ZeptoMail" : "Managed by KDK"}>
       <div className="sbrand">
         <BrandIcon name="email" size={24} />
         <div>
           <div className="u-strong">
-            {own ? (z.fromAddress || "Not set up yet") : s.fromEmail}
+            {smtpOn ? (s.smtp.fromAddress || "Not set up yet") : own ? (z.fromAddress || "Not set up yet") : s.fromEmail}
           </div>
           <div className="u-mute" style={{ fontSize: "var(--t-12)" }}>
-            {own
-              ? (z.domain ? `Domain: ${z.domain}` : "Sent via ZeptoMail")
-              : `Replies arrive at ${s.replyTo || "—"}`}
+            {smtpOn
+              ? (s.smtp.host ? `Server: ${s.smtp.host}:${s.smtp.port}` : "Sent through your mail server")
+              : own
+                ? (z.domain ? `Domain: ${z.domain}` : "Sent via ZeptoMail")
+                : `Replies arrive at ${s.replyTo || "—"}`}
           </div>
         </div>
-        {own ? (
+        {smtpOn ? (
+          <>
+            <span className="u-spacer" />
+            <span className={`tag ${s.smtp.status === "connected" ? "tag--filed" : s.smtp.status === "failed" ? "tag--overdue" : "tag--pending"}`}>
+              <i className="tag__dot" />
+              {s.smtp.status === "connected" ? "Connected" : s.smtp.status === "checking" ? "Connecting" : s.smtp.status === "failed" ? "Could not connect" : "Not set up"}
+            </span>
+          </>
+        ) : own ? (
           <>
             <span className="u-spacer" />
             <span className={`tag ${statusTag(z.status)}`}>
@@ -957,16 +1161,23 @@ function EmailCard({ s }: { s: SenderProfile }) {
           doesn't erase what was saved there; picking it again brings the
           same setup straight back. */}
       <ConnChoice
+        wide
         name="email-provider"
         value={s.emailProvider}
         onChange={setEmailProvider}
         options={[
           { value: "kdk", title: "CA Connect", sub: "Managed by KDK" },
           { value: "zeptomail", title: "Your own domain", sub: statusLabel(z.status) },
+          {
+            value: "smtp", title: "Your own SMTP server",
+            sub: s.smtp.status === "connected" ? "Connected" : "Use your mail server",
+          },
         ]}
       />
 
-      {!own ? (
+      {smtpOn ? (
+        <SmtpPanel s={s} />
+      ) : !own ? (
         <div className="pgrid">
           <div className="pgrid__pair">
             <PField label="From address" hint="Managed by KDK">
@@ -1475,14 +1686,13 @@ function TeamSection() {
       >
         <div className="sgrid sgrid--tight">
           <Row label="Assign new clients to">
-            <select
-              className="sinput"
+            <OwnerSelect
+              block
               value={defaultOwner}
-              onChange={(e) => setDefaultAssignee(e.target.value)}
-            >
-              <option value="none">Nobody (assign manually)</option>
-              {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.role}</option>)}
-            </select>
+              onChange={setDefaultAssignee}
+              noneLabel="Nobody (assign manually)"
+              ariaLabel="Default owner"
+            />
           </Row>
         </div>
       </Card>

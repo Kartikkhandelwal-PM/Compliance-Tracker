@@ -23,6 +23,7 @@ import { TODAY, addDays, fmtShort, inrShort } from "../domain/dates.ts";
 import { Empty, PageHead } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
 import { CORRECTION_CODES } from "../ui/EntryPanels.tsx";
+import { FilterPillMulti } from "../ui/Filters.tsx";
 
 type Quick = "all" | "late" | "week" | "corrections";
 type Sort = "late" | "due" | "fees";
@@ -105,13 +106,14 @@ export function CompliancesPage() {
   const obligations = useObligations();
   const untracked = useEngine(untrackedCodes);
   const nav = useNavigate();
-  const [head, setHead] = useState("all");
+  /* Head and frequency each take several values; empty means all. */
+  const [heads, setHeads] = useState<string[]>([]);
   const [quick, setQuick] = useState<Quick>("all");
   const [fy, setFy] = useState(FY_START);
   const [params] = useSearchParams();
   /* `?open=GSTR-1` lands with that row already expanded. */
   const [open, setOpen] = useState<string | null>(() => params.get("open"));
-  const [freq, setFreq] = useState("all");
+  const [freqs, setFreqs] = useState<string[]>([]);
 
   /* The filter bar is sticky under the top bar and the table header parks
      under the filter bar. The bar wraps on a narrow window, so its height is
@@ -201,12 +203,12 @@ export function CompliancesPage() {
   const filtered = useMemo(() => {
     const weekEnd = addDays(TODAY, 7);
     return tracked.filter((d) => {
-      if (head !== "all" && d.head !== head) return false;
+      if (heads.length && !heads.includes(d.head)) return false;
       const s = byDef.get(d.code);
       if (quick === "late" && !(s && s.late > 0)) return false;
       if (quick === "week" && !(s && s.runs.some((r) => r.dueDate >= TODAY && r.dueDate <= weekEnd && r.pending > 0))) return false;
       if (quick === "corrections" && !CORRECTION_CODES.has(d.code)) return false;
-      if (freq !== "all" && d.frequency !== freq) return false;
+      if (freqs.length && !freqs.includes(d.frequency)) return false;
       return true;
     }).sort((a, b) => {
       const sort = SORT_FOR[quick];
@@ -217,7 +219,7 @@ export function CompliancesPage() {
       /* Default: forms with work late first, then by next date. */
       return (sb?.late ?? 0) - (sa?.late ?? 0) || byDue;
     });
-  }, [tracked, byDef, head, quick, freq]);
+  }, [tracked, byDef, heads, quick, freqs]);
 
   const groups = useMemo(() => {
     const m = new Map<string, typeof filtered>();
@@ -265,17 +267,17 @@ export function CompliancesPage() {
               itself. "Due within" was dropped because it fought the
               "Due in 7 days" tab over the same question. */}
           <div className="cl-tools">
-            {head !== "all" || freq !== "all" ? (
-              <button type="button" className="cl-clear" onClick={() => { setHead("all"); setFreq("all"); }}>Clear</button>
+            {heads.length || freqs.length ? (
+              <button type="button" className="cl-clear" onClick={() => { setHeads([]); setFreqs([]); }}>Clear</button>
             ) : null}
-            <select className="plain" value={head} onChange={(e) => setHead(e.target.value)} aria-label="Compliance head">
-              <option value="all">All heads</option>
-              {HEADS.map((h) => <option key={h} value={h}>{h}</option>)}
-            </select>
-            <select className="plain" value={freq} onChange={(e) => setFreq(e.target.value)} aria-label="Frequency">
-              <option value="all">Any frequency</option>
-              {FREQS.map((f) => <option key={f} value={f}>{f}</option>)}
-            </select>
+            <FilterPillMulti
+              field="Head" noun="heads" values={heads} onChange={setHeads}
+              options={HEADS.map((h) => ({ value: h, label: h }))}
+            />
+            <FilterPillMulti
+              field="Frequency" noun="frequencies" values={freqs} onChange={setFreqs}
+              options={FREQS.map((f) => ({ value: f, label: f }))}
+            />
           </div>
         </div>
       </div>

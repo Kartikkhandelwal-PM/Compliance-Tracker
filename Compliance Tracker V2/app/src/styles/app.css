@@ -3528,7 +3528,6 @@ button.stat:hover {
 :root[data-theme="dark"] .wabubble,
 :root[data-theme="dark"] .wabubble::after { background: #005c4b; }
 :root[data-theme="dark"] .wabubble { color: #e9edef; }
-:root[data-theme="dark"] .wabubble p:last-of-type { color: rgba(233, 237, 239, 0.6); }
 .wabubble p {
   margin: 0;
 }
@@ -3539,12 +3538,6 @@ button.stat:hover {
 .wabubble__gap {
   display: block;
   height: 9px;
-}
-/* The last line is the sender attribution, and reads as a footnote. */
-.wabubble p:last-of-type {
-  margin-top: 10px;
-  font-size: 11px;
-  color: rgba(17, 27, 33, 0.55);
 }
 :root[data-theme="dark"] .wabubble {
   background: #005c4b;
@@ -7320,3 +7313,83 @@ tr:hover .rowact {
   background: var(--sheet);
 }
 
+
+/* ---- Own SMTP server: sectioned form --------------------------------------- */
+.conn--wide { max-width: none; }
+.smtp {
+  margin-top: var(--s2); background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden;
+}
+.smtp__sec {
+  display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--s6); padding: var(--s5) var(--s6);
+}
+.smtp__sec + .smtp__sec { border-top: 1px solid var(--rule); }
+.smtp__lead h4 { margin: 0 0 4px; font-size: 14px; font-weight: 653; color: var(--ink); }
+.smtp__lead p { margin: 0; font-size: 12px; line-height: 17px; color: var(--ink-3); }
+.smtp__body { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; max-width: 620px; }
+.smtp__row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); }
+.smtp__row--host { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.smtp__foot {
+  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; padding: var(--s3) var(--s6);
+  background: var(--sunk); border-top: 1px solid var(--rule);
+}
+.smtp__status { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); }
+.smtp__status.is-ok { color: var(--st-filed-fg); font-weight: 600; }
+.smtp__status.is-bad { color: var(--st-overdue-fg); font-weight: 600; }
+@media (max-width: 800px) {
+  .smtp__sec { grid-template-columns: minmax(0, 1fr); gap: var(--s3); padding: var(--s4); }
+  .smtp__row, .smtp__row--host { grid-template-columns: minmax(0, 1fr); }
+  .smtp__foot { padding: var(--s3) var(--s4); }
+}
+.smtp__opts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 6px; }
+.smtp__opt {
+  display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; text-align: left;
+  border: 1px solid var(--rule); border-radius: 10px; background: var(--sheet);
+  font: inherit; color: var(--ink); cursor: pointer; transition: border-color .12s, background .12s;
+}
+.smtp__opt:hover { border-color: var(--rule-strong); }
+.smtp__opt.is-on { border-color: var(--accent); background: var(--selected); box-shadow: 0 0 0 1px var(--accent); }
+.smtp__opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.smtp__radio {
+  width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; border: 2px solid var(--rule-strong); flex-shrink: 0;
+}
+.smtp__opt.is-on .smtp__radio { border-color: var(--accent); background: var(--accent); box-shadow: inset 0 0 0 3px var(--sheet); }
+.smtp__opt-txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.smtp__opt-txt b { font-size: 13px; font-weight: 600; }
+.smtp__opt.is-on .smtp__opt-txt b { color: var(--accent); }
+.smtp__opt-txt small { font-size: 12px; line-height: 16px; color: var(--ink-3); }
+@media (max-width: 800px) { .smtp__opts { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- Owner select: avatar in the button and in every option ----------------- */
+/* Same look as every other filter control (select.plain and the filter pills):
+   a filled neutral button with no outline and 6px corners, a blue fill once a
+   filter is applied. A form field (`block`) keeps the outlined input look. */
+.osel {
+  display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 6px; max-width: 100%;
+  border: 0; border-radius: 6px; background: var(--hover);
+  font: inherit; font-size: 14px; font-weight: 500; color: var(--ink-2); cursor: pointer; text-align: left;
+}
+.osel:hover:not(:disabled) { background: var(--active); color: var(--ink); }
+.osel.is-open { background: var(--active); color: var(--ink); }
+.osel.is-active { background: var(--selected); color: var(--accent); }
+.osel.is-active:hover:not(:disabled) { background: var(--accent-line); }
+.osel:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.osel:disabled { opacity: 0.45; cursor: not-allowed; }
+.osel--sm { height: 26px; font-size: var(--t-12); gap: 6px; padding: 0 8px 0 4px; }
+.osel--block {
+  display: flex; width: 100%; height: 36px; border: 1px solid var(--rule); background: var(--sheet);
+  font-size: var(--t-13); color: var(--ink);
+}
+.osel--block:hover:not(:disabled), .osel--block.is-open { background: var(--sheet); border-color: var(--rule-strong); }
+.osel__name { flex: 1; min-width: 0; }
+.osel__caret { color: var(--ink-3); flex-shrink: 0; }
+.osel.is-active .osel__caret { color: var(--accent); }
+.osel__all {
+  width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; flex-shrink: 0;
+  background: var(--sunk-2); color: var(--ink-3);
+}
+.osel--sm .avatar, .osel--sm .osel__all { transform: scale(0.85); }
+.osel__scrim { position: fixed; inset: 0; z-index: 400; }
+/* The menu itself is the shared `.fmenu`; this only pins it to its button, lifts
+   it above drawers, and keeps wheel scrolling inside the list. */
+.osel__menu { position: fixed !important; z-index: 401; top: auto; max-width: 320px; overscroll-behavior: contain; }
+.osel__menu.is-up { transform: translateY(-100%); }

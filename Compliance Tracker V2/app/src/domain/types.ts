@@ -53,20 +53,26 @@ export type PaymentNature =
   | "Commission"
   | "Non-Resident";
 
-/* --- Three unlinked records ------------------------------------------------
-   GST, TDS and Income-Tax/ROC each come from a different KDK module, and
-   none of them share a common ID — a TDS-module record carries a TAN, never
-   a PAN, so there is no reliable key to join it back to a GST or ITR record.
-   Guessing a link from name/address would sometimes guess wrong, and a wrong
-   merge is worse than none, so these are three separate, unrelated record
-   types: `Client` (PAN, ITR/ROC), `GstEntity` (GSTIN, GST — labelled "Firm"
-   in the UI) and `TdsDeductor` (TAN, TDS + payroll). The same real business
-   may legitimately appear as two or three rows with no code-level tie
-   between them.
+/* --- One client, many registrations --------------------------------------
+   A client is one PAN. Under it sit any number of GST registrations (one
+   GSTIN per state, sometimes more than one in a state) and any number of TAN
+   registrations (a head office and each branch that deducts on its own TAN).
+   The KDK backend supplies the link: every `GstEntity` and `TdsDeductor`
+   carries the `clientId` of the PAN it belongs to, so nothing here guesses a
+   link from name or address.
 
-   `Party` is only the handful of fields every one of the three needs for
-   messaging, assignment and search — name, contact, owner. It is not a
-   fourth "unified client" concept. */
+   GSTINs and TANs stay as records of their own, not fields on `Client`,
+   because each is filed separately: GSTR-3B is due per GSTIN and 24Q per
+   TAN, each with its own profile (QRMP, payment natures) that the rule
+   engine reads. An `Obligation` still points at the exact registration it
+   is filed under (`ownerType` + `clientId`); `parentClientId()` in book.ts
+   lifts that to the PAN client for anything that groups by client.
+
+   `Party` is the handful of contact and ownership fields every record
+   carries. Contact details belong to each record on its own: a branch GSTIN
+   or TAN is often handled by a different accountant, with their own email
+   and phone, so its reminders go to them. The owner (the staff member
+   responsible) is set once per client and copied to every registration. */
 export interface Party {
   id: string;
   name: string;
@@ -82,11 +88,15 @@ export interface Party {
    *  reminder on either channel; it still shows up everywhere else. */
   emailEnabled: boolean;
   phone: string;
+  /** Who to address at this contact, when it is not the client themselves —
+   *  "Accounts team", "Suresh Iyer (branch accountant)". */
+  contactName?: string;
 }
 
-/** Which of the three records an `Obligation`/`OutboxEntry` belongs to —
- *  the discriminant that picks which lookup map (`CLIENT_BY_ID`,
- *  `GST_ENTITY_BY_ID`, `TDS_DEDUCTOR_BY_ID`) `clientId` joins into. */
+/** Which record an `Obligation`/`OutboxEntry` is filed under: the PAN
+ *  itself (`Client`), one of its GSTINs or one of its TANs. Picks which
+ *  lookup map (`CLIENT_BY_ID`, `GST_ENTITY_BY_ID`, `TDS_DEDUCTOR_BY_ID`)
+ *  `clientId` joins into. */
 export type RecordType = "Client" | "GstEntity" | "TdsDeductor";
 
 export interface ClientProfile {
@@ -139,9 +149,14 @@ export interface GstProfile {
   discipline: number;
 }
 
-/** A GST registration. Labelled "Firm" in the UI. */
+/** One GST registration (GSTIN) of a client. */
 export interface GstEntity extends Party {
+  /** The PAN client this GSTIN is registered under. */
+  clientId: string;
   gstin: string;
+  /** How staff tell this GSTIN apart from the client's others, e.g.
+   *  "Principal place" or "Additional place · Gujarat". */
+  label: string;
   profile: GstProfile;
 }
 
@@ -164,9 +179,14 @@ export interface DeductorProfile {
   discipline: number;
 }
 
-/** A TAN-registered deductor. */
+/** One TAN of a client. A client may hold several, one per branch that
+ *  deducts on its own. */
 export interface TdsDeductor extends Party {
+  /** The PAN client this TAN belongs to. */
+  clientId: string;
   tan: string;
+  /** "Head office", "Pune branch" and so on. */
+  label: string;
   profile: DeductorProfile;
 }
 
@@ -392,6 +412,8 @@ export interface FilingRun {
   pending: number;
   overdue: number;
   exposure: number;
+  /** Tax payable on the filings in this run that are not filed yet. */
+  liability: number;
   clientIds: string[];
 }
 
@@ -531,6 +553,24 @@ export interface ReminderSettings {
    will either ignore it or report it.
    ------------------------------------------------------------------------- */
 
+/** A firm's own mail server, for firms that would rather send through the
+ *  server they already use than through KDK or ZeptoMail. */
+export interface SmtpConfig {
+  host: string;
+  port: number;
+  /** How the connection is secured: STARTTLS (usually port 587), SSL/TLS
+   *  (usually 465), or none (usually 25). */
+  security: "starttls" | "ssl" | "none";
+  username: string;
+  password: string;
+  fromName: string;
+  fromAddress: string;
+  /** "checking" is its own state so the button visibly goes away while the
+   *  connection is tried; "failed" keeps the reason in `error`. */
+  status: "unset" | "checking" | "connected" | "failed";
+  error?: string;
+}
+
 export interface FirmProfile {
   name: string;
   pan: string;
@@ -554,7 +594,8 @@ export interface SenderProfile {
   /** Which account each channel actually sends through — see `Sender` in
    *  messages.ts, the source these mirror. */
   waProvider: "kdk" | "rampwin";
-  emailProvider: "kdk" | "zeptomail";
+  emailProvider: "kdk" | "zeptomail" | "smtp";
+  smtp: SmtpConfig;
   rampwin: {
     displayName: string;
     apiKey: string;

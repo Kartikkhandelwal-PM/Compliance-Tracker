@@ -1,5 +1,5 @@
 /* ============================================================================
-   CLIENTS — the GST / TDS / ITR book, as one list
+   CLIENTS — one list, one row per PAN
    ----------------------------------------------------------------------------
    The book, as a list. That is the whole job.
 
@@ -8,35 +8,31 @@
    fold. Nobody arriving at "Clients" wants a report; they want to find a client
    or scan the book. Aggregate analysis moved to the Dashboard where it belongs.
 
-   THREE UNLINKED RECORDS, ONE SCREEN. GST, TDS and Income-Tax/ROC come from
-   three separate KDK modules with no shared ID — a TDS record carries a TAN,
-   never a PAN — so the GST bucket (GstEntity, GSTIN), the TDS bucket
-   (TdsDeductor, TAN) and the ITR bucket (Client, PAN — also carrying ROC/MCA,
-   Advance Tax and Tax Audit for that PAN) are genuinely different, unrelated
-   record types, not three views of one client. The tabs are labelled by
-   source module (GST/TDS/ITR) rather than by record shape, since that is the
-   vocabulary staff already use. Rather than three separate pages, they share
-   this one list and one detail page (see ClientDetail.tsx) behind a type
-   tab — chosen over separate screens because most of what a person does here
-   (search, filter by owner/state, scan compliance health) is identical across
-   the three; only the identifying number and a couple of profile columns
-   differ.
+   ONE ROW PER CLIENT. A client is a PAN; its GSTINs and TANs belong to it
+   (see the note in types.ts). This screen used to be three tabs, GST, TDS and
+   ITR, each its own list, so a company with three GSTINs and a TAN showed up
+   five times under the same name. Now it is one row: the Registrations column
+   says what it holds, the health bar and the counts cover every filing under
+   the PAN, and the registration filter does what the tabs used to ("only
+   clients with GST"). Search still finds a client by any GSTIN or TAN.
 
-   640 ITR rows, 490 GST, 381 TDS here, 10,000+ in production, so the table is
-   paged and every narrowing question is a filter rather than a separate view.
+   640 clients here, 10,000+ in production, so the table is paged and every
+   narrowing question is a filter rather than a separate view.
    ========================================================================== */
 
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import type { RecordType } from "../domain/types.ts";
+import type { EntityType } from "../domain/types.ts";
 import { useApp, useObligations } from "../ui/app-state.tsx";
 import {
-  ALL_STATES, CLIENTS, GST_ENTITIES, STAFF, TDS_DEDUCTORS, staffOf,
+  ALL_STATES, CLIENTS, GSTINS_BY_CLIENT, TANS_BY_CLIENT, parentClientId, staffOf,
 } from "../domain/book.ts";
 import { FY_START } from "../domain/catalog.ts";
 import { inr, inrShort } from "../domain/dates.ts";
-import { Avatar, Empty, PageHead, Pbar, Seg, initialsOf } from "../ui/bits.tsx";
+import { Avatar, Empty, PageHead, Pbar, initialsOf } from "../ui/bits.tsx";
 import { Icon } from "../ui/Icon.tsx";
+import { FilterPillMulti } from "../ui/Filters.tsx";
+import { OWNER_OPTIONS } from "../ui/ownerOptions.ts";
 
 type SortKey = "exposure" | "overdue" | "name" | "turnover";
 /** Compliance state is a filter like any other, so it is a select like any
@@ -45,74 +41,56 @@ type SortKey = "exposure" | "overdue" | "name" | "turnover";
  *  — and it could only ever ask half the question: there was no way to filter
  *  down to the clients who are *clean*. */
 type Health = "all" | "arrears" | "clear";
+/** What the old GST / TDS / ITR tabs used to answer, as one filter. */
+type RegFilter = "all" | "gst" | "tds" | "both" | "multi" | "itr";
 const PAGE = 40;
 
-/* Labelled by source module (GST / TDS / ITR), not by record shape — matches
-   how staff already talk about these, since that is the vocabulary the three
-   upstream KDK modules use. "ITR" is a stand-in for the whole PAN bucket: it
-   also carries ROC/MCA, Advance Tax and Tax Audit, everything that keys off
-   the same PAN as the return itself. */
-const TABS: { type: RecordType; label: string; idLabel: string; detailLabel: string }[] = [
-  { type: "GstEntity", label: "GST", idLabel: "GSTIN", detailLabel: "Registration" },
-  { type: "TdsDeductor", label: "TDS", idLabel: "TAN", detailLabel: "Entity" },
-  { type: "Client", label: "ITR", idLabel: "PAN", detailLabel: "Entity" },
-];
+const ENTITY_OPTIONS: EntityType[] = ["Individual", "Company", "LLP", "Firm", "Trust", "AOP/BOI", "HUF"];
 
-/** The "detail" filter's own option list, per tab — an entity type for
- *  Client/Deductor, a GST registration type for Firm. Different vocabularies,
- *  same slot in the filter row. */
-const DETAIL_OPTIONS: Record<RecordType, string[]> = {
-  Client: ["Individual", "Company", "LLP", "Firm", "Trust", "AOP/BOI", "HUF"],
-  GstEntity: ["Regular", "Composition", "TDS Deductor", "E-commerce Operator", "ISD", "Non-Resident Taxable"],
-  TdsDeductor: ["Individual", "Company", "LLP", "Firm", "Trust", "AOP/BOI", "HUF"],
-};
+const REG_OPTIONS: { value: RegFilter; label: string }[] = [
+  { value: "all", label: "Any registration" },
+  { value: "gst", label: "Has GST" },
+  { value: "tds", label: "Has TDS" },
+  { value: "both", label: "Has GST and TDS" },
+  { value: "multi", label: "Multiple GSTINs or TANs" },
+  { value: "itr", label: "Income tax only" },
+];
 
 interface Row {
   id: string;
-  type: RecordType;
   name: string;
-  idValue: string;
+  pan: string;
+  entity: EntityType;
   detail: string;
   state: string;
   assigneeId: string;
   turnover: number;
+  gstins: string[];
+  tans: string[];
   filed: number;
   pending: number;
   overdue: number;
   exposure: number;
 }
 
-function rowsFor(type: RecordType): Row[] {
-  const map = new Map<string, Row>();
-  if (type === "Client") {
-    for (const c of CLIENTS) {
-      map.set(c.id, {
-        id: c.id, type, name: c.name, idValue: c.pan,
-        detail: c.profile.entityType === "Company" ? `Company · ${c.profile.companyType}` : c.profile.entityType,
-        state: c.state, assigneeId: c.assigneeId, turnover: c.profile.turnover,
-        filed: 0, pending: 0, overdue: 0, exposure: 0,
-      });
-    }
-  } else if (type === "GstEntity") {
-    for (const f of GST_ENTITIES) {
-      map.set(f.id, {
-        id: f.id, type, name: f.name, idValue: f.gstin,
-        detail: f.profile.gstQrmpOpted ? `${f.profile.gstRegType} · QRMP` : f.profile.gstRegType,
-        state: f.state, assigneeId: f.assigneeId, turnover: f.profile.turnover,
-        filed: 0, pending: 0, overdue: 0, exposure: 0,
-      });
-    }
-  } else {
-    for (const d of TDS_DEDUCTORS) {
-      map.set(d.id, {
-        id: d.id, type, name: d.name, idValue: d.tan,
-        detail: d.profile.entityType === "Company" ? "Company" : d.profile.entityType,
-        state: d.state, assigneeId: d.assigneeId, turnover: d.profile.turnover,
-        filed: 0, pending: 0, overdue: 0, exposure: 0,
-      });
-    }
-  }
-  return [...map.values()];
+function baseRows(): Row[] {
+  return CLIENTS.map((c) => ({
+    id: c.id, name: c.name, pan: c.pan, entity: c.profile.entityType,
+    detail: c.profile.entityType === "Company" ? `Company · ${c.profile.companyType}` : c.profile.entityType,
+    state: c.state, assigneeId: c.assigneeId, turnover: c.profile.turnover,
+    gstins: (GSTINS_BY_CLIENT[c.id] ?? []).map((g) => g.gstin),
+    tans: (TANS_BY_CLIENT[c.id] ?? []).map((t) => t.tan),
+    filed: 0, pending: 0, overdue: 0, exposure: 0,
+  }));
+}
+
+/** Old links (and bookmarks) carried `?type=GstEntity` / `TdsDeductor` from
+ *  the tab days; they land on the matching registration filter. */
+function initialReg(params: URLSearchParams): RegFilter {
+  const reg = params.get("reg");
+  if (REG_OPTIONS.some((o) => o.value === reg)) return reg as RegFilter;
+  const t = params.get("type");
+  return t === "GstEntity" ? "gst" : t === "TdsDeductor" ? "tds" : "all";
 }
 
 export function ClientsPage() {
@@ -120,15 +98,13 @@ export function ClientsPage() {
   const { toast } = useApp();
   const nav = useNavigate();
   const [params] = useSearchParams();
-  const [type, setType] = useState<RecordType>(() => {
-    const t = params.get("type");
-    return t === "Client" || t === "TdsDeductor" ? t : "GstEntity";
-  });
   const [q, setQ] = useState("");
-  const [detailFilter, setDetailFilter] = useState("all");
-  const [state, setState] = useState("all");
+  /* Entity type, state and owner each take several values; empty means all. */
+  const [entities, setEntities] = useState<string[]>([]);
+  const [reg, setReg] = useState<RegFilter>(() => initialReg(params));
+  const [states, setStates] = useState<string[]>([]);
   /* Team → "Open" deep-links here with ?owner=<staffId>. */
-  const [owner, setOwner] = useState(() => params.get("owner") ?? "all");
+  const [owners, setOwners] = useState<string[]>(() => (params.get("owner") ? [params.get("owner")!] : []));
   const [health, setHealth] = useState<Health>(() =>
     params.get("health") === "arrears" ? "arrears" : "all",
   );
@@ -138,33 +114,41 @@ export function ClientsPage() {
   const [sort, setSort] = useState<SortKey>("name");
   const [limit, setLimit] = useState(PAGE);
 
-  const tab = TABS.find((t) => t.type === type)!;
-
+  /* Every filing under the PAN counts toward its client's row, whichever
+     GSTIN or TAN it is filed under. */
   const rows = useMemo(() => {
-    const list = rowsFor(type);
+    const list = baseRows();
     const map = new Map(list.map((r) => [r.id, r]));
     for (const o of obligations) {
-      if (o.fy !== FY_START || o.ownerType !== type) continue;
-      const r = map.get(o.clientId);
+      if (o.fy !== FY_START) continue;
+      const r = map.get(parentClientId(o.ownerType, o.clientId));
       if (!r) continue;
       if (o.status === "Filed") r.filed++;
       else if (o.status === "Overdue") { r.overdue++; r.exposure += o.exposure; }
       else if (o.status === "Pending") r.pending++;
     }
-    return [...map.values()];
-  }, [obligations, type]);
+    return list;
+  }, [obligations]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     let list = rows;
     if (needle) {
       list = list.filter(
-        (r) => r.name.toLowerCase().includes(needle) || r.idValue.toLowerCase().includes(needle),
+        (r) => r.name.toLowerCase().includes(needle)
+          || r.pan.toLowerCase().includes(needle)
+          || r.gstins.some((g) => g.toLowerCase().includes(needle))
+          || r.tans.some((t) => t.toLowerCase().includes(needle)),
       );
     }
-    if (detailFilter !== "all") list = list.filter((r) => r.detail.startsWith(detailFilter));
-    if (state !== "all") list = list.filter((r) => r.state === state);
-    if (owner !== "all") list = list.filter((r) => r.assigneeId === owner);
+    if (entities.length) list = list.filter((r) => entities.includes(r.entity));
+    if (reg === "gst") list = list.filter((r) => r.gstins.length > 0);
+    else if (reg === "tds") list = list.filter((r) => r.tans.length > 0);
+    else if (reg === "both") list = list.filter((r) => r.gstins.length > 0 && r.tans.length > 0);
+    else if (reg === "multi") list = list.filter((r) => r.gstins.length > 1 || r.tans.length > 1);
+    else if (reg === "itr") list = list.filter((r) => r.gstins.length === 0 && r.tans.length === 0);
+    if (states.length) list = list.filter((r) => states.includes(r.state));
+    if (owners.length) list = list.filter((r) => owners.includes(r.assigneeId));
     if (health === "arrears") list = list.filter((r) => r.overdue > 0);
     else if (health === "clear") list = list.filter((r) => r.overdue === 0);
 
@@ -174,27 +158,21 @@ export function ClientsPage() {
     else if (sort === "turnover") sorted.sort((a, b) => b.turnover - a.turnover);
     else sorted.sort((a, b) => a.name.localeCompare(b.name));
     return sorted;
-  }, [rows, q, detailFilter, state, owner, health, sort]);
+  }, [rows, q, entities, reg, states, owners, health, sort]);
 
   const visible = filtered.slice(0, limit);
-  const total = type === "Client" ? CLIENTS.length : type === "GstEntity" ? GST_ENTITIES.length : TDS_DEDUCTORS.length;
-
-  const switchTab = (t: RecordType) => {
-    setType(t);
-    setDetailFilter("all");
-    setLimit(PAGE);
-  };
+  const gstinTotal = useMemo(() => rows.reduce((n, r) => n + r.gstins.length, 0), [rows]);
+  const tanTotal = useMemo(() => rows.reduce((n, r) => n + r.tans.length, 0), [rows]);
 
   /* Sync also runs automatically in the background on its own schedule; this
      button just runs it right now instead of waiting for that. There's no
      live KDK connection behind this prototype, so there's nothing actually
-     new to pull — the confirmation always reads as up to date. Broken down
-     per module rather than one combined number, since GST, TDS and ITR are
-     three separate feeds and a single figure would hide which one actually
-     changed. */
+     new to pull — the confirmation always reads as up to date. */
   const syncFromKdk = () => {
-    toast("Synced: GST 0 new · TDS 0 new · ITR 0 new");
+    toast("Synced: 0 new clients · 0 new GSTINs · 0 new TANs");
   };
+
+  const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setLimit(PAGE); };
 
   return (
     <div className="page page--wide">
@@ -203,22 +181,18 @@ export function ClientsPage() {
         icon="clients"
         note={
           <>
-            <b>{filtered.length.toLocaleString("en-IN")}</b> of {total.toLocaleString("en-IN")} {tab.label} records
+            <b>{filtered.length.toLocaleString("en-IN")}</b> of {rows.length.toLocaleString("en-IN")} clients
+            {" · "}{gstinTotal.toLocaleString("en-IN")} GSTINs · {tanTotal.toLocaleString("en-IN")} TANs
           </>
         }
         aside={
           <div className="u-row">
-            {/* GST / TDS / ITR are unrelated records — no shared ID joins them —
-                so switching tabs is switching which array the whole screen reads,
-                not filtering one list three ways. Placed here, beside the title,
-                the same way Calendar's Calendar/Timeline switch sits in its own
-                header rather than as a separate row: this choice changes what the
-                whole page means, not just one filter within it. */}
-            <Seg<RecordType>
-              value={type}
-              onChange={switchTab}
-              options={TABS.map((t) => ({ value: t.type, label: t.label }))}
-            />
+            <select className="plain" value={sort} onChange={(e) => setSort(e.target.value as SortKey)} aria-label="Sort">
+              <option value="name">Sort: Name A–Z</option>
+              <option value="overdue">Sort: Most overdue</option>
+              <option value="turnover">Sort: Turnover</option>
+              <option value="exposure">Sort: Late fees</option>
+            </select>
             <button type="button" className="btn btn--sm" onClick={syncFromKdk}>
               <Icon name="sync" size={14} /> Sync from KDK
             </button>
@@ -231,42 +205,33 @@ export function ClientsPage() {
           question nobody asks on the way to finding one client — that analysis
           belongs on the Dashboard. Filters do the narrowing instead. */}
       <div className="filters">
-        <div className="field" style={{ width: 280 }}>
+        <div className="field" style={{ width: 240 }}>
           <Icon name="search" size={15} />
           <input
             value={q}
-            onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }}
-            placeholder={`Name or ${tab.idLabel}`}
+            onChange={(e) => reset(setQ)(e.target.value)}
+            placeholder="Name, PAN, GSTIN or TAN"
           />
         </div>
-        <select className="plain" value={detailFilter} onChange={(e) => { setDetailFilter(e.target.value); setLimit(PAGE); }}>
-          <option value="all">All {tab.detailLabel.toLowerCase()} types</option>
-          {DETAIL_OPTIONS[type].map((s) => <option key={s} value={s}>{s}</option>)}
+        <FilterPillMulti
+          field="Entity type" noun="types" values={entities} onChange={reset(setEntities)}
+          options={ENTITY_OPTIONS.map((e) => ({ value: e, label: e }))}
+        />
+        <select className="plain" value={reg} onChange={(e) => reset(setReg)(e.target.value as RegFilter)}>
+          {REG_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        <select className="plain" value={state} onChange={(e) => { setState(e.target.value); setLimit(PAGE); }}>
-          <option value="all">All states</option>
-          {ALL_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select className="plain" value={owner} onChange={(e) => { setOwner(e.target.value); setLimit(PAGE); }}>
-          <option value="all">All owners</option>
-          <option value="none">Unassigned</option>
-          {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-        <select
-          className="plain"
-          value={health}
-          onChange={(e) => { setHealth(e.target.value as Health); setLimit(PAGE); }}
-        >
-          <option value="all">All records</option>
+        <FilterPillMulti
+          field="State" noun="states" values={states} onChange={reset(setStates)}
+          searchPlaceholder="Search states" options={ALL_STATES.map((s) => ({ value: s, label: s }))}
+        />
+        <FilterPillMulti
+          field="Owner" noun="owners" values={owners} onChange={reset(setOwners)}
+          searchPlaceholder="Search staff" options={OWNER_OPTIONS}
+        />
+        <select className="plain" value={health} onChange={(e) => reset(setHealth)(e.target.value as Health)}>
+          <option value="all">All clients</option>
           <option value="arrears">In arrears</option>
           <option value="clear">Up to date</option>
-        </select>
-        <span className="u-spacer" />
-        <select className="plain" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
-          <option value="name">Name A–Z</option>
-          <option value="overdue">Most overdue</option>
-          <option value="turnover">Turnover</option>
-          <option value="exposure">Late fees</option>
         </select>
       </div>
 
@@ -274,8 +239,9 @@ export function ClientsPage() {
         <table className="ltable">
           <thead>
             <tr>
-              <th>{tab.label}</th>
-              <th>{tab.detailLabel}</th>
+              <th>Client</th>
+              <th>Entity</th>
+              <th>Registrations</th>
               <th>State</th>
               <th>Owner</th>
               <th className="u-right">Turnover</th>
@@ -287,13 +253,13 @@ export function ClientsPage() {
           </thead>
           <tbody>
             {visible.map((r) => (
-              <tr key={r.id} className="is-clickable" onClick={() => nav(`/clients/${r.id}?type=${r.type}`)}>
+              <tr key={r.id} className="is-clickable" onClick={() => nav(`/clients/${r.id}`)}>
                 <td>
                   {/* A face on the row: down 640 rows a client is recognised by
                       its mark before its name is read, the same way staff are
                       in the Owner column. */}
                   <Link
-                    to={`/clients/${r.id}?type=${r.type}`}
+                    to={`/clients/${r.id}`}
                     onClick={(e) => e.stopPropagation()}
                     className="u-row"
                     style={{ gap: "var(--s3)" }}
@@ -302,12 +268,29 @@ export function ClientsPage() {
                     <span style={{ minWidth: 0 }}>
                       <div className="u-strong u-truncate" style={{ maxWidth: 230 }}>{r.name}</div>
                       <div className="num u-mute" style={{ fontSize: "var(--t-11)", marginTop: 2 }}>
-                        {r.idValue}
+                        {r.pan}
                       </div>
                     </span>
                   </Link>
                 </td>
                 <td className="u-mute" style={{ fontSize: "var(--t-12)" }}>{r.detail}</td>
+                <td>
+                  {/* ITR is implied by the PAN, so only GST and TDS are counted.
+                      The numbers themselves are in the tooltip. */}
+                  <span className="regchips">
+                    <span className="regchip regchip--Client" title={`PAN ${r.pan}`}>ITR</span>
+                    {r.gstins.length ? (
+                      <span className="regchip regchip--GstEntity" title={r.gstins.join("\n")}>
+                        GST{r.gstins.length > 1 ? <b>{r.gstins.length}</b> : null}
+                      </span>
+                    ) : null}
+                    {r.tans.length ? (
+                      <span className="regchip regchip--TdsDeductor" title={r.tans.join("\n")}>
+                        TDS{r.tans.length > 1 ? <b>{r.tans.length}</b> : null}
+                      </span>
+                    ) : null}
+                  </span>
+                </td>
                 <td className="u-mute">{r.state}</td>
                 <td>
                   <span className="u-row">
@@ -326,7 +309,7 @@ export function ClientsPage() {
             ))}
           </tbody>
         </table>
-        {filtered.length === 0 ? <Empty title={`No ${tab.label} records match these filters`} /> : null}
+        {filtered.length === 0 ? <Empty title="No clients match these filters" /> : null}
         {limit < filtered.length ? (
           <div className="sheet__foot u-row" style={{ justifyContent: "center" }}>
             <button type="button" className="btn btn--sm" onClick={() => setLimit((l) => l + PAGE * 2)}>
@@ -334,7 +317,7 @@ export function ClientsPage() {
             </button>
           </div>
         ) : (
-          <div className="sheet__foot u-center">Showing all {filtered.length} matching {tab.label} records</div>
+          <div className="sheet__foot u-center">Showing all {filtered.length} matching clients</div>
         )}
       </div>
     </div>

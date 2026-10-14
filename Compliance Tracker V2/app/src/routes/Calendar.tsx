@@ -31,12 +31,13 @@ import type { FilingRun } from "../domain/types.ts";
 import {
   DEF_BY_CODE, FY_OPTIONS, FY_START, HEADS, SEEDED_FYS, fyLabel, headClass, occurrencesForFY,
 } from "../domain/catalog.ts";
-import { STAFF } from "../domain/book.ts";
 import {
   DOW, MONTHS, TODAY, addDays, dow, fmtLong, inrShort, iso, monthLabelLong, parts,
 } from "../domain/dates.ts";
 import { Countdown, Empty, PageHead, Pbar, SectionHead, Seg, Stat, useRevealOnPick } from "../ui/bits.tsx";
 import { RunList } from "../ui/RunList.tsx";
+import { FilterPillMulti } from "../ui/Filters.tsx";
+import { OWNER_OPTIONS } from "../ui/ownerOptions.ts";
 import { Icon } from "../ui/Icon.tsx";
 
 /** Grid = the month as a wall calendar. Timeline = the year as one ordered run. */
@@ -82,8 +83,9 @@ export function CalendarPage() {
 
 
 
-  const [head, setHead] = useState(() => params.get("head") ?? "all");
-  const [owner, setOwner] = useState(() => params.get("owner") ?? "all");
+  /* Head and owner each take several values; empty means all. */
+  const [heads, setHeads] = useState<string[]>(() => (params.get("head") ? [params.get("head")!] : []));
+  const [owners, setOwners] = useState<string[]>(() => (params.get("owner") ? [params.get("owner")!] : []));
 
   /* Follow the URL when it changes under an already-open page, and move the
      month to wherever the linked date actually is. */
@@ -95,7 +97,7 @@ export function CalendarPage() {
     const i = fyMonthList(FY_START).findIndex(([yy, mm]) => yy === y && mm === m);
     if (i >= 0) setMonthIdx(i);
     const h = params.get("head");
-    if (h) setHead(h);
+    if (h) setHeads([h]);
   }, [params]);
   /* Was a lone toggle chip sitting among two dropdowns — the same mismatch
      the Clients page had. As a select it also gains the half of the question a
@@ -130,10 +132,10 @@ export function CalendarPage() {
     const from = `${fy}-04-01`;
     const to = `${fy + 1}-03-31`;
     let list = obligations.filter((o) => o.dueDate >= from && o.dueDate <= to);
-    if (head !== "all") list = list.filter((o) => o.head === head);
-    if (owner !== "all") list = list.filter((o) => o.assigneeId === owner);
+    if (heads.length) list = list.filter((o) => heads.includes(o.head));
+    if (owners.length) list = list.filter((o) => owners.includes(o.assigneeId));
     return list;
-  }, [obligations, fy, head, owner]);
+  }, [obligations, fy, heads, owners]);
 
   const runs = useMemo(() => buildRuns(filteredObligations), [filteredObligations]);
 
@@ -159,19 +161,19 @@ export function CalendarPage() {
         const def = DEF_BY_CODE[occ.defCode];
         if (!def) return null;
         if (untracked.has(occ.defCode)) return null;
-        if (head !== "all" && def.head !== head) return null;
+        if (heads.length && !heads.includes(def.head)) return null;
         return {
           runId: occ.runId,
           def,
           periodLabel: occ.periodLabel,
           dueDate: occ.dueDate,
           daysOverdue: 0,
-          total: 0, filed: 0, pending: 0, overdue: 0, exposure: 0,
+          total: 0, filed: 0, pending: 0, overdue: 0, exposure: 0, liability: 0,
           clientIds: [],
         };
       })
       .filter((r): r is FilingRun => r !== null);
-  }, [seeded, runs, dayState, fy, head, untracked]);
+  }, [seeded, runs, dayState, fy, heads, untracked]);
 
   const byDate = useMemo(() => {
     const map = new Map<string, DayCell>();
@@ -329,7 +331,7 @@ export function CalendarPage() {
     setPicked(null);
   };
 
-  const filtersOn = head !== "all" || owner !== "all" || dayState !== "all";
+  const filtersOn = heads.length > 0 || owners.length > 0 || dayState !== "all";
 
   return (
     <div className="page page--wide">
@@ -375,21 +377,18 @@ export function CalendarPage() {
 
       {/* ---- Filters ---------------------------------------------------- */}
       <div className="filters">
-        <select className="plain" value={head} onChange={(e) => { setHead(e.target.value); setPicked(null); }}>
-          <option value="all">All heads</option>
-          {HEADS.map((h) => <option key={h} value={h}>{h}</option>)}
-        </select>
-        <select
-          className="plain"
-          value={owner}
-          onChange={(e) => { setOwner(e.target.value); setPicked(null); }}
+        <FilterPillMulti
+          field="Head" noun="heads" values={heads}
+          onChange={(v) => { setHeads(v); setPicked(null); }}
+          options={HEADS.map((h) => ({ value: h, label: h }))}
+        />
+        <FilterPillMulti
+          field="Owner" noun="owners" values={owners}
+          onChange={(v) => { setOwners(v); setPicked(null); }}
+          searchPlaceholder="Search staff" options={OWNER_OPTIONS}
           disabled={!seeded}
           title={seeded ? undefined : "Owners can only be filtered once a year has started"}
-        >
-          <option value="all">Any owner</option>
-          <option value="none">Unassigned</option>
-          {STAFF.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
+        />
         <select
           className="plain"
           value={dayState}
@@ -406,7 +405,7 @@ export function CalendarPage() {
           <button
             type="button"
             className="btn btn--sm btn--ghost"
-            onClick={() => { setHead("all"); setOwner("all"); setDayState("all"); setPicked(null); }}
+            onClick={() => { setHeads([]); setOwners([]); setDayState("all"); setPicked(null); }}
           >
             <Icon name="close" size={12} /> Clear filters
           </button>

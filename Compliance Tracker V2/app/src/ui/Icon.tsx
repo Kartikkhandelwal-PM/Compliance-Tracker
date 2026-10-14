@@ -2,7 +2,7 @@
    navigational furniture, so they stay quiet and never carry state colour. */
 
 export type IconName =
-  | "today" | "runs" | "calendar" | "clients" | "matrix" | "team" | "rules"
+  | "today" | "runs" | "calendar" | "clients" | "matrix" | "tree" | "notice" | "team" | "rules"
   | "outbox" | "search" | "chevronRight" | "chevronLeft" | "chevronDown"
   | "check" | "close" | "alert" | "filter" | "download" | "moon" | "sun"
   | "collapse" | "expand" | "plus" | "clock" | "send" | "external" | "info"
@@ -19,6 +19,10 @@ const P: Record<IconName, string> = {
   calendar: "M4 5.5h16M4 5.5a1.5 1.5 0 0 1 1.5-1.5h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13ZM8 2.5v3M16 2.5v3M7.5 10h2M11 10h2M14.5 10h2M7.5 13.5h2M11 13.5h2M14.5 13.5h2M7.5 17h2M11 17h2",
   clients: "M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM2.5 20a6.5 6.5 0 0 1 13 0M16 5.2a3.5 3.5 0 0 1 0 6.6M18 14.4a6.5 6.5 0 0 1 3.5 5.6",
   matrix: "M3.5 3.5h17v17h-17zM3.5 9.2h17M3.5 14.8h17M9.2 3.5v17M14.8 3.5v17",
+  /* A letter with a corner fold and an alert mark: something received that needs an answer. */
+  notice: "M6 3.5h8l4 4v13H6zM14 3.5v4h4M12 11v4M12 17.4h.01",
+  /* A root box with three child boxes on a branching line — the client's structure. */
+  tree: "M9.5 3.5h5v4h-5zM12 7.5v4M5 11.5h14M5 11.5v4M12 11.5v4M19 11.5v4M3 15.5h4v4H3zM10 15.5h4v4h-4zM17 15.5h4v4h-4z",
   team: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4.5 20.5a7.5 7.5 0 0 1 15 0",
   rules: "M12 3.5v17M6.5 7.5h11M4 7.5 6.5 15h-5L4 7.5ZM20 7.5 22.5 15h-5L20 7.5ZM8.5 20.5h7",
   outbox: "M3.5 12.5h5l1.5 3h4l1.5-3h5M3.5 12.5 6 5a1.5 1.5 0 0 1 1.4-1h9.2A1.5 1.5 0 0 1 18 5l2.5 7.5v5A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5v-5Z",

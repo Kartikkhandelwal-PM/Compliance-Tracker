@@ -17,6 +17,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { headClass } from "../domain/catalog.ts";
 import { filedInMonth, monthsWithFilings, ownerIdOf, ownerOf } from "../domain/engine.ts";
+import { clientPath } from "../domain/book.ts";
 import { MONTHS_LONG, TODAY, fmtShort } from "../domain/dates.ts";
 import { useApp, useEngine } from "./app-state.tsx";
 import { Drawer } from "./Drawer.tsx";
@@ -160,7 +161,7 @@ export function FiledDrawer({ open, onClose }: { open: boolean; onClose: () => v
                     {g.rows.slice(0, 40).map((r) => {
                       const c = ownerOf(r);
                       return (
-                        <Link key={r.clientId} to={`/clients/${r.clientId}?type=${r.ownerType}`} className="filedcli" onClick={onClose}>
+                        <Link key={r.clientId} to={clientPath(r.ownerType, r.clientId)} className="filedcli" onClick={onClose}>
                           <span className="u-truncate">{c?.name ?? r.clientId}</span>
                           {r.arn
                             ? <span className="u-faint num">{r.arn}</span>

@@ -46,8 +46,11 @@ export interface PillOption {
 
 /** Shared shell: the button, its active styling, and the menu it opens. */
 function Pill({
-  field, summary, active, onClear, clearable = true, children,
+  field, summary, active, onClear, clearable = true, disabled, title, children,
 }: {
+  /** Greyed out and unopenable, with `title` saying why. */
+  disabled?: boolean;
+  title?: string;
   field: string;
   summary: string;
   active: boolean;
@@ -78,6 +81,8 @@ function Pill({
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="listbox"
+        disabled={disabled}
+        title={title}
       >
         <span className="u-truncate">
           {active ? <><span className="fpill__f">{field}:</span> {summary}</> : field}
@@ -209,8 +214,14 @@ export function FilterPill<T extends string>({
  * the point where scanning beats typing, so the list filters as you type.
  */
 export function FilterPillMulti({
-  field, values, options, onChange, searchPlaceholder = "Search",
+  field, values, options, onChange, searchPlaceholder = "Search", noun = "selected", searchable, disabled, title,
 }: {
+  disabled?: boolean;
+  title?: string;
+  /** What several of them are called in the pill: "3 owners", "2 stages". */
+  noun?: string;
+  /** Force the search box on or off; by default it appears past 7 options. */
+  searchable?: boolean;
   field: string;
   /** Empty means "not filtering" — every option is in play. */
   values: string[];
@@ -230,25 +241,27 @@ export function FilterPillMulti({
 
   const summary = values.length === 1
     ? options.find((o) => o.value === values[0])?.label ?? "1 selected"
-    : `${values.length} people`;
+    : `${values.length} ${noun}`;
 
   const toggle = (v: string) =>
     onChange(values.includes(v) ? values.filter((x) => x !== v) : [...values, v]);
 
   return (
-    <Pill field={field} summary={summary} active={values.length > 0} onClear={() => onChange([])}>
+    <Pill field={field} summary={summary} active={values.length > 0} onClear={() => onChange([])} disabled={disabled} title={title}>
       {() => (
         <>
-          <div className="field fmenu__q">
-            <Icon name="search" size={14} />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={searchPlaceholder}
-              aria-label={searchPlaceholder}
-              autoFocus
-            />
-          </div>
+          {searchable ?? options.length > 7 ? (
+            <div className="field fmenu__q">
+              <Icon name="search" size={14} />
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder={searchPlaceholder}
+                aria-label={searchPlaceholder}
+                autoFocus
+              />
+            </div>
+          ) : null}
 
           {shown.map((o) => {
             const on = values.includes(o.value);
@@ -267,13 +280,14 @@ export function FilterPillMulti({
                   {on ? <Icon name="check" size={11} /> : null}
                 </span>
                 {o.avatar ? <Avatar initials={o.avatar} /> : null}
+                {o.icon ? <span className="fmenu__ico">{o.icon}</span> : null}
                 <span className="u-truncate">{o.label}</span>
                 {o.sub ? <span className="fmenu__sub">{o.sub}</span> : null}
               </button>
             );
           })}
 
-          {shown.length === 0 ? <div className="fmenu__empty">No one matches “{q}”.</div> : null}
+          {shown.length === 0 ? <div className="fmenu__empty">Nothing matches “{q}”.</div> : null}
         </>
       )}
     </Pill>

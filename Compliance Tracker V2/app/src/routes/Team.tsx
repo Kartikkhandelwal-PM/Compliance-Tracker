@@ -5,7 +5,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useObligations } from "../ui/app-state.tsx";
-import { CLIENTS, GST_ENTITIES, STAFF, TDS_DEDUCTORS, UNASSIGNED } from "../domain/book.ts";
+import { CLIENTS, STAFF, UNASSIGNED } from "../domain/book.ts";
 import { FY_START } from "../domain/catalog.ts";
 import { TODAY, addDays, inr, inrShort } from "../domain/dates.ts";
 import { Avatar, PageHead, SectionHead, Seg, Stat } from "../ui/bits.tsx";
@@ -40,10 +40,9 @@ export function TeamPage() {
       }]),
     );
 
-    /* A staff member's book spans all three unlinked records — a Client, a
-       Firm and a Deductor with the same owner are three separate assignments,
-       not one client counted three ways. */
-    for (const c of [...CLIENTS, ...GST_ENTITIES, ...TDS_DEDUCTORS]) {
+    /* Counted per PAN client. Its GSTINs and TANs share the client's owner,
+       so counting them too would count one client several times. */
+    for (const c of CLIENTS) {
       const row = map.get(c.assigneeId);
       if (row) row.clients++;
     }
@@ -102,7 +101,7 @@ export function TeamPage() {
 
       <div className="stats" style={{ marginBottom: "var(--s4)" }}>
         <Stat label="People" value={STAFF.length} sub="with an active book" />
-        <Stat label="Records" value={CLIENTS.length + GST_ENTITIES.length + TDS_DEDUCTORS.length} sub="clients, firms and deductors" />
+        <Stat label="Clients" value={CLIENTS.length} sub="by PAN" />
         <Stat label="Overdue" value={totals.overdue} tone={totals.overdue ? "overdue" : undefined} sub="across all owners" />
         <Stat label="Due in 7 days" value={totals.week} tone="soon" sub="team-wide" />
         <Stat

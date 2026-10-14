@@ -12,11 +12,14 @@ import type {
   Channel, Client, ComplianceOverride, DeliveryStatus, FilingRun, FilingStatus,
   FirmProfile, Head, NotificationSettings, Obligation, Occurrence, OutboxEntry, Party,
   RecordType, ReminderSettings, ReminderStage, ScheduleStep, ScheduledSend,
-  SenderProfile, StatusBasis, StepKind, TaxBasis, TdsDeductor,
+  SenderProfile, SmtpConfig, StatusBasis, StepKind, TaxBasis, TdsDeductor,
 } from "./types.ts";
+import { TEMPLATES } from "./templates.ts";
+import { buildNotices } from "./notices.ts";
+import type { Notice, NoticeOutcome, NoticeStatus } from "./notices.ts";
 import {
   CLIENTS, CLIENT_BY_ID, GST_ENTITIES, GST_ENTITY_BY_ID, TDS_DEDUCTORS,
-  TDS_DEDUCTOR_BY_ID, h, staffOf,
+  TDS_DEDUCTOR_BY_ID, GSTINS_BY_CLIENT, TANS_BY_CLIENT, h, parentClientId, staffOf,
 } from "./book.ts";
 import {
   CORR_BASE_CODE, DEFAULT_UNTRACKED, DEFS, DEF_BY_CODE, FY_START, SEEDED_FYS, occurrencesForFY,
@@ -1213,6 +1216,7 @@ export function getSenderProfile(): SenderProfile {
     replyTo: s.replyTo,
     waProvider: s.waProvider,
     emailProvider: s.emailProvider,
+    smtp: s.smtp,
     rampwin: s.rampwin,
     zeptomail: s.zeptomail,
   };
@@ -1246,11 +1250,81 @@ export function setWaProvider(provider: "kdk" | "rampwin") {
  *  form rather than a real handshake; swap for a real check once one exists. */
 export function saveRampwin(config: Omit<Sender["rampwin"], "connected">) {
   setSender({ rampwin: { ...config, connected: true } });
+  /* A newly connected number has none of our templates approved on it, so
+     every WhatsApp template goes in for approval straight away rather than
+     waiting for someone to remember to. */
+  submitTemplates(WHATSAPP_TEMPLATE_IDS);
   emit();
 }
 
-export function setEmailProvider(provider: "kdk" | "zeptomail") {
+/* --- WhatsApp template approval, for a firm's own number ---------------------
+   WhatsApp approves templates per business account. On the shared CA Connect
+   number KDK holds that approval once for everyone; on a firm's own number
+   each template has to be approved on that account. So each starts "Not
+   submitted", goes to "Pending" when sent, and "Approved" when WhatsApp says
+   so. The answer here is simulated after a few seconds, standing in for the
+   real response (swap for the provider's callback). */
+
+export type TemplateApproval = "Not submitted" | "Pending" | "Approved";
+
+const WHATSAPP_TEMPLATE_IDS = TEMPLATES.filter((t) => t.channel === "WhatsApp").map((t) => t.id);
+let APPROVALS: Record<string, TemplateApproval> = {};
+
+export function getTemplateApprovals(): Record<string, TemplateApproval> {
+  return APPROVALS;
+}
+
+export function submitTemplates(ids: string[]) {
+  const sent = ids.filter((id) => (APPROVALS[id] ?? "Not submitted") === "Not submitted");
+  if (sent.length === 0) return;
+  APPROVALS = { ...APPROVALS, ...Object.fromEntries(sent.map((id) => [id, "Pending" as const])) };
+  emit();
+  setTimeout(() => {
+    APPROVALS = {
+      ...APPROVALS,
+      ...Object.fromEntries(sent.filter((id) => APPROVALS[id] === "Pending").map((id) => [id, "Approved" as const])),
+    };
+    emit();
+  }, 4000);
+}
+
+export function setEmailProvider(provider: "kdk" | "zeptomail" | "smtp") {
   setSender({ emailProvider: provider });
+  emit();
+}
+
+/** Saves a firm's own SMTP server and tries it. There is no real mail server
+ *  to reach from this prototype, so the "connection" is a short wait that
+ *  fails only on the mistakes a person actually makes: a server name that is
+ *  not a hostname, a port outside the valid range, or a missing login.
+ *  Swap for a real connect-and-authenticate once the backend can. While it
+ *  runs, mail keeps going from the shared address (see `emailFrom`). */
+export function saveSmtp(config: Omit<SmtpConfig, "status" | "error">) {
+  setSender({ smtp: { ...config, status: "checking" } });
+  emit();
+  setTimeout(() => {
+    const s = getSender();
+    if (s.smtp.status !== "checking") return; // cleared mid-check
+    const c = s.smtp;
+    const error = !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(c.host)
+      ? `Could not reach ${c.host}. Check the server name.`
+      : c.port < 1 || c.port > 65535
+        ? "That port is not valid. Common ones are 587, 465 and 25."
+        : !c.username || !c.password
+          ? "The server needs a username and password."
+          : undefined;
+    setSender({ smtp: { ...c, status: error ? "failed" : "connected", error } });
+    emit();
+  }, 1400);
+}
+
+export function clearSmtp() {
+  setSender({
+    smtp: {
+      host: "", port: 587, security: "starttls", username: "", password: "",
+      fromName: "", fromAddress: "", status: "unset",
+    },
+  });
   emit();
 }
 
@@ -1357,6 +1431,21 @@ export function updateParty(ownerType: RecordType, id: string, patch: Partial<Pa
       : CLIENT_BY_ID[id];
   if (!rec) return;
   Object.assign(rec, patch);
+  emit();
+}
+
+/**
+ * Change the owner on a client and every GSTIN and TAN under it in one go.
+ * Only for fields that hold for the whole client. Contact details differ per
+ * registration and are changed one record at a time with `updateParty`.
+ */
+export function updateClientParty(clientId: string, patch: Partial<Party>) {
+  const recs: Party[] = [
+    CLIENT_BY_ID[clientId],
+    ...(GSTINS_BY_CLIENT[clientId] ?? []),
+    ...(TANS_BY_CLIENT[clientId] ?? []),
+  ].filter(Boolean);
+  for (const rec of recs) Object.assign(rec, patch);
   emit();
 }
 
@@ -1898,7 +1987,7 @@ export function buildRuns(obs: Obligation[]): FilingRun[] {
         periodLabel: o.periodLabel,
         dueDate: o.dueDate,
         daysOverdue: Math.max(0, diffDays(o.dueDate, TODAY)),
-        total: 0, filed: 0, pending: 0, overdue: 0, exposure: 0,
+        total: 0, filed: 0, pending: 0, overdue: 0, exposure: 0, liability: 0,
         clientIds: [],
       };
       map.set(o.runId, run);
@@ -1908,6 +1997,7 @@ export function buildRuns(obs: Obligation[]): FilingRun[] {
     else if (o.status === "Overdue") run.overdue++;
     else run.pending++;
     run.exposure += o.exposure;
+    if (o.status !== "Filed") run.liability += o.taxLiability;
     run.clientIds.push(o.clientId);
   }
 
@@ -2044,6 +2134,92 @@ export function summarise(obs: Obligation[]): FirmSummary {
     overdueCount, overdueClients: overdueClients.size, exposure,
     dueThisWeek, dueToday, filedThisMonth, pendingTotal, unassigned,
   };
+}
+
+/** Tax payable on the filings still open: what the client owes the
+ *  government, as opposed to what delay would cost them. Only filings that
+ *  carry a liability count (GST returns, TDS, income tax and advance tax); a
+ *  filing with no figure behind it adds nothing rather than a guess. Grouped
+ *  by PAN client, so a business with several GSTINs is one row. */
+export interface TaxLiabilitySummary {
+  total: number;
+  /** The part of `total` sitting on filings already past their due date. */
+  overdue: number;
+  filings: number;
+  clients: number;
+  byHead: { head: Head; amount: number }[];
+  top: { clientId: string; amount: number; filings: number }[];
+}
+
+export function taxLiabilitySummary(obs: Obligation[]): TaxLiabilitySummary {
+  let total = 0, overdue = 0, filings = 0;
+  const byHead = new Map<Head, number>();
+  const byClient = new Map<string, { clientId: string; amount: number; filings: number }>();
+  for (const o of obs) {
+    if ((o.status !== "Pending" && o.status !== "Overdue") || !(o.taxLiability > 0)) continue;
+    total += o.taxLiability;
+    filings++;
+    if (o.status === "Overdue") overdue += o.taxLiability;
+    byHead.set(o.head, (byHead.get(o.head) ?? 0) + o.taxLiability);
+    const k = parentClientId(o.ownerType, o.clientId);
+    const c = byClient.get(k) ?? { clientId: k, amount: 0, filings: 0 };
+    c.amount += o.taxLiability;
+    c.filings++;
+    byClient.set(k, c);
+  }
+  return {
+    total, overdue, filings, clients: byClient.size,
+    byHead: [...byHead.entries()].map(([head, amount]) => ({ head, amount })).sort((a, b) => b.amount - a.amount),
+    top: [...byClient.values()].sort((a, b) => b.amount - a.amount).slice(0, 5),
+  };
+}
+
+/* --- Notices ----------------------------------------------------------------
+   Notices from a tax department, with their own life cycle. See notices.ts.
+   Kept in this store so every screen sees a change at once. */
+
+let NOTICES: Notice[] = buildNotices();
+
+export function getNotices(): Notice[] {
+  return NOTICES;
+}
+
+/** Move a notice to another stage, recording who did it. */
+export function setNoticeStatus(id: string, status: NoticeStatus, by: string) {
+  NOTICES = NOTICES.map((n) => {
+    if (n.id !== id || n.status === status) return n;
+    const at = NOTICE_ORDER.indexOf(status);
+    return {
+      ...n, status,
+      /* Dates and the outcome follow the stage: reaching Replied or Closed
+         stamps today, and stepping back before either clears what no longer
+         holds. */
+      repliedOn: at >= 3 ? n.repliedOn ?? TODAY : undefined,
+      replyRef: at >= 3 ? n.replyRef : undefined,
+      closedOn: at >= 4 ? n.closedOn ?? TODAY : undefined,
+      outcome: at >= 4 ? n.outcome : undefined,
+      history: [...n.history, { on: TODAY, by, text: `Moved to ${status}` }],
+    };
+  });
+  emit();
+}
+
+const NOTICE_ORDER: NoticeStatus[] = ["Received", "Under review", "Reply drafted", "Replied", "Closed"];
+
+export function setNoticeOutcome(id: string, outcome: NoticeOutcome, by: string) {
+  NOTICES = NOTICES.map((n) => (n.id !== id ? n : {
+    ...n, outcome,
+    history: [...n.history, { on: TODAY, by, text: `Outcome recorded: ${outcome}` }],
+  }));
+  emit();
+}
+
+export function assignNotice(id: string, staffId: string, by: string) {
+  NOTICES = NOTICES.map((n) => (n.id !== id || n.assigneeId === staffId ? n : {
+    ...n, assigneeId: staffId,
+    history: [...n.history, { on: TODAY, by, text: `Assigned to ${staffOf(staffId).name}` }],
+  }));
+  emit();
 }
 
 /** Per-day load for the runway ribbon. */

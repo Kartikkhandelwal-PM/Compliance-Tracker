@@ -10,17 +10,19 @@
 
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import type { FilingRun, Head, Obligation, OutboxEntry, RecordType } from "../domain/types.ts";
-import { CLIENT_BY_ID, GST_ENTITY_BY_ID, TDS_DEDUCTOR_BY_ID } from "../domain/book.ts";
+import type { FilingRun, Head, Obligation, OutboxEntry } from "../domain/types.ts";
+import { CLIENT_BY_ID } from "../domain/book.ts";
 import { TODAY, addDays, fmtShort, inrShort } from "../domain/dates.ts";
+import { getNotices, taxLiabilitySummary } from "../domain/engine.ts";
+import { daysToReply, needsReply, urgencyOf } from "../domain/notices.ts";
+import { useEngine } from "./app-state.tsx";
 import { Icon } from "./Icon.tsx";
 
 const n = (v: number) => v.toLocaleString("en-IN");
 const daysLeft = (d: string) => Math.round((Date.parse(d) - Date.parse(TODAY)) / 864e5);
 
-function partyName(type: RecordType, id: string): string {
-  const p = type === "GstEntity" ? GST_ENTITY_BY_ID[id] : type === "TdsDeductor" ? TDS_DEDUCTOR_BY_ID[id] : CLIENT_BY_ID[id];
-  return p?.name ?? id;
+function clientName(id: string): string {
+  return CLIENT_BY_ID[id]?.name ?? id;
 }
 
 /* ---- Apps: the jump-off into each head ----------------------------------- */
@@ -117,7 +119,7 @@ export function CorrectionsCard({ obligations }: { obligations: Obligation[] }) 
   );
 }
 
-/* ---- Penalty running, and the clients causing it ------------------------- */
+/* ---- Tax liability, and the clients carrying the most --------------------- */
 
 /* Each card carries its own colour and icon so they are told apart at a glance. */
 function CardHead({ title, link, onLink, icon, tone }: { title: string; link: string; onLink: () => void; icon?: Parameters<typeof Icon>[0]["name"]; tone?: string }) {
@@ -129,49 +131,73 @@ function CardHead({ title, link, onLink, icon, tone }: { title: string; link: st
   );
 }
 
-export function RiskyClientsCard({ obligations }: { obligations: Obligation[] }) {
+export function TaxLiabilityCard({ obligations }: { obligations: Obligation[] }) {
   const nav = useNavigate();
-  const { total, top, clients } = useMemo(() => {
-    const by = new Map<string, { type: RecordType; id: string; exposure: number; late: number }>();
-    const byHead: Record<string, number> = {};
-    let total = 0;
-    for (const o of obligations) {
-      if (o.status !== "Overdue") continue;
-      total += o.exposure;
-      byHead[o.head] = (byHead[o.head] ?? 0) + o.exposure;
-      const k = `${o.ownerType}:${o.clientId}`;
-      const c = by.get(k) ?? { type: o.ownerType, id: o.clientId, exposure: 0, late: 0 };
-      c.exposure += o.exposure;
-      c.late++;
-      by.set(k, c);
-    }
-    const top = [...by.values()].sort((a, b) => b.exposure - a.exposure || b.late - a.late).slice(0, 5);
-    const heads = Object.entries(byHead).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
-    return { total, top, clients: by.size, heads };
-  }, [obligations]);
-  const maxExp = Math.max(1, ...top.map((t) => t.exposure));
+  const sum = useMemo(() => taxLiabilitySummary(obligations), [obligations]);
+  const max = Math.max(1, ...sum.top.map((t) => t.amount));
 
   return (
-    <div className="ec ec--red">
-      <CardHead title="Penalty running" link="All late clients" onLink={() => nav("/clients?health=arrears")} icon="alert" tone="red" />
+    <div className="ec ec--liability">
+      <CardHead title="Tax liability" link="All clients" onLink={() => nav("/clients")} icon="rules" tone="blue" />
       <div className="ec__hero">
-        <b className="num ec__red">{inrShort(total)}</b>
-        <span>late fee and interest across {n(clients)} clients</span>
+        <b className="num">{n(sum.clients)}</b>
+        <span>clients with tax due, across {n(sum.filings)} open filings</span>
       </div>
-      <div className="ec__label">Clients losing the most</div>
+      <div className="ec__label">Largest liabilities</div>
       <ul className="ec__list">
-        {top.map((c) => (
-          <li key={c.type + c.id}>
-            <button type="button" onClick={() => nav(`/clients/${c.id}?type=${c.type}`)}>
-              <span className="ec__main"><b>{partyName(c.type, c.id)}</b><small>{n(c.late)} late {c.late === 1 ? "filing" : "filings"}</small></span>
+        {sum.top.map((c) => (
+          <li key={c.clientId}>
+            <button type="button" onClick={() => nav(`/clients/${c.clientId}`)}>
+              <span className="ec__main"><b>{clientName(c.clientId)}</b><small>{n(c.filings)} open {c.filings === 1 ? "filing" : "filings"}</small></span>
               <span className="ec__amt">
-                <span className="ec__val num ec__red">{inrShort(c.exposure)}</span>
-                <span className="ec__mini"><i style={{ width: `${Math.max(6, (c.exposure / maxExp) * 100)}%` }} /></span>
+                <span className="ec__val num">{inrShort(c.amount)}</span>
+                <span className="ec__mini"><i style={{ width: `${Math.max(6, (c.amount / max) * 100)}%` }} /></span>
               </span>
               <Icon name="chevronRight" size={14} />
             </button>
           </li>
         ))}
+      </ul>
+    </div>
+  );
+}
+
+/* ---- Notices waiting for a reply ------------------------------------------ */
+
+export function NoticesCard() {
+  const nav = useNavigate();
+  const notices = useEngine(getNotices);
+  const { waiting, late, top } = useMemo(() => {
+    const waiting = notices.filter(needsReply);
+    const top = [...waiting].sort((a, b) => a.replyDue.localeCompare(b.replyDue)).slice(0, 5);
+    return { waiting: waiting.length, late: waiting.filter((x) => urgencyOf(x) === "overdue").length, top };
+  }, [notices]);
+
+  return (
+    <div className="ec">
+      <CardHead title="Notices" link="All notices" onLink={() => nav("/notices")} icon="notice" tone="red" />
+      <div className="ec__hero">
+        <b className="num">{n(waiting)}</b>
+        <span>waiting for a reply{late ? <>, <span className="ec__red" style={{ fontWeight: 653 }}>{n(late)} overdue</span></> : null}</span>
+      </div>
+      <div className="ec__label">Reply first</div>
+      <ul className="ec__list">
+        {top.map((x) => {
+          const d = daysToReply(x);
+          return (
+            <li key={x.id}>
+              <button type="button" onClick={() => nav(`/notices?open=${x.id}`)}>
+                <span className="ec__main"><b>{clientName(x.clientId)}</b><small>{x.type} · {x.dept}</small></span>
+                <span className="ec__amt">
+                  <span className={`ec__val num${d < 0 ? " ec__red" : ""}`} style={{ fontSize: "var(--t-13)" }}>
+                    {d < 0 ? `${-d}d overdue` : d === 0 ? "today" : `${d}d left`}
+                  </span>
+                </span>
+                <Icon name="chevronRight" size={14} />
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

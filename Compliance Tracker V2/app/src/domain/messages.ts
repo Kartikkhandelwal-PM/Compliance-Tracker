@@ -40,7 +40,7 @@
    both speak for the client's own firm.
    ========================================================================== */
 
-import type { Channel, Obligation, Party, StepKind } from "./types.ts";
+import type { Channel, Obligation, Party, SmtpConfig, StepKind } from "./types.ts";
 import { fmtLong } from "./dates.ts";
 
 export interface Composed {
@@ -73,7 +73,10 @@ export interface Sender {
    *  note used to rule out — now genuinely possible because the firm brings
    *  its own Rampwin/ZeptoMail account rather than trying to reuse KDK's. */
   waProvider: "kdk" | "rampwin";
-  emailProvider: "kdk" | "zeptomail";
+  emailProvider: "kdk" | "zeptomail" | "smtp";
+  /** A firm's own mail server. Independent of the ZeptoMail domain: switching
+   *  providers never clears either. */
+  smtp: SmtpConfig;
   /** A firm's own Rampwin channel — the WhatsApp Business number they already
    *  set up in their own Rampwin account, pointed at by its API key and
    *  channel ID. `connected` is set once saved. */
@@ -109,6 +112,10 @@ let sender: Sender = {
   verified: true,
   waProvider: "kdk",
   emailProvider: "kdk",
+  smtp: {
+    host: "", port: 587, security: "starttls", username: "", password: "",
+    fromName: "", fromAddress: "", status: "unset",
+  },
   rampwin: { displayName: "", apiKey: "", channelId: "", connected: false },
   zeptomail: {
     domain: "", fromName: "", fromAddress: "",
@@ -116,6 +123,23 @@ let sender: Sender = {
     status: "unverified", checkAttempts: 0,
   },
 };
+
+/** Where email actually goes out from right now. A firm's own domain or SMTP
+ *  server is used only once it is ready (domain verified, server connected);
+ *  until then everything goes from the shared KDK address, so that is what
+ *  every screen should quote. `chosen` says which the firm picked, `ready`
+ *  whether it is in effect yet. */
+export function emailFrom(s: Sender): {
+  from: string; chosen: "kdk" | "zeptomail" | "smtp"; ready: boolean;
+} {
+  if (s.emailProvider === "zeptomail" && s.zeptomail.status === "verified") {
+    return { from: `${s.zeptomail.fromName} <${s.zeptomail.fromAddress}>`, chosen: "zeptomail", ready: true };
+  }
+  if (s.emailProvider === "smtp" && s.smtp.status === "connected") {
+    return { from: `${s.smtp.fromName} <${s.smtp.fromAddress}>`, chosen: "smtp", ready: true };
+  }
+  return { from: `${s.name} <${s.fromEmail}>`, chosen: s.emailProvider, ready: s.emailProvider === "kdk" };
+}
 
 export function getSender(): Sender {
   return sender;
