@@ -176,9 +176,14 @@ export function NoticesCard() {
   return (
     <div className="ec">
       <CardHead title="Notices" link="All notices" onLink={() => nav("/notices")} icon="notice" tone="red" />
-      <div className="ec__hero">
+      {/* The figure, then one line under it: the same shape as the cards beside
+          this one, so the lists below start level. */}
+      <div className="ec__hero ec__hero--stack">
         <b className="num">{n(waiting)}</b>
-        <span>waiting for a reply{late ? <>, <span className="ec__red" style={{ fontWeight: 653 }}>{n(late)} overdue</span></> : null}</span>
+        <span>
+          waiting for a reply
+          {late ? <>, <span className="ec__red" style={{ fontWeight: 653 }}>{n(late)} overdue</span></> : null}
+        </span>
       </div>
       <div className="ec__label">Reply first</div>
       <ul className="ec__list">
