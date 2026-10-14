@@ -57,9 +57,13 @@ export function CountUp({ n, format }: { n: number; format?: (v: number) => stri
  * `delay` waits out the panel's own open transition, otherwise we scroll to an
  * element that is still zero pixels tall.
  */
-export function useRevealOnPick<T extends HTMLElement>(key: string | null, delay = 220) {
+export function useRevealOnPick<T extends HTMLElement>(key: string | null, delay = 220, skipInitial = false) {
   const ref = useRef<T>(null);
-  const prev = useRef<string | null>(null);
+  /* `skipInitial`: a value that is already set when the page opens is not a
+     choice anyone just made, so it must not scroll the page. The Dashboard's
+     runway opens on today by default, and revealing that on arrival dropped
+     every visitor halfway down the page. */
+  const prev = useRef<string | null>(skipInitial ? key : null);
 
   useEffect(() => {
     const changed = key !== prev.current;

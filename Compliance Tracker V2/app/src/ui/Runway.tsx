@@ -52,7 +52,7 @@ export function Runway({
   /* Clicking a bar opened the panel below the fold on a laptop, so the click
      looked like it had done nothing. The panel brings itself into view once
      its open transition has run. */
-  const panelRef = useRevealOnPick<HTMLDivElement>(selected ?? null);
+  const panelRef = useRevealOnPick<HTMLDivElement>(selected ?? null, 220, true);
 
   /* A tooltip pinned to viewport coordinates has to let go when the page moves
      under it, or it hangs over the wrong bar. */
