@@ -1,0 +1,602 @@
+<title>Compliance Tracker V2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap">
+<style>
+/* Layout: Jira shell (48px top bar, 240px sidebar). Page = one 12-column grid: header, compliance heads (app entry), summary tiles, work list + status/penalty column, workload + activity. Atlassian Design System tokens, light + dark. */
+:root{
+  --text:#292A2E; --text-subtle:#505258; --text-subtlest:#6B6E76; --link:#1868DB; --text-inverse:#FFFFFF;
+  --surface:#FFFFFF; --sunken:#F8F8F8; --overlay:#FFFFFF;
+  --border:#0B120E24; --border-input:#8C8F97;
+  --neutral:#0515240F; --neutral-hov:#0B120E24; --subtle-hov:#0515240F;
+  --brand:#1868DB; --brand-hov:#1558BC; --selected:#E9F2FE; --text-selected:#1868DB; --focus:#4688EC;
+  --danger-bold:#C9372C; --danger:#FFECEB; --text-danger:#AE2E24;
+  --warning:#FFF5DB; --text-warning:#9E4C00; --success:#EFFFD6; --text-success:#4C6B1F; --info:#E9F2FE; --text-info:#1558BC; --discovery:#F8EEFE; --text-discovery:#803FA5;
+  --lz-gray:#DDDEE1; --lz-gray-t:#292A2E; --lz-green:#D3F1A7; --lz-green-t:#4C6B1F; --lz-red:#FFD5D2; --lz-red-t:#AE2E24; --lz-yellow:#FCE4A6; --lz-yellow-t:#7F5F01; --lz-blue:#CFE1FD; --lz-blue-t:#1558BC; --lz-purple:#EED7FC; --lz-purple-t:#803FA5;
+  --sp-gst:#1868DB; --sp-tds:#964AC0; --sp-it:#1F845A; --sp-lab:#BD5B00; --sp-roc:#227D9B;
+  --ch-success:#82B536; --ch-brand:#357DE8; --ch-danger:#E2483D; --ch-neutral:#8C8F97;
+  --shadow-overlay:0px 8px 12px #1E1F2126,0px 0px 1px #1E1F214F;
+  --font:"Atlassian Sans","Inter",ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Ubuntu,"Helvetica Neue",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --text:#CECFD2; --text-subtle:#A9ABAF; --text-subtlest:#96999E; --link:#669DF1; --text-inverse:#1F1F21;
+  --surface:#1F1F21; --sunken:#18191A; --overlay:#2B2C2F; --border:#E3E4F21F; --border-input:#7E8188;
+  --neutral:#CECED912; --neutral-hov:#E3E4F21F; --subtle-hov:#CECED912;
+  --brand:#669DF1; --brand-hov:#8FB8F6; --selected:#1C2B42; --text-selected:#669DF1;
+  --danger-bold:#F87168; --danger:#42221F; --text-danger:#FD9891; --warning:#3A2C1F; --text-warning:#FBC828; --success:#28311B; --text-success:#B3DF72; --info:#1C2B42; --text-info:#8FB8F6; --discovery:#35243F; --text-discovery:#D8A0F7;
+  --lz-gray:#4B4D51; --lz-gray-t:#CECFD2; --lz-green:#37471F; --lz-green-t:#B3DF72; --lz-red:#5D1F1A; --lz-red-t:#FD9891; --lz-yellow:#533F04; --lz-yellow-t:#EED12B; --lz-blue:#123263; --lz-blue-t:#8FB8F6; --lz-purple:#48245D; --lz-purple-t:#D8A0F7;
+  --sp-gst:#669DF1; --sp-tds:#C97CF4; --sp-it:#4BCE97; --sp-lab:#FCA700; --sp-roc:#6CC3E0;
+  --ch-brand:#4688EC; --ch-neutral:#7E8188; --shadow-overlay:0 0 0 1px #BDBDBD1F,0 8px 12px #0104045C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --text:#CECFD2; --text-subtle:#A9ABAF; --text-subtlest:#96999E; --link:#669DF1; --text-inverse:#1F1F21;
+  --surface:#1F1F21; --sunken:#18191A; --overlay:#2B2C2F; --border:#E3E4F21F; --border-input:#7E8188;
+  --neutral:#CECED912; --neutral-hov:#E3E4F21F; --subtle-hov:#CECED912;
+  --brand:#669DF1; --brand-hov:#8FB8F6; --selected:#1C2B42; --text-selected:#669DF1;
+  --danger-bold:#F87168; --danger:#42221F; --text-danger:#FD9891; --warning:#3A2C1F; --text-warning:#FBC828; --success:#28311B; --text-success:#B3DF72; --info:#1C2B42; --text-info:#8FB8F6; --discovery:#35243F; --text-discovery:#D8A0F7;
+  --lz-gray:#4B4D51; --lz-gray-t:#CECFD2; --lz-green:#37471F; --lz-green-t:#B3DF72; --lz-red:#5D1F1A; --lz-red-t:#FD9891; --lz-yellow:#533F04; --lz-yellow-t:#EED12B; --lz-blue:#123263; --lz-blue-t:#8FB8F6; --lz-purple:#48245D; --lz-purple-t:#D8A0F7;
+  --sp-gst:#669DF1; --sp-tds:#C97CF4; --sp-it:#4BCE97; --sp-lab:#FCA700; --sp-roc:#6CC3E0;
+  --ch-brand:#4688EC; --ch-neutral:#7E8188; --shadow-overlay:0 0 0 1px #BDBDBD1F,0 8px 12px #0104045C; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--surface);color:var(--text);font:400 14px/20px var(--font)}
+h1,h2,h3,p{margin:0}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--text-subtlest)}
+svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* buttons, lozenges, badges */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:4px;border:0;font-weight:500;cursor:pointer;white-space:nowrap;background:var(--neutral);color:var(--text-subtle)}
+.btn:hover{background:var(--neutral-hov);color:var(--text)}
+.btn.primary{background:var(--brand);color:var(--text-inverse)}
+.btn.primary:hover{background:var(--brand-hov)}
+.btn.sm{height:28px;padding:0 10px}
+.btn.block{width:100%}
+.icon-btn{width:32px;padding:0;background:transparent}
+.icon-btn:hover{background:var(--subtle-hov)}
+.link{background:none;border:0;padding:0;color:var(--link);cursor:pointer;font-weight:500;white-space:nowrap}
+.link:hover{text-decoration:underline}
+.lz{display:inline-block;padding:0 4px;border-radius:3px;font-size:11px;line-height:16px;font-weight:653;text-transform:uppercase;white-space:nowrap;background:var(--lz-gray);color:var(--lz-gray-t)}
+.lz.red{background:var(--lz-red);color:var(--lz-red-t)}.lz.yellow{background:var(--lz-yellow);color:var(--lz-yellow-t)}.lz.blue{background:var(--lz-blue);color:var(--lz-blue-t)}.lz.purple{background:var(--lz-purple);color:var(--lz-purple-t)}
+.badge{display:inline-flex;min-width:20px;justify-content:center;padding:0 6px;border-radius:8px;font-size:12px;line-height:16px;font-weight:500;background:var(--neutral);color:var(--text)}
+.badge.red{background:var(--danger-bold);color:var(--text-inverse)}
+.av{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;font-size:10px;font-weight:653;color:#fff;flex:none}
+.sq{display:inline-grid;place-items:center;color:#fff;font-weight:700;flex:none}
+
+/* top nav */
+.topnav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;height:48px;display:flex;align-items:center;gap:4px;padding:0 12px;background:var(--surface);border-bottom:1px solid var(--border)}
+.prod{display:flex;align-items:center;gap:8px;height:32px;padding:0 6px;border-radius:4px;border:0;background:none;cursor:pointer;font-weight:653}
+.prod:hover{background:var(--subtle-hov)}
+.tile{width:24px;height:24px;border-radius:6px;background:var(--brand);display:grid;place-items:center;color:var(--text-inverse);font-size:11px;font-weight:700;flex:none}
+.tile svg{width:14px;height:14px;stroke-width:2.4}
+.mid{flex:1;display:flex;justify-content:center;gap:8px;min-width:0;padding:0 12px}
+.search{flex:1;max-width:680px;height:32px;display:flex;align-items:center;gap:8px;padding:0 8px;border:1px solid var(--border-input);border-radius:6px;color:var(--text-subtlest);cursor:text;min-width:0}
+.search:hover{background:var(--sunken)}
+.search span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.right{display:flex;align-items:center;gap:2px}
+.notif{position:relative}
+.notif .badge{position:absolute;top:0;right:-2px;transform:scale(.85)}
+.pop{position:absolute;top:44px;left:44px;width:320px;background:var(--overlay);border-radius:8px;box-shadow:var(--shadow-overlay);padding:8px 0;z-index:30}
+.pop h4{margin:8px 16px 4px;font-size:12px;font-weight:653;color:var(--text-subtlest)}
+.pop button{display:flex;gap:12px;align-items:center;width:100%;border:0;background:none;padding:8px 16px;cursor:pointer;text-align:left}
+.pop button:hover{background:var(--subtle-hov)}
+.pop button[aria-current="true"]{background:var(--selected);box-shadow:inset 2px 0 var(--brand)}
+.pop small{display:block;color:var(--text-subtlest);font-size:12px;line-height:16px}
+
+/* shell + sidebar */
+.shell{display:grid;grid-template-columns:240px minmax(0,1fr)}
+.shell.collapsed{grid-template-columns:0 minmax(0,1fr)}
+.shell.collapsed .side{visibility:hidden}
+.side{border-right:1px solid var(--border);padding:12px 8px 24px;position:sticky;top:48px;height:calc(100vh - 48px);overflow:auto;background:var(--surface)}
+.ni{position:relative;display:flex;align-items:center;gap:8px;width:100%;height:32px;padding:0 8px;border:0;border-radius:4px;background:none;cursor:pointer;color:var(--text-subtle);font-weight:500;text-align:left;white-space:nowrap}
+.ni:hover{background:var(--subtle-hov);color:var(--text)}
+.ni[aria-current="page"]{background:var(--selected);color:var(--text-selected)}
+.ni[aria-current="page"]::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2px;border-radius:0 2px 2px 0;background:var(--brand)}
+.ni .end{margin-left:auto}
+.ni .sq{width:16px;height:16px;border-radius:4px;font-size:9px}
+.sec{margin:20px 8px 4px;font-size:12px;line-height:16px;font-weight:653;color:var(--text-subtlest)}
+
+/* page grid */
+.main{min-width:0;padding:24px 32px 64px}
+.page{max-width:1360px;margin:0 auto;display:flex;flex-direction:column;gap:32px}
+.ph{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.ph .crumbs{color:var(--text-subtle);margin-bottom:4px}
+.ph h1{font-size:24px;line-height:28px;font-weight:653}
+.tools{display:flex;gap:8px;flex-wrap:wrap}
+.seg{display:inline-flex;background:var(--neutral);border-radius:6px;padding:2px}
+.seg button{border:0;background:none;height:28px;padding:0 10px;border-radius:4px;color:var(--text-subtle);font-weight:500;cursor:pointer}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text-selected);box-shadow:0 1px 1px #1E1F2140,0 0 1px #1E1F214F}
+section>.sh{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:12px}
+section>.sh h2{font-size:16px;line-height:20px;font-weight:653}
+section>.sh p{color:var(--text-subtlest);font-size:12px}
+
+.card{border:1px solid var(--border);border-radius:8px;background:var(--surface);min-width:0;display:flex;flex-direction:column}
+.ch{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:16px 20px 0}
+.ch h3{font-size:16px;line-height:20px;font-weight:653}
+.ch p{color:var(--text-subtlest);font-size:12px;line-height:16px;margin-top:2px}
+.cb{padding:16px 20px 20px}
+
+/* compliance heads (app entry) */
+.heads{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+@media(max-width:1250px){.heads{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:720px){.heads{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:480px){.heads{grid-template-columns:minmax(0,1fr)}}
+.head{padding:16px;gap:12px}
+.head .t{display:flex;align-items:center;gap:10px}
+.head .sq{width:32px;height:32px;border-radius:6px;font-size:12px}
+.head h3{font-size:14px;font-weight:653;line-height:20px}
+.head .t small{display:block;color:var(--text-subtlest);font-size:12px;line-height:16px}
+.mrows{display:flex;flex-direction:column;border-top:1px solid var(--border);padding-top:8px}
+.mr{display:flex;justify-content:space-between;align-items:center;height:28px;padding:0 6px;margin:0 -6px;border:0;background:none;border-radius:4px;cursor:pointer;color:var(--text-subtle)}
+.mr:hover{background:var(--subtle-hov);color:var(--text)}
+.mr .z{color:var(--text-subtlest)}
+.mr b{font-weight:653;color:var(--text)}
+
+/* summary tiles */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+@media(max-width:1100px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.stats{grid-template-columns:minmax(0,1fr)}}
+.stat{display:flex;gap:12px;align-items:center;padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--surface);cursor:pointer;text-align:left;width:100%}
+.stat:hover{background:var(--sunken);border-color:var(--border-input)}
+.stat .ic{width:40px;height:40px;border-radius:8px;display:grid;place-items:center;flex:none}
+.stat .ic svg{width:20px;height:20px}
+.stat .l1{font-size:20px;line-height:24px;font-weight:653}
+.stat .l2{color:var(--text-subtle)}
+.stat .l3{font-size:12px;line-height:16px;color:var(--text-subtlest)}
+.stat .chev{margin-left:auto;color:var(--text-subtlest)}
+.stat:hover .chev{color:var(--link)}
+
+/* main work row */
+.work{display:grid;grid-template-columns:minmax(0,2fr) minmax(300px,1fr);gap:16px;align-items:stretch}
+.work .col{display:flex;flex-direction:column;gap:16px}
+.work .col .card{flex:1}
+.duo{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media(max-width:1100px){.work,.duo{grid-template-columns:minmax(0,1fr)}}
+
+.tabs{display:flex;padding:0 20px;margin-top:12px;box-shadow:inset 0 -2px 0 var(--border);overflow-x:auto}
+.tabs button{border:0;background:none;padding:8px 8px 10px;margin-right:8px;color:var(--text-subtle);font-weight:500;cursor:pointer;position:relative;white-space:nowrap;display:flex;gap:6px;align-items:center}
+.tabs button:hover{color:var(--text)}
+.tabs button[aria-selected="true"]{color:var(--text-selected)}
+.tabs button[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--brand)}
+.tblw{overflow-x:auto;min-height:268px}
+.tbl{width:100%;border-collapse:collapse;min-width:680px}
+.tbl th{text-align:left;font-size:12px;font-weight:653;color:var(--text-subtlest);padding:8px;border-bottom:2px solid var(--border);white-space:nowrap}
+.tbl td{padding:10px 8px;border-bottom:1px solid var(--border);vertical-align:middle;height:57px}
+.tbl th:first-child,.tbl td:first-child{padding-left:20px}
+.tbl th:last-child,.tbl td:last-child{padding-right:20px;text-align:right}
+.tbl .r{text-align:right}
+.tbl tr.row{cursor:pointer}
+.tbl tr.row:hover td{background:var(--subtle-hov)}
+.tbl tr.row:hover .nm{color:var(--link);text-decoration:underline}
+.wk{display:flex;align-items:center;gap:10px}
+.wk .sq{width:20px;height:20px;border-radius:4px;font-size:10px}
+.nm{font-weight:500}
+.tbl small{display:block;color:var(--text-subtlest);font-size:12px;line-height:16px}
+.late{color:var(--text-danger);font-weight:500}
+.stack{display:flex}
+.stack .av{box-shadow:0 0 0 2px var(--surface);margin-left:-4px}
+.stack .av:first-child{margin-left:0}
+.cfoot{margin-top:auto;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 20px;color:var(--text-subtlest);border-top:1px solid var(--border)}
+.tbl tr:last-child td{border-bottom:0}
+
+/* donut */
+.donut{display:flex;flex-direction:column;gap:16px;align-items:center}
+.donut .leg{width:100%}
+.donut .arc{cursor:pointer;transition:opacity .15s}
+.donut svg:hover .arc{opacity:.45}
+.donut svg .arc:hover{opacity:1}
+.leg{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.leg button{display:flex;align-items:center;gap:8px;border:0;background:none;padding:4px 6px;border-radius:4px;cursor:pointer;text-align:left}
+.leg button:hover{background:var(--subtle-hov)}
+.leg i{width:10px;height:10px;border-radius:2px;background:var(--c);flex:none}
+.leg .v{margin-left:auto;font-weight:500}
+
+/* horizontal bars (penalty, workload) */
+.hb{display:flex;flex-direction:column;gap:2px}
+.hb button{display:grid;grid-template-columns:148px minmax(0,1fr) 72px;gap:12px;align-items:center;border:0;background:none;height:32px;padding:0 4px;border-radius:4px;cursor:pointer;text-align:left}
+.hb button:hover{background:var(--subtle-hov)}
+.hb .who{display:flex;align-items:center;gap:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-subtle)}
+.hb .tr{height:16px;background:var(--neutral);border-radius:3px;overflow:hidden}
+.hb .tr i{display:block;height:100%;border-radius:3px}
+.hb .amt{text-align:right;font-weight:653}
+.total{display:flex;justify-content:space-between;border-top:1px solid var(--border);margin-top:8px;padding:10px 4px 0;font-weight:653}
+.total .late{font-weight:653}
+
+/* activity */
+.ar{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}
+.ar:last-child{border-bottom:0;padding-bottom:0}
+.ar:first-child{padding-top:0}
+.ar small{color:var(--text-subtlest);font-size:12px}
+.ar .obj{color:var(--link);cursor:pointer;font-weight:500;background:none;border:0;padding:0}
+.ar .obj:hover{text-decoration:underline}
+
+.tip{position:fixed;z-index:40;background:var(--text);color:var(--surface);padding:4px 8px;border-radius:3px;font-size:12px;line-height:16px;pointer-events:none;max-width:280px}
+.flag{position:fixed;left:24px;bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--overlay);box-shadow:var(--shadow-overlay);border-radius:8px;padding:16px;display:flex;gap:12px;align-items:flex-start;max-width:min(400px,calc(100% - 48px))}
+.flag svg{color:var(--brand);width:20px;height:20px}
+
+
+/* tracker */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tsearch{height:32px;width:240px;max-width:100%;border:1px solid var(--border-input);border-radius:4px;padding:0 8px 0 30px;background:var(--surface) no-repeat 8px center;color:var(--text);font:inherit}
+.tsearch::placeholder{color:var(--text-subtlest)}
+.sw{position:relative;display:inline-flex}
+.sw svg{position:absolute;left:8px;top:8px;color:var(--text-subtlest)}
+.qf{display:inline-flex;gap:4px;flex-wrap:wrap}
+.qf button{height:32px;padding:0 12px;border-radius:4px;border:1px solid var(--border);background:var(--surface);color:var(--text-subtle);font-weight:500;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.qf button:hover{background:var(--subtle-hov)}
+.qf button[aria-pressed="true"]{background:var(--selected);border-color:var(--brand);color:var(--text-selected)}
+.dd{height:32px;border-radius:4px;border:0;background:var(--neutral);color:var(--text-subtle);font-weight:500;padding:0 8px;cursor:pointer;font:inherit}
+.dd:hover{background:var(--neutral-hov)}
+.tgrid{overflow:auto;max-height:calc(100vh - 290px);min-height:360px}
+.mx{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%}
+.mx th,.mx td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);background:var(--surface)}
+.mx thead th{position:sticky;top:0;z-index:2;text-align:left;padding:6px 8px;font-size:12px;line-height:16px;font-weight:653;color:var(--text-subtle);vertical-align:bottom;white-space:nowrap}
+.mx thead tr:first-child th{top:0;height:28px;color:var(--text-subtlest);background:var(--sunken)}
+.mx thead tr:nth-child(2) th{top:28px;border-bottom:2px solid var(--border)}
+.mx .cc{position:sticky;left:0;z-index:1;min-width:320px;max-width:320px}
+.mx thead .cc{z-index:3}
+.mx th .fm{display:block;color:var(--text);font-size:12px;font-weight:653}
+.mx th .dt{display:block;font-weight:400;color:var(--text-subtlest)}
+.mx th.colh{min-width:112px;cursor:pointer}
+.mx th.colh:hover .fm{color:var(--link);text-decoration:underline}
+.mx th.colh i{display:block;height:3px;border-radius:2px;margin-bottom:6px;background:var(--c)}
+.mx td{padding:0;height:52px}
+.mx td.cc{padding:6px 12px}
+.mx tr:hover td{background:var(--sunken)}
+.mx tr:hover td.cc{background:var(--sunken)}
+.cl{display:flex;align-items:center;gap:10px}
+.cl .nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:210px}
+.cl small{display:block;color:var(--text-subtlest);font-size:11px;letter-spacing:.02em}
+.cl .lz{margin-left:auto}
+.cell{display:flex;align-items:center;justify-content:center;width:100%;height:52px;border:0;background:none;cursor:pointer;padding:0 6px}
+.cell:hover{box-shadow:inset 0 0 0 2px var(--brand);border-radius:2px}
+.cell .na{color:var(--text-subtlest)}
+.st{display:inline-flex;align-items:center;gap:4px;padding:0 6px;border-radius:3px;font-size:11px;line-height:18px;font-weight:653;white-space:nowrap}
+.st svg{width:12px;height:12px;stroke-width:2.4}
+.st.filed{background:var(--lz-green);color:var(--lz-green-t)}
+.st.late{background:var(--lz-red);color:var(--lz-red-t)}
+.st.ready{background:var(--lz-purple);color:var(--lz-purple-t)}
+.st.pend{background:var(--lz-blue);color:var(--lz-blue-t)}
+.st.wait{background:var(--lz-yellow);color:var(--lz-yellow-t)}
+.tfoot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid var(--border)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;align-items:center;color:var(--text-subtlest);font-size:12px}
+/* drawer */
+.scrim{position:fixed;inset:48px 0 0 0;background:#050C1F33;z-index:24}
+.drawer{position:fixed;top:48px;right:0;bottom:0;width:min(480px,100%);background:var(--overlay);box-shadow:var(--shadow-overlay);z-index:25;display:flex;flex-direction:column}
+.drawer .dh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:20px 24px 12px;border-bottom:1px solid var(--border)}
+.drawer .dh h2{font-size:20px;line-height:24px;font-weight:653;margin-top:6px}
+.drawer .db{padding:16px 24px;overflow:auto;flex:1;display:flex;flex-direction:column;gap:20px}
+.fields{display:grid;grid-template-columns:140px 1fr;gap:12px 16px;align-items:center}
+.fields dt{color:var(--text-subtle);font-weight:500}
+.fields dd{margin:0;display:flex;align-items:center;gap:8px}
+.acts{display:flex;gap:8px;flex-wrap:wrap}
+.note{background:var(--sunken);border-radius:6px;padding:12px;color:var(--text-subtle)}
+.mx .cc{border-left:0}
+
+@media(max-width:900px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .side{position:fixed;left:0;top:48px;width:260px;z-index:15;box-shadow:var(--shadow-overlay);transform:translateX(-105%);transition:transform .2s}
+  .shell.open .side{transform:none}
+  .shell.collapsed .side{visibility:visible}
+  .main{padding:16px 16px 56px}
+  .search span{display:none}.search{flex:0 0 32px;justify-content:center;padding:0}
+  .mid{justify-content:flex-end;padding:0 4px}
+  .hide-sm{display:none}
+  .donut{flex-wrap:wrap}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="topnav">
+  <button class="btn icon-btn" id="tgl" aria-label="Collapse sidebar"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+  <button class="btn icon-btn" id="apps" aria-label="Switch app"><svg class="i" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="5" cy="5" r="1.8"/><circle cx="12" cy="5" r="1.8"/><circle cx="19" cy="5" r="1.8"/><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/><circle cx="5" cy="19" r="1.8"/><circle cx="12" cy="19" r="1.8"/><circle cx="19" cy="19" r="1.8"/></g></svg></button>
+  <button class="prod" data-go="Home"><span class="tile"><svg class="i" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><span class="hide-sm">Spectrum Cloud</span></button>
+  <div class="mid">
+    <div class="search" data-go="Search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Search clients, PAN, GSTIN, TAN or forms</span></div>
+    <button class="btn primary" data-go="Create: client, filing, task or reminder"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Create</button>
+  </div>
+  <div class="right">
+    <button class="btn icon-btn notif" data-go="Notifications" aria-label="Notifications, 3 unread"><svg class="i" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/></svg><span class="badge red">3</span></button>
+    <button class="btn icon-btn hide-sm" data-go="Help" aria-label="Help"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg></button>
+    <button class="btn icon-btn" data-go="Profile" aria-label="Profile"><span class="av" id="me-av">KK</span></button>
+  </div>
+  <div class="pop" id="pop" hidden>
+    <h4>Spectrum Cloud apps</h4>
+    <button aria-current="true" data-go="Compliance Tracker"><span class="tile"><svg class="i" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><span><b>Compliance Tracker</b><small>Home. Due dates, filings, approvals</small></span></button>
+    <button data-go="GST app"><span class="tile" style="background:var(--sp-gst)">G</span><span><b>GST</b><small>Prepare and file GSTR-1, 3B, 9</small></span></button>
+    <button data-go="TDS app"><span class="tile" style="background:var(--sp-tds)">T</span><span><b>TDS</b><small>24Q, 26Q, 27Q and challans</small></span></button>
+    <button data-go="Income Tax app"><span class="tile" style="background:var(--sp-it)">I</span><span><b>Income Tax</b><small>ITR, tax audit, advance tax</small></span></button>
+    <button data-go="PF and ESI app"><span class="tile" style="background:var(--sp-lab)">P</span><span><b>PF and ESI</b><small>Monthly payments and returns</small></span></button>
+    <button data-go="ROC / MCA app"><span class="tile" style="background:var(--sp-roc)">R</span><span><b>ROC / MCA</b><small>AOC-4, MGT-7, DIR-3 KYC</small></span></button>
+  </div>
+</header>
+
+<div class="shell" id="shell">
+  <nav class="side" id="side" aria-label="Main"></nav>
+  <main class="main"><div class="page" id="page"></div></main>
+</div>
+<div class="scrim" id="scrim" hidden></div><aside class="drawer" id="drawer" hidden aria-label="Filing details"></aside>
+<div class="tip" id="tip" hidden></div>
+<div class="flag" id="flag" hidden><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div><b id="flag-t"></b><div class="muted">Sample screen. This would open in the app.</div></div></div>
+
+<script>
+const IC={
+ you:'<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>', clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+ star:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z"/>',
+ cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+ grid:'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>',
+ users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.5 3.2-5.5 6.5-5.5s5.9 2 6.5 5.5M17 11a3 3 0 1 0-1-5.7M18 14.6c2 .6 3.3 2.4 3.5 5.4"/>',
+ bell:'<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/>', mail:'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+ dash:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', team:'<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-4 3-6 7-6s7 2 7 6"/>',
+ gear:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+ chev:'<path d="m9 6 6 6-6 6"/>', alert:'<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>', check:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',
+ doc:'<path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5"/>', due:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M12 14v3"/>',
+ back:'<path d="M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3"/>'
+};
+const ic=n=>`<svg class="i" viewBox="0 0 24 24">${IC[n]}</svg>`;
+const SP={GST:['G','var(--sp-gst)','GST'],TDS:['T','var(--sp-tds)','TDS'],IT:['I','var(--sp-it)','Income Tax'],LAB:['P','var(--sp-lab)','PF and ESI'],ROC:['R','var(--sp-roc)','ROC / MCA']};
+const PEOPLE={NB:['Neha Bhatt','#1F845A'],RA:['Rohit Agarwal','#964AC0'],DR:['Divya Raghavan','#BD5B00'],AS:['Aman Shah','#227D9B'],KK:['Kartik K.','#1868DB'],UN:['Unassigned','#8C8F97']};
+const av=k=>`<span class="av" style="background:${PEOPLE[k][1]}" title="${PEOPLE[k][0]}">${k=='UN'?'?':k}</span>`;
+const sq=(k,s=20)=>`<span class="sq" style="background:${SP[k][1]};width:${s}px;height:${s}px;border-radius:${s>20?6:4}px;font-size:${s>20?12:10}px">${SP[k][0]}</span>`;
+const f=n=>n.toLocaleString('en-IN');
+const inr=n=>'₹'+n.toLocaleString('en-IN');
+
+/* Sample data. Totals add up: late 48 = 32+12+4, due in 7 days 312 = 178+70+64, to approve 64 = 30+14+12+8, waiting 126 = 61+27+22+16. */
+const D={
+ ca:{me:'KK',hello:'Good morning, Kartik',scope:['Whole firm','My clients'],
+  heads:{GST:[32,178,30],TDS:[12,0,14],IT:[4,0,12],LAB:[0,134,8],ROC:[0,0,0]},
+  open:{GST:1406,TDS:428,IT:110,LAB:142,ROC:86},
+  m:['Late','Due in 7 days','To approve'],
+  stats:[['danger','alert','48','Late filings','31 clients · penalty running'],['info','check','64','Waiting for my approval','Oldest waiting 3 days'],['warning','doc','126','Waiting on clients','89 reminders not opened'],['discovery','due','312','Due in 7 days','Busiest day: Thu 15 Oct']],
+  title:'Needs your attention',
+  tabs:[
+   ['Late',[['GST','GSTR-1','Sep 2026',28,'11 Oct',-2,['NB','RA','DR'],'File 28',1],
+            ['TDS','TDS payment','Sep 2026',12,'07 Oct',-6,['AS','RA'],'Pay 12',1],
+            ['IT','Tax audit report','AY 2026-27',4,'30 Sep',-13,['DR'],'File 4',1],
+            ['GST','GSTR-3B','Aug 2026',4,'20 Sep',-23,['RA'],'File 4',1]]],
+   ['Due in 7 days',[['GST','GSTR-3B','Sep 2026',178,'20 Oct',7,['NB','RA','DR','AS'],'Open',0],
+            ['LAB','PF payment','Sep 2026',70,'15 Oct',2,['AS','NB'],'Open',0],
+            ['LAB','ESI payment','Sep 2026',64,'15 Oct',2,['AS'],'Open',0]]],
+   ['To approve',[['GST','GSTR-3B','Sep 2026',30,'20 Oct',7,['NB','RA'],'Approve 30',1],
+            ['TDS','TDS return 26Q','Q2 FY 2026-27',14,'31 Oct',18,['AS'],'Approve 14',1],
+            ['IT','ITR, audit cases','AY 2026-27',12,'31 Oct',18,['DR'],'Approve 12',1],
+            ['LAB','PF return','Sep 2026',8,'15 Oct',2,['AS'],'Approve 8',1]]],
+   ['Waiting on clients',[['GST','Purchase invoices','for GSTR-3B',61,'20 Oct',7,['NB','RA'],'Remind 61',0],
+            ['TDS','Challan details','for 26Q',27,'31 Oct',18,['AS'],'Remind 27',0],
+            ['IT','Audit documents','for ITR',22,'31 Oct',18,['DR'],'Remind 22',0],
+            ['LAB','Salary data','for PF and ESI',16,'15 Oct',2,['AS'],'Remind 16',0]]]],
+  status:[['Filed',14820,'var(--ch-success)'],['Open',9412,'var(--ch-brand)'],['Late',48,'var(--ch-danger)'],['Not applicable',429,'var(--ch-neutral)']],
+  pen:[['GST',276400],['TDS',98200],['IT',45400],['LAB',0],['ROC',0]],penT:'Penalty running',
+  wlT:'Team workload',wlP:'Open items per person this month',wlFirst:'Assignee',
+  wl:[['NB',212],['RA',184],['DR',151],['AS',138],['UN',27]],
+  act:[['NB','filed','GSTR-3B · Sep 2026','for 12 clients','10 min ago'],['RA','sent','42 reminders','for GST purchase invoices','35 min ago'],['DR','moved','ITR · Agarwal Metals','to For approval','1 hour ago'],['AS','marked','PF payment · Sep 2026','as waiting on data for 22 clients','2 hours ago']]},
+ art:{me:'NB',hello:'Good morning, Neha',scope:['My clients','My tasks'],
+  heads:{GST:[14,22,1],TDS:[0,0,0],IT:[0,0,0],LAB:[0,7,0],ROC:[0,0,0]},
+  open:{GST:58,TDS:11,IT:6,LAB:14,ROC:3},
+  m:['Late','Due in 7 days','Sent back'],
+  stats:[['danger','alert','6','Due today','Start with GSTR-1'],['warning','doc','9','Waiting on clients','5 silent for 3+ days'],['info','check','4','With your CA','1 sent back to you'],['discovery','due','29','Due in 7 days','Busiest day: Thu 15 Oct']],
+  title:'Your work',
+  tabs:[
+   ['Late',[['GST','GSTR-1','Sep 2026',14,'11 Oct',-2,['NB'],'Prepare 14',1]]],
+   ['Due in 7 days',[['GST','GSTR-3B','Sep 2026',22,'20 Oct',7,['NB'],'Prepare 22',1],['LAB','PF and ESI','Sep 2026',7,'15 Oct',2,['NB'],'Prepare 7',1]]],
+   ['Sent back',[['GST','GSTR-3B · Agarwal Metals','Invoice 114 missing',1,'20 Oct',7,['KK'],'Fix',1]]],
+   ['Waiting on clients',[['GST','Purchase invoices','for GSTR-3B',9,'20 Oct',7,['NB'],'Remind 9',0]]]],
+  status:[['Prepared',118,'var(--ch-success)'],['To prepare',74,'var(--ch-brand)'],['Late',14,'var(--ch-danger)'],['Not applicable',6,'var(--ch-neutral)']],
+  pen:[['GST',31900],['TDS',0],['IT',0],['LAB',0],['ROC',0]],penT:'Penalty on my clients',
+  wlT:'My work by head',wlP:'Your open items this month',wlFirst:'Head',
+  wl:[['GST',58],['LAB',14],['TDS',11],['IT',6],['ROC',3]],
+  act:[['KK','sent back','GSTR-3B · Agarwal Metals','with a comment','20 min ago'],['NB','prepared','GSTR-3B · Sep 2026','for 9 clients','1 hour ago'],['NB','sent','14 reminders','for purchase invoices','3 hours ago'],['KK','approved','GSTR-1 · Aug 2026','for 22 of your clients','Yesterday']]}
+};
+
+let role='ca',tab=0,view='home';
+const $=s=>document.querySelector(s);
+
+function side(d){
+ const it=(i,l,end='',v='')=>`<button class="ni" ${v&&v==view?'aria-current="page"':''} ${v?`data-view="${v}"`:`data-go="${l}"`}>${i}${l}${end?`<span class="end">${end}</span>`:''}</button>`;
+ $('#side').innerHTML=
+  it(ic('you'),'For you','','home')+it(ic('clock'),'Recent')+it(ic('star'),'Starred')+
+  `<div class="sec">Compliance heads</div>`+
+  Object.keys(SP).map(k=>it(sq(k,16),SP[k][2],d.heads[k][0]?`<span class="lz red">${d.heads[k][0]} late</span>`:'')).join('')+
+  `<div class="sec">Tracker</div>`+
+  it(ic('cal'),'Calendar')+it(ic('grid'),'Tracker',`<span class="badge red">48</span>`,'tracker')+it(ic('users'),'Clients',`<span class="badge">${role=='ca'?'10,284':'142'}</span>`)+it(ic('bell'),'Reminders')+
+  (role=='ca'?it(ic('mail'),'Notices','<span class="badge red">17</span>')+it(ic('dash'),'Reports')+it(ic('team'),'Team'):'')+
+  it(ic('gear'),'Settings');
+}
+function donut(rows){
+ const tot=rows.reduce((a,r)=>a+r[1],0),R=56,W=18,C=2*Math.PI*R;let off=0;
+ const arcs=rows.map(r=>{const l=Math.max(r[1]/tot*C,3);const a=`<circle class="arc" data-go="${r[0]}" data-tip="${r[0]}: ${f(r[1])} (${(r[1]/tot*100).toFixed(1)}%)" cx="70" cy="70" r="${R}" fill="none" stroke="${r[2]}" stroke-width="${W}" stroke-dasharray="${Math.max(l-2,1)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"/>`;off+=l;return a}).join('');
+ return `<div class="donut"><svg width="140" height="140" viewBox="0 0 140 140" role="img" aria-label="Status of every filing">${arcs}<text x="70" y="70" text-anchor="middle" style="font:653 20px var(--font);fill:var(--text)">${f(tot)}</text><text x="70" y="88" text-anchor="middle" style="font:400 12px var(--font);fill:var(--text-subtlest)">filings</text></svg>
+  <div class="leg">${rows.map(r=>`<button data-go="${r[0]}"><i style="--c:${r[2]}"></i>${r[0]}<span class="v num">${f(r[1])}</span></button>`).join('')}</div></div>`;
+}
+function bars(rows,lab,val,color,tipFn){
+ const max=Math.max(...rows.map(r=>r[1]),1);
+ return `<div class="hb">${rows.map(r=>`<button data-go="${tipFn(r)}" data-tip="${tipFn(r)}"><span class="who">${lab(r)}</span><span class="tr"><i style="width:${r[1]?Math.max(2,r[1]/max*100):0}%;background:${color}"></i></span><span class="amt num">${val(r)}</span></button>`).join('')}</div>`;
+}
+
+function render(){
+ const d=D[role];side(d);
+ $('#me-av').textContent=d.me;$('#me-av').style.background=PEOPLE[d.me][1];
+ if(view=='tracker'){renderTracker();return}
+ const t=d.tabs[tab];
+ const tabCount=x=>x[1].reduce((a,r)=>a+r[3],0);
+ const penTot=d.pen.reduce((a,p)=>a+p[1],0);
+ $('#page').innerHTML=`
+ <div class="ph"><div><div class="crumbs">Spectrum Cloud / Compliance Tracker</div><h1>${d.hello}</h1><div class="muted">Tuesday, 13 October 2026 · FY 2026-27</div></div>
+  </div></div>
+
+ <section><div class="sh"><h2>Compliance heads</h2><p>Open a head to work inside its app</p></div>
+  <div class="heads">${Object.keys(SP).map(k=>{const h=d.heads[k];return `<div class="card head">
+   <div class="t">${sq(k,32)}<div><h3>${SP[k][2]}</h3><small>${f(d.open[k])} open items</small></div></div>
+   <div class="mrows">${d.m.map((m,i)=>`<button class="mr" data-go="${SP[k][2]} · ${m}"><span>${m}</span>${h[i]?(i==0||m=='Sent back'?`<span class="lz red">${h[i]}</span>`:`<b class="num">${f(h[i])}</b>`):'<span class="z">0</span>'}</button>`).join('')}</div>
+   <button class="btn block" data-go="Open ${SP[k][2]} app">Open ${SP[k][2]} ${ic('chev')}</button></div>`}).join('')}</div></section>
+
+ <section><div class="sh"><h2>Summary</h2><p>Updated 2 minutes ago</p></div>
+  <div class="stats">${d.stats.map(s=>`<button class="stat" data-go="${s[3]}"><span class="ic" style="background:var(--${s[0]});color:var(--text-${s[0]})">${ic(s[1])}</span><span><div class="l1 num" style="${s[0]=='danger'?'color:var(--text-danger)':''}">${s[2]}</div><div class="l2">${s[3]}</div><div class="l3">${s[4]}</div></span><span class="chev">${ic('chev')}</span></button>`).join('')}</div></section>
+
+ <section class="work">
+  <div class="card">
+   <div class="ch"><div><h3>${d.title}</h3><p>Grouped by filing. Open a row to see every client in it.</p></div></div>
+   <div class="tabs" role="tablist">${d.tabs.map((x,i)=>`<button role="tab" data-tab="${i}" aria-selected="${i==tab}">${x[0]}<span class="${i==0?'lz red':'badge'}">${f(tabCount(x))}</span></button>`).join('')}</div>
+   <div class="tblw"><table class="tbl"><thead><tr><th>Filing</th><th class="r">Clients</th><th>Due</th><th>Assignee</th><th></th></tr></thead><tbody>
+   ${t[1].map(r=>`<tr class="row" data-go="${r[1]} · ${r[2]}"><td><div class="wk">${sq(r[0])}<div><div class="nm">${r[1]}</div><small>${SP[r[0]][2]} · ${r[2]}</small></div></div></td>
+     <td class="r num"><b>${f(r[3])}</b></td>
+     <td>${r[5]<0?`<span class="late">${r[4]}</span><small><span class="lz red">${-r[5]} days late</span></small>`:`${r[4]}<small>in ${r[5]} days</small>`}</td>
+     <td><div class="stack">${r[6].map(av).join('')}</div></td>
+     <td><button class="btn sm ${r[8]?'primary':''}" data-go="${r[7]} · ${r[1]}">${r[7]}</button></td></tr>`).join('')}
+   </tbody></table></div>
+   <div class="cfoot"><span>${t[1].length} filings · ${f(tabCount(t))} clients</span><button class="link" data-view="tracker" data-qf="${tab==0?'late':'all'}">View all in Tracker →</button></div>
+  </div>
+  <div class="col">
+   <div class="card"><div class="ch"><div><h3>Status overview</h3><p>All filings in FY 2026-27</p></div><button class="link" data-view="tracker">Tracker →</button></div><div class="cb">${donut(d.status)}</div></div>
+  </div>
+ </section>
+
+ <section class="duo">
+  <div class="card"><div class="ch"><div><h3>${d.wlT}</h3><p>${d.wlP}</p></div><button class="link" data-go="${role=='ca'?'Team':'My work'}">${role=='ca'?'Team':'My work'} →</button></div>
+   <div class="cb">${role=='ca'
+    ?bars(d.wl,r=>`${av(r[0])}${PEOPLE[r[0]][0]}`,r=>f(r[1]),'var(--ch-brand)',r=>`${PEOPLE[r[0]][0]}: ${f(r[1])} open items`)
+    :bars(d.wl,r=>`${sq(r[0],16)}${SP[r[0]][2]}`,r=>f(r[1]),'var(--ch-brand)',r=>`${SP[r[0]][2]}: ${f(r[1])} open items`)}</div></div>
+   <div class="card"><div class="ch"><div><h3>${d.penT}</h3><p>Late fee and interest to date</p></div><button class="link" data-go="Penalty details">Details →</button></div>
+    <div class="cb">${bars(d.pen,r=>`${sq(r[0],16)}${SP[r[0]][2]}`,r=>r[1]?inr(r[1]):'Nil','var(--ch-danger)',r=>`${SP[r[0]][2]}: ${r[1]?inr(r[1]):'Nil'}`)}
+     <div class="total"><span>Total</span><span class="late num">${inr(penTot)}</span></div></div></div>
+  <div class="card"><div class="ch"><div><h3>Recent activity</h3><p>What your team did today</p></div><button class="link" data-go="All activity">All activity →</button></div>
+   <div class="cb">${d.act.map(a=>`<div class="ar">${av(a[0])}<div><div><b>${PEOPLE[a[0]][0]}</b> ${a[1]} <button class="obj" data-go="${a[2]}">${a[2]}</button> ${a[3]}</div><small>${a[4]}</small></div></div>`).join('')}</div></div>
+ </section>`;
+}
+
+
+/* ---------- Tracker: every client against every compliance ---------- */
+const TODAY=new Date(2026,9,13);
+const COLS=[
+ ['tar','Tax audit report','AY 2026-27','IT','2026-09-30'],
+ ['kyc','DIR-3 KYC','FY 2026-27','ROC','2026-09-30'],
+ ['tdsp','TDS payment','Sep 2026','TDS','2026-10-07'],
+ ['g1','GSTR-1','Sep 2026','GST','2026-10-11'],
+ ['pf','PF payment','Sep 2026','LAB','2026-10-15'],
+ ['esi','ESI payment','Sep 2026','LAB','2026-10-15'],
+ ['g3b','GSTR-3B','Sep 2026','GST','2026-10-20'],
+ ['aoc','AOC-4','FY 2025-26','ROC','2026-10-30'],
+ ['26q','TDS return 26Q','Q2','TDS','2026-10-31'],
+ ['itr','ITR (audit)','AY 2026-27','IT','2026-10-31']];
+const NAMES=['Sunrise Traders LLP','Kumar Realty','Qureshi & Dutta','Beacon Enterprises Pvt Ltd','Prime Exports Pvt Ltd','Pinnacle Textiles Pvt Ltd','Vertex Logistics Pvt Ltd','Metro Motors LLP','Summit Textiles Pvt Ltd','Metro Charitable Trust','Prime Packaging Pvt Ltd','Agarwal Chemicals','Agarwal Consulting','Agarwal Exports','Agarwal Metals','Anand & Associates','Anchor Chemicals Pvt Ltd','Patel Packaging','Trivedi Electricals','Sharma & Dutta','Joseph Shah','Karan Trivedi','Sunrise Industries Pvt Ltd','QuickCart E-commerce Pvt Ltd','Prime Metals Pvt Ltd','Anchor Engineering Pvt Ltd','Kapoor Foods','Mehta Pharma Pvt Ltd','Desai Builders LLP','Iyer Textiles','Bansal Steel Pvt Ltd','Gupta & Sons','Rao Agro LLP','Nair Hospitality Pvt Ltd','Singh Transport','Verma Electronics Pvt Ltd','Chopra Exports','Joshi Polymers Pvt Ltd','Kulkarni Associates','Reddy Infra Pvt Ltd','Malhotra Retail','Pillai Spices LLP','Saxena Paper Pvt Ltd','Bhatia Motors','Ghosh Ceramics Pvt Ltd','Dutta Leather','Menon Logistics LLP','Shetty Foods Pvt Ltd','Jain Garments','Bose Instruments Pvt Ltd'];
+const OWN=['NB','RA','DR','AS','UN'];
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const days=d=>Math.round((new Date(d)-TODAY)/864e5);
+const ROWS=NAMES.map((n,i)=>{
+ const co=/Pvt Ltd/.test(n),llp=/LLP/.test(n),trust=/Trust/.test(n),indiv=!co&&!llp&&!trust&&/^[A-Z][a-z]+ [A-Z][a-z]+$/.test(n);
+ const owner=OWN[i%9==8?4:i%4];
+ const pan='ABCDE'.split('').map(()=>String.fromCharCode(65+Math.floor(rnd()*26))).join('')+String(1000+Math.floor(rnd()*8999))+String.fromCharCode(65+Math.floor(rnd()*26));
+ const cells={};let late=0;
+ COLS.forEach(c=>{
+  const [k,,,h,due]=c,dd=days(due);
+  let app=true;
+  if(h=='ROC'&&!co)app=false;
+  if(k=='kyc'&&!(co||llp))app=false;
+  if(h=='LAB'&&rnd()<.45)app=false;
+  if((k=='tar'||k=='itr')&&(indiv||rnd()<.35))app=false;
+  if(h=='GST'&&trust)app=false;
+  if(h=='TDS'&&indiv)app=false;
+  if(!app){cells[k]={s:'na'};return}
+  const r=rnd();let st;
+  if(dd<0){st=r<(i<14?.62:.93)?'filed':'late'}
+  else{st=r<.12?'filed':r<.38?'ready':r<.52?'wait':'pend'}
+  if(st=='late')late++;
+  cells[k]={s:st,dd};
+ });
+ return {n,pan,owner,cells,late};
+}).sort((a,b)=>b.late-a.late);
+const TR={q:'',qf:'all',head:'all',n:25};
+const ST={filed:['filed','check','Filed'],late:['late','alert','late'],ready:['ready','check','For approval'],wait:['wait','clock','Waiting'],pend:['pend','','Not started']};
+function chip(c){
+ if(c.s=='na')return '<span class="na">–</span>';
+ const m=ST[c.s];const label=c.s=='late'?`${-c.dd}d late`:m[2];
+ return `<span class="st ${m[0]}">${m[1]?ic(m[1]):''}${label}</span>`;
+}
+function filtered(){
+ let r=ROWS;
+ const q=TR.q.trim().toLowerCase();
+ if(q)r=r.filter(x=>x.n.toLowerCase().includes(q)||x.pan.toLowerCase().includes(q));
+ if(TR.qf=='late')r=r.filter(x=>x.late>0);
+ if(TR.qf=='unowned')r=r.filter(x=>x.owner=='UN');
+ if(TR.qf=='approve')r=r.filter(x=>Object.values(x.cells).some(c=>c.s=='ready'));
+ return r;
+}
+function renderTracker(){
+ const cols=COLS.filter(c=>TR.head=='all'||c[3]==TR.head);
+ const rows=filtered(),shown=rows.slice(0,TR.n);
+ const lateRows=ROWS.filter(x=>x.late).length;
+ const months=[];cols.forEach(c=>{const m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][new Date(c[4]).getMonth()]+' '+new Date(c[4]).getFullYear();const L=months[months.length-1];L&&L[0]==m?L[1]++:months.push([m,1])});
+ const keep=document.activeElement&&document.activeElement.id=='tq';
+ $('#page').innerHTML=`
+ <div class="ph"><div><div class="crumbs">Spectrum Cloud / Compliance Tracker</div><h1>Tracker</h1><div class="muted">Every client against every compliance due around today · sample of 50 clients</div></div>
+  <div class="tools" style="display:flex;gap:8px"><button class="btn" data-go="Export to Excel"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Export</button><button class="btn primary" data-go="Send reminders for late filings">Remind all late</button></div></div>
+ <div class="toolbar">
+  <span class="sw">${'<svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'}<input class="tsearch" id="tq" placeholder="Search client or PAN" value="${TR.q.replace(/"/g,'&quot;')}"></span>
+  <div class="qf" role="group" aria-label="Quick filters">
+   <button data-qf="all" aria-pressed="${TR.qf=='all'}">All clients</button>
+   <button data-qf="late" aria-pressed="${TR.qf=='late'}">Has late filings <span class="lz red">${lateRows}</span></button>
+   <button data-qf="approve" aria-pressed="${TR.qf=='approve'}">Waiting for approval</button>
+   <button data-qf="unowned" aria-pressed="${TR.qf=='unowned'}">Unassigned</button>
+  </div>
+  <select class="dd" id="th" aria-label="Compliance head" style="margin-left:auto">${[['all','All heads'],...Object.keys(SP).map(k=>[k,SP[k][2]])].map(h=>`<option value="${h[0]}" ${TR.head==h[0]?'selected':''}>${h[1]}</option>`).join('')}</select>
+ </div>
+ <div class="card" style="margin-top:-16px">
+  <div class="tgrid"><table class="mx">
+   <thead><tr><th class="cc"></th>${months.map(m=>`<th colspan="${m[1]}">${m[0].toUpperCase()}</th>`).join('')}</tr>
+   <tr><th class="cc">Client</th>${cols.map(c=>`<th class="colh" style="--c:${SP[c[3]][1]}" data-go="${c[1]} · ${c[2]} (all clients)"><i></i><span class="fm">${c[1]}</span><span class="dt">${c[2]} · due ${new Date(c[4]).getDate()} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][new Date(c[4]).getMonth()]}</span></th>`).join('')}</tr></thead>
+   <tbody>${shown.map((r,ri)=>`<tr><td class="cc"><div class="cl">${av(r.owner)}<div style="min-width:0"><button class="link nm" style="color:var(--text)" data-go="Client · ${r.n}">${r.n}</button><small>${r.pan}</small></div>${r.late?`<span class="lz red">${r.late} late</span>`:''}</div></td>
+    ${cols.map(c=>`<td><button class="cell" data-cell="${ROWS.indexOf(r)}|${c[0]}" aria-label="${r.n}, ${c[1]}">${chip(r.cells[c[0]])}</button></td>`).join('')}</tr>`).join('')||`<tr><td class="cc" colspan="${cols.length+1}" style="padding:24px">No clients match these filters.</td></tr>`}</tbody>
+  </table></div>
+  <div class="tfoot"><div class="legend"><span class="st filed">${ic('check')}Filed</span><span class="st late">${ic('alert')}Late</span><span class="st ready">${ic('check')}For approval</span><span class="st wait">${ic('clock')}Waiting on client</span><span class="st pend">Not started</span><span>– Not applicable</span></div>
+   <div style="display:flex;gap:12px;align-items:center"><span class="muted">${Math.min(TR.n,rows.length)} of ${rows.length} clients</span>${rows.length>TR.n?'<button class="btn" id="more">Show 25 more</button>':''}</div></div>
+ </div>`;
+ if(keep){const el=$('#tq');el.focus();el.setSelectionRange(el.value.length,el.value.length)}
+}
+document.addEventListener('input',e=>{if(e.target.id=='tq'){TR.q=e.target.value;TR.n=25;renderTracker()}});
+document.addEventListener('change',e=>{if(e.target.id=='th'){TR.head=e.target.value;renderTracker()}});
+function openDrawer(key){
+ const [ri,k]=key.split('|'),r=ROWS[+ri],c=COLS.find(x=>x[0]==k),cell=r.cells[k],h=SP[c[3]];
+ const due=new Date(c[4]).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+ let status,acts,note;
+ if(cell.s=='na'){status='<span class="lz">Not applicable</span>';acts=`<button class="btn" data-go="Mark applicable">Mark as applicable</button>`;note=`This compliance does not apply to ${r.n} under the current rules.`}
+ else{
+  const m=ST[cell.s];
+  status=`<span class="st ${m[0]}">${m[1]?ic(m[1]):''}${cell.s=='late'?(-cell.dd)+' days late':m[2]}</span>`;
+  acts=cell.s=='filed'?`<button class="btn" data-go="View acknowledgement">View acknowledgement</button><button class="btn" data-go="Undo filed">Undo</button>`
+   :cell.s=='ready'?`<button class="btn primary" data-go="Approve and file">Approve and file</button><button class="btn" data-go="Send back">Send back</button>`
+   :`<button class="btn primary" data-go="Mark as filed">Mark as filed</button><button class="btn" data-go="Send reminder to client">Send reminder</button><button class="btn" data-go="Assign">Assign</button>`;
+  note=cell.s=='late'?`Late fee and interest keep growing every day until this is filed.`:cell.s=='wait'?`Waiting on documents from the client. Last reminder sent 3 days ago.`:cell.s=='ready'?`Prepared by ${PEOPLE[r.owner][0]}. Ready for your approval.`:cell.s=='filed'?`Filed. Acknowledgement saved.`:`Not started yet. Due in ${cell.dd} days.`;
+ }
+ $('#drawer').innerHTML=`<div class="dh"><div><span class="lz">${h[2]}</span><h2>${c[1]} · ${c[2]}</h2><div class="muted">${r.n} · ${r.pan}</div></div><button class="btn icon-btn" id="dr-close" aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+  <div class="db"><div class="acts">${acts}</div>
+   <dl class="fields"><dt>Status</dt><dd>${status}</dd><dt>Due date</dt><dd>${due}</dd><dt>Owner</dt><dd>${av(r.owner)}${PEOPLE[r.owner][0]}</dd><dt>Head</dt><dd>${sq(c[3],16)}${h[2]}</dd><dt>Reminders</dt><dd>${cell.s=='wait'||cell.s=='late'?'2 sent · last 3 days ago':'None sent'}</dd></dl>
+   <div class="note">${note}</div>
+   <button class="link" data-go="Open ${h[2]} app for ${r.n}" style="align-self:flex-start">Open in ${h[2]} app →</button></div>`;
+ $('#drawer').hidden=false;$('#scrim').hidden=false;
+}
+function closeDrawer(){$('#drawer').hidden=true;$('#scrim').hidden=true}
+document.addEventListener('keydown',e=>{if(e.key=='Escape')closeDrawer()});
+
+const flag=m=>{$('#flag-t').textContent='Opens: '+m;$('#flag').hidden=false;clearTimeout(flag.k);flag.k=setTimeout(()=>$('#flag').hidden=true,2400)};
+document.addEventListener('click',e=>{
+ const t=e.target;
+ if(t.closest('#tgl')){const s=$('#shell');innerWidth<=900?s.classList.toggle('open'):s.classList.toggle('collapsed');return}
+ if(t.closest('#apps')){$('#pop').hidden=!$('#pop').hidden;return}
+ if(!t.closest('#pop'))$('#pop').hidden=true;
+ const v=t.closest('[data-view]');if(v){view=v.dataset.view;if(v.dataset.qf)TR.qf=v.dataset.qf;closeDrawer();render();scrollTo(0,0);if(innerWidth<=900)$('#shell').classList.remove('open');return}
+ const cell=t.closest('[data-cell]');if(cell){openDrawer(cell.dataset.cell);return}
+ if(t.closest('#dr-close')||t.closest('#scrim')){closeDrawer();return}
+ const qf=t.closest('[data-qf]');if(qf){TR.qf=qf.dataset.qf;TR.n=25;renderTracker();return}
+ const hd=t.closest('[data-head]');if(hd){TR.head=hd.dataset.head;renderTracker();return}
+ if(t.closest('#more')){TR.n+=25;renderTracker();return}
+ const tb=t.closest('[data-tab]');if(tb){tab=+tb.dataset.tab;render();return}
+ const g=t.closest('[data-go]');if(g){flag(g.dataset.go);$('#pop').hidden=true;if(innerWidth<=900)$('#shell').classList.remove('open')}
+});
+const tip=$('#tip');
+document.addEventListener('mousemove',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');if(!t){tip.hidden=true;return}tip.textContent=t.dataset.tip;tip.hidden=false;tip.style.left=Math.min(e.clientX+12,innerWidth-290)+'px';tip.style.top=(e.clientY+16)+'px'});
+if(location.hash=='#tracker')view='tracker';
+render();
+</script>

@@ -1,0 +1,1232 @@
+/* ============================================================================
+   COMPLIANCE TRACKER V2 — JIRA SKIN
+   ----------------------------------------------------------------------------
+   Loaded after app.css. tokens.css already carries the Atlassian colours,
+   font and radii; this file changes the shapes that tokens cannot reach so
+   the V1 screens read like Jira: 48px top bar, 32px nav rows with a blue
+   selection notch, flat bordered cards that do not lift, sentence-case
+   section labels, uppercase lozenges and underline tabs.
+   ========================================================================== */
+
+body {
+  font-family: var(--f-sans);
+  font-size: 14px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Top bar and rail brand: Jira's 48px chrome ------------------------- */
+.topline {
+  height: 48px;
+  padding: 0 var(--s4);
+  background: var(--sheet);
+}
+.rail__brand {
+  height: 48px;
+  padding: 0 var(--s4);
+}
+.rail__wordmark b {
+  font-size: 14px;
+  font-weight: 653;
+  letter-spacing: 0;
+}
+
+/* ---- Sidebar: Jira nav item ---------------------------------------------- */
+.rail__scroll {
+  padding: var(--s3) var(--s2);
+}
+.navlink {
+  height: 32px;
+  gap: var(--s2);
+  padding: 0 var(--s2);
+  margin-bottom: 2px;
+  border-radius: 4px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.navlink__icon {
+  width: 16px;
+  height: 16px;
+  opacity: 1;
+}
+.navlink.is-active {
+  background: var(--selected);
+  color: var(--accent);
+  font-weight: 500;
+}
+.navlink.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+}
+.rail__grouphead {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 12px;
+  font-weight: 653;
+  color: var(--ink-3);
+}
+
+/* ---- Page header ------------------------------------------------------- */
+.phead h1 {
+  font-size: 24px;
+  line-height: 28px;
+  font-weight: 653;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Section and card labels: sentence case, Jira heading-small ----------
+   V1 set these as small uppercase eyebrows. Jira labels a card with a plain
+   16px/600 heading, and keeps uppercase for lozenges only. */
+.chartcard__head,
+.runway__title,
+.hero__label,
+.railnow__head,
+.obsect__head,
+.obwhy__head,
+.pop__head,
+.cmd__group,
+.fmenu__group,
+.grouphead {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 14px !important;
+  font-weight: 653 !important;
+  color: var(--ink) !important;
+}
+.chartcard__head,
+.runway__title {
+  font-size: 16px !important;
+}
+.stat__label,
+.exposure__label,
+.donut__label,
+.label,
+.week__k,
+.fymonth,
+.headname,
+.obstate__k,
+.obfee__label,
+.cprofile__k,
+.cmpabout__f dt,
+.cmpcard__facts dt,
+.cprofile__facts dt,
+.obfacts dt,
+.caltip__stat span,
+.tlgroup__date span,
+.trk__span span,
+.wadate,
+.why__kicker {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 12px !important;
+  font-weight: 653 !important;
+  color: var(--ink-3) !important;
+}
+.stat__label {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  color: var(--ink-2) !important;
+}
+
+/* ---- Table headers: Jira list view ------------------------------------- */
+.ltable thead th,
+.runhead__c,
+.runhead__c--btn,
+.trk__corner,
+.cal__dow div {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-size: 12px !important;
+  font-weight: 653 !important;
+  color: var(--ink-3) !important;
+}
+.ltable thead th {
+  border-bottom: 2px solid var(--rule) !important;
+}
+
+/* ---- Cards: flat, bordered, no lift ------------------------------------- */
+.sheet,
+.hero,
+.stat,
+.chartcard,
+.queuecard,
+.runway,
+.cal,
+.trkwrap,
+.cmpcard,
+.cmpabout {
+  border-radius: 8px;
+  box-shadow: none;
+}
+.hero:hover,
+button.stat:hover,
+.cmpcard:hover {
+  transform: none !important;
+  box-shadow: none !important;
+  background: var(--sunk) !important;
+  border-color: var(--rule-strong) !important;
+}
+.stat__value {
+  font-weight: 653;
+  letter-spacing: -0.01em;
+}
+
+/* ---- Buttons: Atlassian default is a filled neutral, primary is blue ---- */
+.btn {
+  border-radius: 4px;
+  border-color: transparent;
+  background: var(--hover);
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+.btn:hover:not(:disabled) {
+  background: var(--active);
+  border-color: transparent;
+  color: var(--ink);
+}
+.btn--primary {
+  background: var(--btn-ink);
+  color: #fff;
+  font-weight: 500;
+}
+.btn--primary:hover:not(:disabled) {
+  background: var(--btn-ink-hover);
+  color: #fff;
+}
+:root[data-theme="dark"] .btn--primary,
+:root[data-theme="dark"] .btn--primary:hover:not(:disabled) {
+  color: var(--ink-invert);
+}
+.btn--ghost {
+  background: transparent;
+}
+.btn--sm {
+  height: 24px;
+  font-size: 12px;
+}
+
+/* ---- Segmented control ------------------------------------------------- */
+.seg {
+  border: 0;
+  background: var(--hover);
+  border-radius: 6px;
+}
+.seg button {
+  font-size: 14px;
+  height: 28px;
+  color: var(--ink-2);
+}
+
+/* ---- Lozenges: Jira uppercase status labels ---------------------------- */
+.tag {
+  height: 18px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 653;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.tag__dot {
+  display: none;
+}
+
+/* ---- Work-queue tabs: Jira underline tabs ------------------------------ */
+.qtabs {
+  box-shadow: inset 0 -2px 0 var(--rule);
+  gap: var(--s2);
+}
+.qtab {
+  border-radius: 0;
+  padding: 8px 4px 10px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.qtab.is-on {
+  background: none;
+  color: var(--accent);
+  font-weight: 500;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* ---- Inputs ------------------------------------------------------------ */
+.sinput,
+.field input,
+.field select {
+  border-radius: 4px;
+}
+
+
+/* ============================================================================
+   ENTRY PANELS (ui/EntryPanels.tsx) — the CA landing additions
+   ========================================================================== */
+.ep-apps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s4);
+  margin-bottom: var(--s4);
+}
+@media (max-width: 1000px) { .ep-apps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ep-app {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--sheet);
+  text-align: left;
+  cursor: pointer;
+}
+.ep-app:hover { background: var(--sunk); border-color: var(--rule-strong); }
+.ep-app__mark {
+  width: 32px; height: 32px; border-radius: 6px; flex: none;
+  display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 13px;
+}
+.ep-app__txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ep-app__txt b { font-weight: 653; }
+.ep-app__txt small { color: var(--ink-3); font-size: 12px; }
+.ep-app__txt em { font-style: normal; color: var(--st-overdue-fg); font-weight: 600; }
+.ep-app__go { display: inline-flex; align-items: center; gap: 2px; color: var(--accent); font-weight: 500; }
+.ep-app:hover .ep-app__go { text-decoration: underline; }
+
+.ep-grid2, .ep-grid3 { display: grid; gap: var(--s4); margin-top: var(--s4); }
+.ep-grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ep-grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .ep-grid2, .ep-grid3 { grid-template-columns: minmax(0, 1fr); } }
+
+.ep-card { display: flex; flex-direction: column; }
+.ep-card__head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--s3); margin-bottom: var(--s3); }
+.ep-sub { margin: 2px 0 0; font-size: 12px; color: var(--ink-3); }
+.ep-link { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 500; display: inline-flex; align-items: center; gap: 2px; cursor: pointer; white-space: nowrap; }
+.ep-link:hover { text-decoration: underline; }
+.ep-red { color: var(--st-overdue-fg); }
+.ep-muted { color: var(--ink-3); }
+
+.ep-table { width: 100%; border-collapse: collapse; }
+.ep-table th { text-align: left; font-size: 12px; font-weight: 653; color: var(--ink-3); padding: 6px 8px; border-bottom: 2px solid var(--rule); white-space: nowrap; }
+.ep-table td { padding: 10px 8px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.ep-table tr:last-child td { border-bottom: 0; }
+.ep-table th:first-child, .ep-table td:first-child { padding-left: 0; }
+.ep-table th:last-child, .ep-table td:last-child { padding-right: 0; }
+.ep-table tbody tr { cursor: pointer; }
+.ep-table tbody tr:hover td { background: var(--hover); }
+.ep-table tbody tr:hover b { color: var(--accent); }
+.ep-table td b { font-weight: 600; }
+.ep-table td small { display: block; font-size: 12px; color: var(--ink-3); }
+.ep-tag { margin-left: 8px; }
+.ep-chev { color: var(--ink-3); display: inline-flex; }
+.ep-bar { display: inline-block; vertical-align: middle; width: 90px; height: 8px; border-radius: 4px; background: var(--hover); overflow: hidden; margin-right: 8px; }
+.ep-bar i { display: block; height: 100%; background: var(--st-overdue-solid); border-radius: 4px; }
+.ep-amt { font-weight: 653; }
+
+.ep-list { display: flex; flex-direction: column; }
+.ep-row {
+  display: flex; align-items: center; gap: var(--s3);
+  width: 100%; padding: 10px 0; border: 0; border-bottom: 1px solid var(--rule);
+  background: none; text-align: left; cursor: pointer; font: inherit; color: inherit;
+}
+.ep-row:last-child { border-bottom: 0; }
+button.ep-row:hover { background: var(--hover); }
+button.ep-row:hover .ep-row__main b { color: var(--accent); }
+.ep-row--static { cursor: default; padding: 6px 0; }
+.ep-row__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ep-row__main b { font-weight: 600; }
+.ep-row__main small { font-size: 12px; color: var(--ink-3); }
+.ep-row__meta { display: flex; flex-direction: column; align-items: flex-end; }
+.ep-row__meta b { font-weight: 653; }
+.ep-row__meta small { font-size: 12px; color: var(--ink-3); }
+.ep-prog { width: 64px; height: 6px; border-radius: 3px; background: var(--hover); overflow: hidden; flex: none; }
+.ep-prog i { display: block; height: 100%; background: var(--st-filed-solid); }
+.ep-dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.ep-dot--overdue { background: var(--st-overdue-solid); }
+.ep-dot--pending { background: var(--st-pending-solid); }
+.ep-dot--na { background: var(--st-na-solid); }
+.ep-big { display: flex; flex-direction: column; margin-bottom: var(--s2); }
+.ep-big b { font-size: 28px; line-height: 32px; font-weight: 653; }
+.ep-big span { font-size: 12px; color: var(--ink-3); }
+.ep-cta { margin-top: auto; align-self: flex-start; }
+.ep-card .chartcard__head { border: 0; padding: 0; margin: 0; }
+.ep-grid3 { align-items: start; }
+.ep-section {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  margin: 32px 0 12px; font-size: 20px; line-height: 24px; font-weight: 653; color: var(--ink);
+}
+.ep-section span { font-size: 14px; font-weight: 400; color: var(--ink-3); }
+.ep-grid3 > .chartcard { margin: 0; }
+
+/* ---- One grid for the whole dashboard -------------------------------------
+   Every row sits on the same 4 columns with one 16px gap, so card edges line
+   up from the app strip down: apps 4 × 1, summary = hero 2 + KPIs 2 (a 2×2 of
+   one column each), and every later row is full width or two equal halves. */
+.dashtop {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 0;
+}
+.dashkpi { gap: 16px; }
+.ep-apps { gap: 16px; margin-bottom: 16px; }
+.ep-grid2 { gap: 16px; margin-top: 16px; align-items: stretch; }
+.ep-grid2 > .chartcard { margin: 0; height: 100%; }
+.queuecard { margin-top: 0; }
+.chartcard { padding: 20px; }
+.ep-section { margin: 32px 0 16px; }
+@media (max-width: 1080px) { .dashtop { grid-template-columns: minmax(0, 1fr); } }
+
+.ep-more {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 12px 20px; border-top: 1px solid var(--rule); color: var(--ink-3); font-size: 12px;
+}
+.ep-heads { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.ep-headchip {
+  display: inline-flex; gap: 6px; align-items: center; height: 28px; padding: 0 10px;
+  border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet);
+  color: var(--ink-2); font: inherit; font-size: 12px; cursor: pointer;
+}
+.ep-headchip:hover { background: var(--hover); border-color: var(--rule-strong); }
+.ep-headchip b { color: var(--st-overdue-fg); font-weight: 653; }
+
+/* ============================================================================
+   COMPLIANCES (routes/Compliances.tsx) — list view with inline expansion
+   ========================================================================== */
+.cl-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+@media (max-width: 1000px) { .cl-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cl-tile {
+  display: flex; gap: 12px; align-items: flex-start; text-align: left; cursor: pointer;
+  padding: 16px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); font: inherit; color: inherit;
+}
+.cl-tile:hover { background: var(--sunk); border-color: var(--rule-strong); }
+.cl-tile.is-on { background: var(--selected); border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.cl-tile__ic { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+.cl-tone--base { background: var(--sunk-2); color: var(--ink-2); }
+.cl-tone--late { background: var(--st-overdue-bg); color: var(--st-overdue-fg); }
+.cl-tone--soon { background: var(--urg-soon-bg); color: var(--urg-near); }
+.cl-tone--info { background: var(--accent-soft); color: var(--accent); }
+.cl-tile__txt { display: flex; flex-direction: column; min-width: 0; }
+.cl-tile__label { color: var(--ink-2); font-weight: 500; }
+.cl-tile__txt b { font-size: 24px; line-height: 28px; font-weight: 653; margin-top: 2px; }
+.cl-tile__txt small { font-size: 12px; color: var(--ink-3); }
+
+.cl-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.cl-muted { color: var(--ink-3); font-size: 12px; }
+.cl-late { color: var(--st-overdue-fg); }
+.cl-soon { color: var(--urg-near); font-weight: 500; }
+
+.cl-sheet { overflow-x: auto; }
+.cl-table { width: 100%; border-collapse: collapse; min-width: 960px; }
+.cl-table > thead th {
+  text-align: left; font-size: 12px; font-weight: 653; color: var(--ink-3);
+  padding: 10px 12px; border-bottom: 2px solid var(--rule); white-space: nowrap; background: var(--sheet);
+}
+.cl-table > tbody > tr > td { padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.cl-table td small { display: block; font-size: 12px; color: var(--ink-3); }
+.cl-group td { background: var(--sunk); font-weight: 653; padding: 8px 12px !important; }
+.cl-group__dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; vertical-align: middle; }
+.cl-group__n { margin: 0 8px; font-weight: 500; font-size: 12px; color: var(--ink-3); background: var(--sheet); border-radius: 8px; padding: 0 6px; }
+.cl-row { cursor: pointer; }
+.cl-row:hover td { background: var(--hover); }
+.cl-row:hover .cl-id b { color: var(--accent); text-decoration: underline; }
+.cl-row.is-open td { background: var(--selected); border-bottom-color: transparent; }
+.cl-id { display: flex; gap: 10px; align-items: stretch; }
+.cl-id b { font-weight: 600; }
+.cl-spine { width: 3px; border-radius: 2px; flex: none; }
+.cl-period { margin-bottom: 4px; }
+.cl-prog { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+.cl-prog__bar { display: flex; height: 8px; border-radius: 4px; background: var(--st-pending-bg); overflow: hidden; }
+.cl-prog__bar i { display: block; height: 100%; }
+.cl-prog__bar .is-filed { background: var(--st-filed-solid); }
+.cl-prog__bar .is-late { background: var(--st-overdue-solid); }
+.cl-chev { display: inline-flex; color: var(--ink-3); transition: transform .15s; }
+.cl-chev.is-open { transform: rotate(180deg); color: var(--accent); }
+
+.cl-detail > td { background: var(--selected); padding: 4px 16px 16px !important; }
+.cl-facts { display: grid; grid-template-columns: 1fr 1.2fr 1.6fr; gap: 16px; margin-bottom: 12px; }
+.cl-facts span { font-size: 12px; font-weight: 653; color: var(--ink-3); }
+.cl-facts p { margin: 2px 0 0; color: var(--ink); }
+.cl-periods { width: 100%; border-collapse: collapse; background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.cl-periods th { text-align: left; font-size: 12px; font-weight: 653; color: var(--ink-3); padding: 8px 12px; border-bottom: 2px solid var(--rule); }
+.cl-periods td { padding: 8px 12px; border-bottom: 1px solid var(--rule); }
+.cl-periods tr:last-child td { border-bottom: 0; }
+.cl-periods tbody tr:hover td { background: var(--hover); }
+.cl-full { display: inline-flex; align-items: center; gap: 2px; margin-top: 12px; color: var(--accent); font-weight: 500; }
+.cl-full:hover { text-decoration: underline; }
+.cl-table td small.cl-late { color: var(--st-overdue-fg); }
+.cl-table td small.cl-soon { color: var(--urg-near); font-weight: 500; }
+
+/* ---- Expanded compliance: three clear blocks ------------------------------ */
+.cl-row.is-open td { background: var(--sunk); }
+.cl-detail > td { background: var(--sunk) !important; padding: 0 16px 20px !important; border-bottom: 2px solid var(--rule) !important; }
+.cl-panels { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin-bottom: 20px; }
+@media (max-width: 1100px) { .cl-panels { grid-template-columns: minmax(0, 1fr); } }
+.cl-panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; padding: 16px 20px; }
+.cl-panel h4, .cl-subhead { margin: 0 0 12px; font-size: 14px; font-weight: 653; color: var(--ink); }
+.cl-subhead span { margin-left: 8px; font-weight: 400; font-size: 12px; color: var(--ink-3); }
+.cl-dl { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px 16px; margin: 0; }
+.cl-dl dt { font-size: 12px; font-weight: 653; color: var(--ink-3); padding-top: 1px; }
+.cl-dl dd { margin: 0; color: var(--ink); display: flex; flex-direction: column; gap: 2px; }
+.cl-dl dd:first-of-type { flex-direction: row; align-items: center; }
+.cl-dl dd b { font-weight: 600; }
+.cl-dl dd small { font-size: 12px; color: var(--ink-3); line-height: 16px; }
+.cl-yearbar { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.cl-yearbar .cl-prog__bar { height: 10px; }
+.cl-yearbar small { font-size: 12px; color: var(--ink-3); }
+.cl-yearbar small b { color: var(--ink); font-weight: 653; }
+.cl-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.cl-stats > div { padding: 10px 12px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.cl-stats > div:nth-child(3n) { border-right: 0; }
+.cl-stats > div:nth-last-child(-n+3) { border-bottom: 0; }
+.cl-stats dt { font-size: 12px; color: var(--ink-3); }
+.cl-stats dd { margin: 2px 0 0; font-size: 18px; line-height: 24px; font-weight: 653; color: var(--ink); }
+.cl-stats dd.is-filed { color: var(--st-filed-fg); }
+.cl-stats dd.is-late { color: var(--st-overdue-fg); }
+.cl-periods { box-shadow: none; }
+
+/* ---- Compliances: chips instead of tiles, sticky bar + header ------------- */
+.cl-bar { display: flex; flex-direction: column; gap: 10px; padding-bottom: 12px; margin-bottom: 0; background: var(--paper); }
+.cl-bar__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cl-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.cl-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px;
+  border: 1px solid var(--rule); border-radius: 4px; background: var(--sheet);
+  color: var(--ink-2); font: inherit; font-weight: 500; cursor: pointer;
+}
+.cl-chip:hover { background: var(--hover); border-color: var(--rule-strong); }
+.cl-chip.is-on { background: var(--selected); border-color: var(--accent); color: var(--accent); }
+.cl-chip__n { font-size: 12px; font-weight: 653; padding: 0 6px; border-radius: 8px; background: var(--hover); color: var(--ink); }
+.cl-chip__n.is-late { background: var(--st-overdue-bg); color: var(--st-overdue-fg); }
+.cl-chip__n.is-soon { background: var(--urg-soon-bg); color: var(--urg-near); }
+/* Sticky header needs no clipping ancestor: the sheet's overflow is dropped. */
+.cl-sheet { overflow: visible; }
+.cl-table { min-width: 0; }
+.cl-table > thead th {
+  position: sticky;
+  top: calc(var(--topline-h) + var(--cl-bar-h, 96px));
+  z-index: 5;
+}
+.cl-table > thead th:first-child { border-top-left-radius: 8px; }
+.cl-table > thead th:last-child { border-top-right-radius: 8px; }
+.filters.cl-bar { align-items: stretch; justify-content: flex-start; }
+
+/* ---- Compliances bar v2: tabs + people filter (no pills, no search) ------- */
+.cl-tabsrow { box-shadow: inset 0 -2px 0 var(--rule); align-items: flex-end; }
+.cl-tabs { display: flex; gap: 4px; }
+.cl-tab {
+  position: relative; display: inline-flex; align-items: center; gap: 6px;
+  border: 0; background: none; padding: 8px 8px 10px; margin-right: 8px;
+  font: inherit; font-weight: 500; color: var(--ink-2); cursor: pointer; white-space: nowrap;
+}
+.cl-tab:hover { color: var(--ink); }
+.cl-tab.is-on { color: var(--accent); }
+.cl-tab.is-on::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--accent); border-radius: 1px; }
+.cl-tab__n { font-size: 12px; font-weight: 653; padding: 0 6px; border-radius: 8px; background: var(--hover); color: var(--ink); }
+.cl-tab__n.is-late { background: var(--st-overdue-bg); color: var(--st-overdue-fg); }
+.cl-tab__n.is-soon { background: var(--urg-soon-bg); color: var(--urg-near); }
+.cl-sort { display: inline-flex; align-items: center; gap: 8px; color: var(--ink-3); font-size: 12px; font-weight: 653; padding-bottom: 6px; }
+.cl-people { display: flex; align-items: center; }
+.cl-face {
+  width: 32px; height: 32px; border-radius: 50%; margin-left: -6px; position: relative;
+  border: 2px solid var(--paper); color: #fff; font: 653 11px var(--f-sans); cursor: pointer;
+  display: grid; place-items: center; transition: transform .12s;
+}
+.cl-face:first-child { margin-left: 0; }
+.cl-face:hover { transform: translateY(-2px); z-index: 20 !important; }
+.cl-face.is-on { box-shadow: 0 0 0 2px var(--accent); z-index: 21 !important; }
+.cl-face--none { background: var(--sunk-2); color: var(--ink-2); }
+.cl-people__label { margin-left: 10px; color: var(--ink-2); font-weight: 500; white-space: nowrap; }
+.cl-divider { width: 1px; height: 24px; background: var(--rule); margin: 0 8px; }
+.cl-panels { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 1250px) { .cl-panels { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .cl-panels > :first-child { grid-column: 1 / -1; } }
+.cl-team { width: 100%; border-collapse: collapse; }
+.cl-team th { text-align: left; font-size: 12px; font-weight: 653; color: var(--ink-3); padding: 0 0 6px; border-bottom: 1px solid var(--rule); }
+.cl-team td { padding: 7px 0; border-bottom: 1px solid var(--rule); }
+.cl-team tr:last-child td { border-bottom: 0; }
+.cl-team tbody tr { cursor: pointer; }
+.cl-team tbody tr:hover td { color: var(--accent); }
+.cl-team th.u-right, .cl-team td.u-right { padding-left: 12px; }
+/* Expanded compliance: back to two blocks once the team panel was dropped. */
+.cl-panels { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+@media (max-width: 1250px) { .cl-panels { grid-template-columns: minmax(0, 1fr); } .cl-panels > :first-child { grid-column: auto; } }
+/* Single-line compliance bar: tabs left, narrowing controls right. */
+.cl-bar { gap: 0; padding-bottom: 16px; }
+.cl-tools { display: flex; align-items: center; gap: 8px; padding-bottom: 6px; }
+.cl-tools select.plain { height: 32px; }
+.cl-clear { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 500; cursor: pointer; padding: 0 4px; }
+.cl-clear:hover { text-decoration: underline; }
+
+/* ---- Period table inside an opened compliance: frozen title + header ----- */
+.cl-table > thead th.u-right { text-align: right; }
+.cl-pwrap { position: relative; }
+.cl-ptitle {
+  position: sticky;
+  top: calc(var(--topline-h) + var(--cl-bar-h, 64px) + var(--cl-th-h, 42px));
+  z-index: 4;
+  height: 44px; display: flex; align-items: center; gap: 8px;
+  background: var(--sunk); font-size: 14px; color: var(--ink);
+}
+.cl-ptitle b { font-weight: 653; }
+.cl-ptitle span { margin-left: 4px; font-size: 12px; color: var(--ink-3); }
+.cl-ptitle .cl-group__dot { margin-right: 0; }
+.cl-periods {
+  width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0;
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; overflow: visible;
+}
+.cl-periods thead th {
+  position: sticky;
+  top: calc(var(--topline-h) + var(--cl-bar-h, 64px) + var(--cl-th-h, 42px) + 44px);
+  z-index: 3; background: var(--sheet);
+  text-align: left; font-size: 12px; font-weight: 653; color: var(--ink-3);
+  padding: 10px 12px; border-bottom: 2px solid var(--rule);
+  box-shadow: 0 -1px 0 var(--rule);
+}
+.cl-periods thead th:first-child { border-top-left-radius: 8px; }
+.cl-periods thead th:last-child { border-top-right-radius: 8px; }
+.cl-periods thead th.u-right { text-align: right; }
+.cl-periods td { padding: 10px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.cl-periods tbody tr:last-child td { border-bottom: 0; }
+.cl-periods tbody tr:hover td { background: var(--hover); }
+.cl-periods tr.is-current td { background: var(--selected); }
+.cl-periods tr.is-current td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.cl-periods tr.is-future td { color: var(--ink-2); }
+.cl-cur { margin-left: 8px; }
+.cl-periods .cl-prog { min-width: 0; }
+
+/* ---- Sticky edge fixes ------------------------------------------------------
+   Collapsed borders belong to the table, not the cell, so a stuck header left
+   its border behind and the edge looked cut. Separate borders let every
+   frozen cell carry its own lines. */
+.cl-table { border-collapse: separate; border-spacing: 0; }
+.cl-table > thead th { background: var(--sheet); border-bottom: 2px solid var(--rule); }
+/* Solid backing above the period title: closes any sub-pixel gap under the
+   main header (which sits on top of it) so rows never peek through. */
+.cl-ptitle { box-shadow: 0 -24px 0 0 var(--sunk); }
+/* The period table draws its outer edges on its cells, so the frozen header
+   keeps its top, sides and rounded corners while the body scrolls under it. */
+.cl-periods { border: 0; border-radius: 0; background: transparent; }
+.cl-periods thead th {
+  border-top: 1px solid var(--rule);
+  box-shadow: none;
+}
+.cl-periods thead th:first-child { border-left: 1px solid var(--rule); border-top-left-radius: 8px; }
+.cl-periods thead th:last-child { border-right: 1px solid var(--rule); border-top-right-radius: 8px; }
+.cl-periods tbody td { background: var(--sheet); }
+.cl-periods tbody td:first-child { border-left: 1px solid var(--rule); }
+.cl-periods tbody td:last-child { border-right: 1px solid var(--rule); }
+.cl-periods tbody tr:last-child td { border-bottom: 1px solid var(--rule); }
+.cl-periods tbody tr:last-child td:first-child { border-bottom-left-radius: 8px; }
+.cl-periods tbody tr:last-child td:last-child { border-bottom-right-radius: 8px; }
+.cl-periods tbody tr:hover td { background: var(--sunk); }
+.cl-periods tr.is-current td { background: var(--selected); }
+.cl-periods tr.is-current td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* ============================================================================
+   Compliances card: tabs + filters are the header strip of the list
+   Every frozen layer draws its own edges, so nothing breaks while scrolling.
+   ========================================================================== */
+.cl-card { margin-top: 20px; }
+.filters.cl-bar {
+  top: var(--topline-h);
+  z-index: 6;
+  padding: 0 16px;
+  margin: 0;
+  gap: 0;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -16px 0 0 var(--paper); /* covers the page behind its rounded top */
+}
+.cl-tabsrow {
+  min-height: 52px;
+  align-items: center;
+  box-shadow: none;
+  border-bottom: 1px solid var(--rule);
+  margin: 0 -16px;
+  padding: 0 16px;
+}
+.cl-tabs { align-self: stretch; align-items: stretch; }
+.cl-tab { padding: 0 6px; margin-right: 12px; font-size: 14px; font-weight: 600; }
+.cl-tab.is-on::after { height: 3px; bottom: -1px; }
+.cl-tools { padding-bottom: 0; }
+.cl-tools select.plain { height: 32px; background-color: var(--hover); border-color: transparent; font-weight: 500; }
+.cl-tools select.plain:hover { background-color: var(--active); }
+
+/* Column header: frozen under the strip, with its own side edges. */
+.cl-table { border-collapse: separate; border-spacing: 0; width: 100%; }
+.cl-table > thead th {
+  top: calc(var(--topline-h) + var(--cl-bar-h, 53px));
+  background: var(--sunk);
+  border-bottom: 1px solid var(--rule);
+}
+.cl-table > thead th:first-child { border-left: 1px solid var(--rule); border-top-left-radius: 0; }
+.cl-table > thead th:last-child { border-right: 1px solid var(--rule); border-top-right-radius: 0; }
+.cl-table > tbody > tr > td:first-child { border-left: 1px solid var(--rule); }
+.cl-table > tbody > tr > td:last-child { border-right: 1px solid var(--rule); }
+.cl-table > tbody > tr:last-child > td { border-bottom: 1px solid var(--rule); }
+.cl-table > tbody > tr:last-child > td:first-child { border-bottom-left-radius: 8px; }
+.cl-table > tbody > tr:last-child > td:last-child { border-bottom-right-radius: 8px; }
+.cl-group td { background: var(--sheet); border-bottom: 1px solid var(--rule); }
+.cl-empty { border: 1px solid var(--rule); border-top: 0; border-radius: 0 0 8px 8px; background: var(--sheet); }
+/* Period title freezes under the column header, which now has a 1px border. */
+.cl-ptitle { box-shadow: 0 -24px 0 0 var(--sunk); }
+
+/* ---- Compliances: the page heading scrolls away; only the list's own
+   header strip and column headings freeze (they carry the controls). ---- */
+.cl-card { margin-top: 0; }
+
+/* ---- Breathing space above the frozen list header -------------------------
+   When the strip sticks it sits 16px below the top bar instead of touching
+   it; a solid band of page colour fills that gap so rows never show through.
+   Every frozen layer below shifts by the same amount. */
+.page { --cl-gap: 16px; }
+.filters.cl-bar {
+  top: calc(var(--topline-h) + var(--cl-gap));
+  box-shadow: 0 calc(-1 * var(--cl-gap)) 0 0 var(--paper);
+}
+.cl-table > thead th { top: calc(var(--topline-h) + var(--cl-gap) + var(--cl-bar-h, 53px)); }
+.cl-ptitle { top: calc(var(--topline-h) + var(--cl-gap) + var(--cl-bar-h, 53px) + var(--cl-th-h, 42px)); }
+.cl-periods thead th { top: calc(var(--topline-h) + var(--cl-gap) + var(--cl-bar-h, 53px) + var(--cl-th-h, 42px) + 44px); }
+/* Band slightly wider than the card so the card's own side borders never
+   show inside the gap. */
+.filters.cl-bar { box-shadow: 0 calc(-1 * var(--cl-gap) - 2px) 0 2px var(--paper); }
+
+/* ---- Financial year selector: one look, one place (top right of the page
+   heading, first control) on every screen that has one. ---- */
+select.fysel {
+  height: 32px;
+  min-width: 132px;
+  padding-left: 12px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 4px;
+  background-color: var(--sheet);
+  color: var(--ink);
+  font-weight: 600;
+}
+select.fysel:hover { border-color: var(--ink-4); background-color: var(--sunk); }
+
+
+/* ============================================================================
+   TRACKER polish — same layout and behaviour as V1, type on Jira's scale
+   (14px body, 12px secondary, nothing below 11px).
+   ========================================================================== */
+.phead__note { font-size: 14px; }
+.fpill__btn, .field--search input, select.plain { font-size: 14px; }
+.fpill__btn { height: 32px; padding: 0 12px; }
+
+.trk__corner { font-size: 12px; }
+.trk__col { min-width: 100px; max-width: 100px; }
+.trk__col button { padding: 8px 8px 8px 6px; gap: 2px 6px; }
+.trk__col b { font-size: 12px; line-height: 16px; font-weight: 600; letter-spacing: 0; }
+.trk__col span { font-size: 11px; font-weight: 400; letter-spacing: 0; color: var(--ink-3); }
+
+.trk__cname { font-size: 14px; font-weight: 500; }
+.trk__cmeta { font-size: 12px; letter-spacing: 0; color: var(--ink-3); }
+.trk__late { font-size: 12px; font-weight: 600; letter-spacing: 0; }
+
+.mxcell i { width: 10px; height: 10px; border-radius: 3px; }
+
+.trkfoot { font-size: 12px; }
+.trkfoot + p.u-faint { font-size: 12px !important; }
+.trk__col b { -webkit-line-clamp: 3; }
+
+/* ---- Tracker column header: top colour edge, form + variant, date tile ---- */
+.trk__col { vertical-align: top; height: 92px; }
+.trk__col button {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+  width: 100%; height: 100%; padding: 12px 10px 10px; text-align: left; background: none; border: 0;
+}
+.trk__col button:hover { background: var(--hover); }
+.trk__top { position: absolute; left: 0; right: 0; top: 0; height: 3px; }
+.trk__form { font-size: 12px; line-height: 16px; font-weight: 653; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.trk__col button:hover .trk__form { color: var(--accent); }
+.trk__var { font-size: 11px; line-height: 14px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.trk__date {
+  margin-top: auto; display: inline-flex; align-items: baseline; gap: 4px;
+  padding: 1px 6px; border: 1px solid var(--rule-strong); border-radius: 4px; background: var(--sheet);
+}
+.trk__date b { font-size: 14px; line-height: 18px; font-weight: 653; color: var(--ink); }
+.trk__date small { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-3); }
+.trk__date.is-past { border-color: var(--rule); background: transparent; }
+.trk__date.is-past b, .trk__date.is-past small { color: var(--ink-3); }
+.trk__date.is-next { background: var(--accent); border-color: var(--accent); }
+.trk__date.is-next b, .trk__date.is-next small { color: #fff; }
+/* Win over the generic ".trk__col span" rule above. */
+.trk__col .trk__form { display: block; font-size: 13px; line-height: 18px; font-weight: 653; color: var(--ink); letter-spacing: 0; }
+.trk__col .trk__var { display: block; font-size: 11px; line-height: 14px; font-weight: 400; color: var(--ink-3); letter-spacing: 0; }
+.trk__col .trk__date { display: inline-flex; font-size: inherit; gap: 4px; }
+.trk__col .trk__date small { font-size: 10px; }
+
+/* ---- Date tile as a tear-off calendar: month band on top, day below ------- */
+.trk__col .trk__date {
+  margin-top: auto;
+  display: inline-flex; flex-direction: column; align-items: stretch; gap: 0;
+  width: 40px; padding: 0; overflow: hidden;
+  border: 1px solid var(--rule-strong); border-radius: 6px; background: var(--sheet);
+  box-shadow: 0 1px 0 var(--rule);
+}
+.trk__col .trk__date small {
+  order: 1; display: block; text-align: center;
+  font-size: 9px; line-height: 13px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: #fff; background: var(--ink-2);
+}
+.trk__col .trk__date b {
+  order: 2; display: block; text-align: center;
+  font-size: 15px; line-height: 21px; font-weight: 653; color: var(--ink);
+}
+/* past: faded sheet */
+.trk__col .trk__date.is-past { border-color: var(--rule); box-shadow: none; }
+.trk__col .trk__date.is-past small { background: var(--ink-4); }
+.trk__col .trk__date.is-past b { color: var(--ink-3); }
+/* next due: blue band, still a white page */
+.trk__col .trk__date.is-next { border-color: var(--accent); background: var(--sheet); }
+.trk__col .trk__date.is-next small { background: var(--accent); color: #fff; }
+.trk__col .trk__date.is-next b { color: var(--accent); }
+.trk__col { height: 100px; }
+/* Long names wrap to two lines instead of truncating. */
+.trk__col .trk__form { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.trk__col { height: 116px; }
+/* Month label freezes beside the client column while scrolling sideways. */
+.trk__span span { position: sticky; left: 232px; font-size: 12px; font-weight: 653; color: var(--ink-2); }
+.trk__col .trk__form.is-tall { -webkit-line-clamp: 3; }
+
+/* ---- Option B: calendar tile on the left, name + variant beside it ------- */
+.trk__col { min-width: 136px; max-width: 136px; height: auto; vertical-align: middle; }
+.trk__col button { flex-direction: row; align-items: center; gap: 10px; padding: 12px 10px 10px; }
+.trk__col .trk__date { margin-top: 0; flex: none; }
+.trk__txt { display: flex; flex-direction: column; min-width: 0; }
+.trk__col .trk__form { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; -webkit-line-clamp: unset; }
+.trk__col .trk__form.is-tall { -webkit-line-clamp: unset; }
+.trk__col .trk__var { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trk__col { min-width: 160px; max-width: 160px; }
+
+/* ---- Date tile colours as a timeline: past faded, next due strongest,
+   upcoming a calm blue so it reads as "future" without competing. ---- */
+.trk__col .trk__date small { background: var(--accent-soft); color: var(--accent-2); }
+.trk__col .trk__date b { color: var(--accent-2); }
+.trk__col .trk__date { border-color: var(--accent-line); }
+.trk__col .trk__date.is-past { border-color: var(--rule); background: var(--sheet); }
+.trk__col .trk__date.is-past small { background: var(--sunk-2); color: var(--ink-3); }
+.trk__col .trk__date.is-past b { color: var(--ink-3); }
+.trk__col .trk__date.is-next { border-color: var(--accent); }
+.trk__col .trk__date.is-next small { background: var(--accent); color: #fff; }
+.trk__col .trk__date.is-next b { color: var(--accent); }
+
+/* ---- Tracker cells: compact status labels on a white cell ----------------
+   No tinted bands (they left white stripes between rows); one small label
+   centred in the cell carries the state. */
+.mxcell { height: 44px; }
+.mxcell.c-filed, .mxcell.c-pending, .mxcell.c-overdue { background: transparent; }
+.mxlabel {
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 22px; padding: 0 10px; border-radius: 11px;
+  font-size: 12px; font-weight: 600; line-height: 1; white-space: nowrap;
+}
+.mxlabel::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.c-filed .mxlabel { background: var(--st-filed-bg); color: var(--st-filed-fg); }
+.c-overdue .mxlabel { background: var(--st-overdue-bg); color: var(--st-overdue-fg); }
+.c-pending .mxlabel { background: var(--st-pending-bg); color: var(--st-pending-fg); }
+.mxcell.c-na i, span.mxcell:empty::after {
+  content: ""; display: block; width: 10px; height: 2px; border-radius: 1px; background: var(--rule-strong);
+}
+.mxcell:hover { box-shadow: none; background: var(--hover); }
+.mxcell:hover .mxlabel { box-shadow: 0 0 0 2px var(--accent); }
+span.mxcell:hover { background: none; }
+.mxlg { width: auto; height: 24px; display: inline-grid; place-items: center; margin-right: 4px; }
+.mxlg--na { width: 24px; }
+/* Square-cornered labels, like Jira lozenges. */
+.mxlabel { border-radius: 3px; padding: 0 8px; }
+.mxlabel::before { border-radius: 1px; }
+
+/* ---- Page-heading controls share one height --------------------------------
+   Buttons in a page heading (Export, Today, Sync from KDK…) were the small
+   24px size beside the 32px FY selector and segmented controls. In the
+   heading they are all standard size. */
+.phead .btn,
+.phead .btn--sm { height: 32px; padding: 0 12px; font-size: 14px; font-weight: 500; }
+.phead .btn svg { width: 16px; height: 16px; }
+.phead .seg button { height: 28px; }
+.phead select.plain { height: 32px; }
+
+/* ---- Tracker cell hover card ---------------------------------------------- */
+.hovercard {
+  position: fixed; z-index: 60; pointer-events: none;
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px;
+  box-shadow: var(--shadow-3); padding: 12px 14px; font-size: 13px; color: var(--ink);
+}
+.hovercard__head b { display: block; font-weight: 653; font-size: 14px; }
+.hovercard__head small { display: block; color: var(--ink-3); font-size: 12px; }
+.hovercard__status { display: flex; gap: 10px; align-items: flex-start; margin: 10px 0; padding: 10px 0; border-block: 1px solid var(--rule); }
+.hovercard__status .mxlabel { flex: none; }
+.hovercard__status b { display: block; font-weight: 600; }
+.hovercard__status small { display: block; font-size: 12px; color: var(--ink-3); }
+.hovercard__red { color: var(--st-overdue-fg) !important; font-weight: 600; }
+.hc--filed { background: var(--st-filed-bg); color: var(--st-filed-fg); }
+.hc--overdue { background: var(--st-overdue-bg); color: var(--st-overdue-fg); }
+.hc--pending { background: var(--st-pending-bg); color: var(--st-pending-fg); }
+.hc--na { background: var(--sunk-2); color: var(--ink-2); }
+.hovercard__dl { display: grid; grid-template-columns: 96px 1fr; gap: 4px 8px; margin: 0; }
+.hovercard__dl dt { color: var(--ink-3); font-size: 12px; }
+.hovercard__dl dd { margin: 0; font-size: 12px; }
+.hovercard__muted { color: var(--ink-3); }
+.hovercard__foot { margin-top: 10px; font-size: 11px; color: var(--ink-3); }
+
+
+/* Period title removed: the period header freezes right under the main one,
+   with a little space above the table. */
+.cl-pwrap { margin-top: 8px; }
+.cl-periods thead th { top: calc(var(--topline-h) + var(--cl-gap) + var(--cl-bar-h, 53px) + var(--cl-th-h, 42px)); }
+
+/* ---- One frozen header at a time ----------------------------------------
+   Inside an opened compliance the period header freezes in the SAME slot as
+   the main column header and sits above it, so only the header that describes
+   the rows you are looking at is visible. Past the period list the period
+   header scrolls away and the main header is visible again. The side shadows
+   cover the main header across the 16px inset on either side. */
+.cl-periods thead th {
+  top: calc(var(--topline-h) + var(--cl-gap) + var(--cl-bar-h, 53px));
+  z-index: 7;
+}
+.cl-periods thead th:first-child { box-shadow: -17px 0 0 0 var(--sunk); }
+.cl-periods thead th:last-child { box-shadow: 17px 0 0 0 var(--sunk); }
+.filters.cl-bar { z-index: 9; }
+.cl-periods tbody td:first-child { white-space: nowrap; }
+
+/* ---- Period table runs edge to edge inside the list card -------------------
+   Inset by 16px it was narrower than the main header it replaces when frozen,
+   so the edges and rounded corners never lined up. Full-bleed, square-cornered,
+   its sides are the card's own borders. */
+.cl-pwrap { margin: 12px -16px 0; }
+.cl-periods thead th { border-top: 1px solid var(--rule); border-radius: 0 !important; box-shadow: none !important; }
+.cl-periods thead th:first-child, .cl-periods tbody td:first-child { border-left: 0; }
+.cl-periods thead th:last-child, .cl-periods tbody td:last-child { border-right: 0; }
+.cl-periods tbody tr:last-child td { border-radius: 0 !important; }
+.cl-periods thead th:first-child, .cl-periods tbody td:first-child { padding-left: 16px; }
+.cl-periods thead th:last-child, .cl-periods tbody td:last-child { padding-right: 16px; }
+.cl-periods tr.is-current td:first-child { box-shadow: inset 3px 0 0 var(--accent) !important; }
+.cl-full { margin-left: 0; }
+.cl-pth-first { white-space: nowrap; }
+.cl-pth-form { color: var(--ink); font-weight: 653; }
+.cl-pth-form .cl-group__dot { margin-right: 6px; }
+
+/* ============================================================================
+   DASHBOARD CARDS v3 — one template: title + link, hero number, clean list
+   or one bar. Used by Penalty, Reminders, Work with no owner, Year.
+   ========================================================================== */
+.ec {
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 20px; display: flex; flex-direction: column; min-width: 0; height: 100%;
+}
+.ec__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.ec__head h3 { margin: 0; font-size: 16px; line-height: 20px; font-weight: 653; color: var(--ink); }
+.ec__hero { display: flex; align-items: baseline; gap: 10px; margin: 14px 0 4px; flex-wrap: wrap; }
+.ec__hero b { font-size: 28px; line-height: 32px; font-weight: 653; color: var(--ink); }
+.ec__hero span { color: var(--ink-3); font-size: 13px; }
+.ec__hero em { font-style: normal; font-weight: 600; }
+.ec__red { color: var(--st-overdue-fg) !important; }
+.ec__by { margin: 0 0 4px; font-size: 12px; color: var(--ink-3); }
+.ec__by b { color: var(--ink-2); font-weight: 600; }
+.ec__label { margin-top: 16px; padding-bottom: 6px; font-size: 12px; font-weight: 653; color: var(--ink-3); border-bottom: 1px solid var(--rule); }
+.ec__list { list-style: none; margin: 8px 0 0; padding: 0; }
+.ec__hero + .ec__list { margin-top: 16px; border-top: 1px solid var(--rule); }
+.ec__list li + li { border-top: 1px solid var(--rule); }
+.ec__list button {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 4px;
+  border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; border-radius: 4px;
+}
+.ec__list button:hover { background: var(--hover); }
+.ec__list button:hover .ec__main b { color: var(--accent); }
+.ec__list button > svg { color: var(--ink-4); flex: none; }
+.ec__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ec__main b { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ec__main small { font-size: 12px; color: var(--ink-3); }
+.ec__val { font-size: 15px; font-weight: 653; }
+.ec__dot { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.ec__dot--red { background: var(--st-overdue-solid); }
+.ec__dot--blue { background: var(--st-pending-solid); }
+.ec__dot--grey { background: var(--st-na-solid); }
+.ec__stack { margin-top: 16px; }
+.ec__bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; gap: 2px; background: var(--hover); }
+.ec__bar i { display: block; height: 100%; }
+.ec__legend { list-style: none; margin: 14px 0 0; padding: 0; display: grid; grid-template-columns: 1fr; }
+.ec__legend li { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 13px; color: var(--ink-2); }
+.ec__legend li + li { border-top: 1px solid var(--rule); }
+.ec__legend li i { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.ec__legend li b { margin-left: auto; color: var(--ink); font-weight: 600; }
+.st-filed { background: var(--st-filed-solid); }
+.st-pending { background: var(--st-pending-solid); }
+.st-overdue { background: var(--st-overdue-solid); }
+.ec__note { margin: auto 0 0; padding-top: 12px; font-size: 12px; color: var(--ink-3); }
+.ep-grid2 > .ec { height: 100%; }
+
+/* ============================================================================
+   FILTER CONTROLS — current Jira style
+   Filled neutral buttons (no outline), 6px corners, our own chevron, and a
+   blue "selected" fill once a filter is applied. Applies to every native
+   dropdown (select.plain) and every filter pill.
+   ========================================================================== */
+select.plain {
+  -webkit-appearance: none; appearance: none;
+  height: 32px; padding: 0 30px 0 12px;
+  border: 0; border-radius: 6px;
+  background-color: var(--hover);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23505258' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; background-size: 12px;
+  color: var(--ink-2); font-size: 14px; font-weight: 500; cursor: pointer;
+}
+select.plain:hover { background-color: var(--active); color: var(--ink); }
+select.plain:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+/* The FY selector keeps its white, outlined look so the year stands apart. */
+select.plain.fysel { background-color: var(--sheet); border: 1px solid var(--rule-strong); color: var(--ink); font-weight: 600; }
+select.plain.fysel:hover { background-color: var(--sunk); }
+
+.fpill__btn {
+  height: 32px; padding: 0 10px 0 12px; gap: 6px;
+  border: 0 !important; border-radius: 6px;
+  background: var(--hover); color: var(--ink-2); font-size: 14px; font-weight: 500;
+}
+.fpill__btn:hover { background: var(--active); color: var(--ink); }
+.fpill__btn.is-open { background: var(--active); }
+.fpill__btn.is-active { background: var(--selected); color: var(--accent); }
+.fpill__btn.is-active:hover { background: var(--accent-line); }
+.fpill__caret { color: var(--ink-3); }
+.fpill__btn.is-active .fpill__caret { color: var(--accent); }
+.fpill__f { opacity: 1; font-weight: 500; }
+
+
+
+/* ---- Card identity: colour edge, icon, and one detail per card ----------- */
+.ec { border-top-width: 3px; }
+.ec--red { border-top-color: var(--st-overdue-solid); }
+.ec--blue { border-top-color: var(--accent); }
+.ec--amber { border-top-color: #E2B203; }
+.ec--purple { border-top-color: #964AC0; }
+.ec__head h3 { display: flex; align-items: center; gap: 10px; }
+.ec__ic { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; flex: none; }
+.ec__ic--red { background: var(--st-overdue-bg); color: var(--st-overdue-fg); }
+.ec__ic--blue { background: var(--accent-soft); color: var(--accent); }
+.ec__ic--amber { background: var(--urg-soon-bg); color: var(--urg-soon); }
+.ec__ic--purple { background: #F3E8FD; color: #803FA5; }
+:root[data-theme="dark"] .ec__ic--purple { background: #48245D; color: #D8A0F7; }
+
+/* Penalty: a share bar under each amount */
+.ec__amt { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; width: 96px; flex: none; }
+.ec__mini { width: 100%; height: 4px; border-radius: 2px; background: var(--st-overdue-bg); overflow: hidden; }
+.ec__mini i { display: block; height: 100%; margin-left: auto; background: var(--st-overdue-solid); border-radius: 2px; }
+
+/* Corrections: countdown to the next window closing */
+.ec__count { font-size: 12px; font-weight: 600; color: var(--accent); background: var(--accent-soft); padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+.ec__count.is-soon { color: var(--st-overdue-fg); background: var(--st-overdue-bg); }
+
+/* Big deadlines: a calendar leaf per date */
+.ec__cal { width: 40px; flex: none; border: 1px solid #D8A0F7; border-radius: 6px; overflow: hidden; text-align: center; }
+.ec__cal small { display: block; font-size: 9px; line-height: 13px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #fff; background: #964AC0; }
+.ec__cal b { display: block; font-size: 15px; line-height: 20px; font-weight: 653; color: #803FA5; }
+.ec__val .ec__unit { display: block; font-size: 11px; font-weight: 400; color: var(--ink-3); text-align: right; }
+.ec__val { text-align: right; }
+.ec__hero + .ec__list { margin-top: 16px; }
+.ec__mini { background: transparent; }
+.ec__mini i { margin-left: auto; opacity: .85; }
+
+/* Dashboard cards: no coloured top edge, an even border all round. */
+.ec { border-top-width: 1px; border-top-color: var(--rule); }
+
+/* ============================================================================
+   DASHBOARD TOP — one 4-column grid
+   The week card spans two columns and two rows; each tile is one cell, so
+   every edge lines up with the cards below. Every block shows a blue footer
+   link and lifts on hover, so it reads as clickable.
+   ========================================================================== */
+.dashtop {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: 1fr 1fr;
+  gap: 16px;
+}
+.dashtop > .hero { grid-column: 1 / span 2; grid-row: 1 / span 2; }
+.dashtop > .dashkpi { display: contents; }
+@media (max-width: 1080px) {
+  .dashtop { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; }
+  .dashtop > .hero { grid-column: 1 / -1; grid-row: auto; }
+}
+.hero, .stat {
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet);
+  cursor: pointer; transition: border-color .15s, box-shadow .15s;
+}
+.hero:hover, button.stat:hover {
+  background: var(--sheet) !important; border-color: var(--rule-strong) !important;
+  box-shadow: 0 4px 12px #1E1F211F, 0 0 1px #1E1F214F !important;
+}
+.stat { display: flex; flex-direction: column; padding: 16px 18px; }
+.stat__go, .hero__go {
+  margin-top: auto; padding-top: 12px; display: inline-flex; align-items: center; gap: 2px;
+  font-size: 13px; font-weight: 500; color: var(--accent) !important;
+}
+.hero:hover .hero__go, button.stat:hover .stat__go { text-decoration: underline; }
+.hero__go { border-top: 0; }
+/* Week bars: empty days are a thin baseline, not grey boxes */
+.week__bar { background: transparent; border-bottom: 2px solid var(--rule); border-radius: 0; }
+.week__fill { border-radius: 4px 4px 0 0; }
+
+
+/* Compliances rows: head colour bar flush on the card's left edge, the same
+   as the Dashboard and Calendar lists. */
+.cl-row > td:first-child { position: relative; padding-left: 20px; }
+.cl-row .cl-spine { position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 2px 2px 0; }
+
+/* ---- Today pulses on the timeline ------------------------------------------ */
+@keyframes today-pulse {
+  0%   { box-shadow: 0 0 0 3px var(--sheet), 0 0 0 3px rgba(24, 104, 219, 0.55); }
+  70%  { box-shadow: 0 0 0 3px var(--sheet), 0 0 0 12px rgba(24, 104, 219, 0); }
+  100% { box-shadow: 0 0 0 3px var(--sheet), 0 0 0 3px rgba(24, 104, 219, 0); }
+}
+.tlgroup.is-today::after { animation: today-pulse 1.8s ease-out infinite; }
+@media (prefers-reduced-motion: reduce) { .tlgroup.is-today::after { animation: none; } }
+
+/* In-table tax-liability basis switch (filing pages) */
+select.plain.basissel {
+  display: block; margin: 4px 0 0 auto; height: 24px; padding: 0 24px 0 8px;
+  font-size: 12px; font-weight: 500; background-position: right 7px center; background-size: 10px;
+}
+.basisbar { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 653; color: var(--ink-3); }
+/* Filing page filter row: everything on one line. */
+.basisbar { gap: 6px; }
+.basisbar select.plain { min-width: 0; }
+
+/* Tax-liability basis chosen in its own column heading */
+th:has(> .basishead) { white-space: nowrap; }
+select.plain.basishead {
+  display: block; margin: 4px 0 0 auto; height: 24px; padding: 0 22px 0 8px;
+  font-size: 12px; font-weight: 500; text-transform: none; letter-spacing: 0;
+  background-position: right 6px center; background-size: 10px;
+}
+/* Same line as the "Tax liability" label, so the header keeps one height. */
+select.plain.basishead { display: inline-block; vertical-align: middle; margin: 0 0 0 6px; height: 24px; }
+th:has(> .basishead) > .th-sort { vertical-align: middle; }
+select.plain.basishead { min-width: 132px; }
+/* A filter set away from its default reads as applied (light blue). */
+select.plain.is-active { background-color: var(--selected); color: var(--accent); }
+
+/* Frozen table headers sit directly under the frozen filter row: V1 assumed a
+   61px top bar, V2's is 48px, which left a gap the rows showed through. */
+.ltable thead th { top: calc(var(--topline-h) + var(--filters-h, 60px)); }
+.page:not(:has(.filters)) .ltable thead th { top: var(--topline-h); }
+/* A frozen header keeps the card's top edge: a 1px line just outside its top,
+   which sits on the card's own border at rest (no double line) and stays with
+   the header once the card's edge has scrolled away. */
+.sheet > .ltable thead th, .sheet .ltable thead th { box-shadow: 0 -1px 0 var(--rule); }
+/* (Replaces the outset line above: the frozen filter row painted over it.)
+   The header draws the top edge inside itself; the card gives up its own top
+   edge and top corner rounding so the line is never doubled. */
+.sheet .ltable thead th { box-shadow: inset 0 1px 0 var(--rule), inset 0 -1px 0 var(--rule-strong); border-bottom-color: transparent; }
+.sheet:has(> .ltable) { border-top-color: transparent; border-top-left-radius: 0; border-top-right-radius: 0; }
+.sheet .ltable thead th { box-shadow: inset 0 1px 0 var(--rule), inset 0 -1px 0 var(--rule-strong); border-bottom: 0; }
+.sheet .ltable tbody tr:first-child td { border-top: 0; }
+.sheet .ltable thead th { border-bottom: 0 !important; }
+.sheet .ltable thead th { border-radius: 0 !important; }
+
+/* Rounded table tops that stay clean when the header is frozen.
+   The card keeps its 8px top corners; each corner header cell paints the arc
+   itself (line + page colour outside it), so rows scrolling underneath never
+   show past the curve. */
+.sheet:has(> .ltable) { border-top-left-radius: 8px; border-top-right-radius: 8px; }
+.sheet .ltable thead th:first-child::before,
+.sheet .ltable thead th:last-child::after {
+  content: ""; position: absolute; top: 0; width: 9px; height: 9px; pointer-events: none;
+}
+.sheet .ltable thead th:first-child::before {
+  left: -1px;
+  background: radial-gradient(circle at 100% 100%, transparent 7.5px, var(--rule) 7.5px, var(--rule) 8.5px, var(--paper) 8.5px);
+}
+.sheet .ltable thead th:last-child::after {
+  right: -1px;
+  background: radial-gradient(circle at 0% 100%, transparent 7.5px, var(--rule) 7.5px, var(--rule) 8.5px, var(--paper) 8.5px);
+}
+/* side edges of the frozen header, so it reads as the top of the card */
+.sheet .ltable thead th:first-child { box-shadow: inset 0 1px 0 var(--rule), inset 0 -1px 0 var(--rule-strong), -1px 0 0 var(--rule); }
+.sheet .ltable thead th:last-child { box-shadow: inset 0 1px 0 var(--rule), inset 0 -1px 0 var(--rule-strong), 1px 0 0 var(--rule); }
+
+/* ---- Expanded compliance: action first ------------------------------------ */
+.cl-single {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; gap: 24px;
+  width: 100%; margin: 12px 0 0; padding: 14px 16px; text-align: left; cursor: pointer;
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 8px; font: inherit; color: inherit;
+}
+.cl-single:hover { border-color: var(--accent); background: var(--selected); }
+.cl-single__what { display: flex; flex-direction: column; }
+.cl-single__what b { font-size: 15px; font-weight: 653; }
+.cl-single__what span { font-size: 12px; color: var(--ink-3); }
+.cl-single + .cl-panels, .cl-pwrap + .cl-panels { margin-top: 16px; }
+.cl-prow { cursor: pointer; }
+.cl-prow:hover td { background: var(--selected) !important; }
+.cl-periods .btn--primary { white-space: nowrap; }
+.cl-panels + .cl-single, .cl-panels + .cl-pwrap { margin-top: 0; }
+.cl-single + .cl-full { margin-top: 12px; }
+
+/* ---- Opened compliance reads as one open dropdown ---------------------------
+   The row and its panel share a blue outline and a lifted shadow, the panel
+   slides open, and the row's chevron turns. */
+@keyframes cl-open { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.cl-row.is-open td { background: var(--selected) !important; border-bottom: 0 !important; }
+.cl-row.is-open td:first-child { box-shadow: inset 2px 0 0 var(--accent), inset 0 2px 0 var(--accent); }
+.cl-row.is-open td:not(:first-child):not(:last-child) { box-shadow: inset 0 2px 0 var(--accent); }
+.cl-row.is-open td:last-child { box-shadow: inset -2px 0 0 var(--accent), inset 0 2px 0 var(--accent); }
+.cl-row.is-open .cl-id b { color: var(--accent); }
+.cl-detail > td {
+  background: var(--selected) !important;
+  box-shadow: inset 2px 0 0 var(--accent), inset -2px 0 0 var(--accent), inset 0 -2px 0 var(--accent);
+  border-bottom: 0 !important;
+}
+.cl-detail > td > * { animation: cl-open .22s ease-out both; }
+.cl-detail > td > *:nth-child(2) { animation-delay: .04s; }
+.cl-detail > td > *:nth-child(3) { animation-delay: .08s; }
+.cl-detail + tr td { border-top: 12px solid var(--sheet); }
+@media (prefers-reduced-motion: reduce) { .cl-detail > td > * { animation: none; } }
+/* Keep the open block's blue outline unbroken beside the period table. */
+.cl-detail .cl-pwrap { margin-left: -14px; margin-right: -14px; }
+.cl-detail .cl-periods thead th:first-child, .cl-detail .cl-periods tbody td:first-child { padding-left: 14px; }
+
+/* Open compliance, quieter: neutral edge + soft lift instead of a blue frame. */
+.cl-row.is-open td { background: var(--sheet) !important; }
+.cl-row.is-open td:first-child { box-shadow: inset 1px 0 0 var(--rule-strong), inset 0 1px 0 var(--rule-strong); }
+.cl-row.is-open td:not(:first-child):not(:last-child) { box-shadow: inset 0 1px 0 var(--rule-strong); }
+.cl-row.is-open td:last-child { box-shadow: inset -1px 0 0 var(--rule-strong), inset 0 1px 0 var(--rule-strong); }
+.cl-detail > td {
+  background: var(--sunk) !important;
+  box-shadow: inset 1px 0 0 var(--rule-strong), inset -1px 0 0 var(--rule-strong), inset 0 -1px 0 var(--rule-strong), 0 6px 12px -6px #1E1F2126;
+}
+.cl-detail .cl-pwrap { margin-left: -15px; margin-right: -15px; }
+/* Open compliance: light grey edge, softer lift. */
+.cl-row.is-open td:first-child { box-shadow: inset 1px 0 0 var(--rule), inset 0 1px 0 var(--rule); }
+.cl-row.is-open td:not(:first-child):not(:last-child) { box-shadow: inset 0 1px 0 var(--rule); }
+.cl-row.is-open td:last-child { box-shadow: inset -1px 0 0 var(--rule), inset 0 1px 0 var(--rule); }
+.cl-detail > td {
+  box-shadow: inset 1px 0 0 var(--rule), inset -1px 0 0 var(--rule), inset 0 -1px 0 var(--rule), 0 4px 8px -6px #1E1F211A;
+}
+
+/* ---- Open compliance: minute fixes ------------------------------------------ */
+/* 2. inside the framed block the head strip would stop half way; hide it */
+.cl-row.is-open .cl-spine { display: none; }
+/* 3. panel content starts on the same line as the row's text (20px) */
+.cl-detail > td { padding: 0 20px 20px !important; }
+.cl-detail .cl-pwrap { margin-left: -19px; margin-right: -19px; }
+.cl-detail .cl-periods thead th:first-child, .cl-detail .cl-periods tbody td:first-child { padding-left: 20px; }
+.cl-detail .cl-periods thead th:last-child, .cl-detail .cl-periods tbody td:last-child { padding-right: 20px; }
+/* 4. no doubled line above the open row */
+.cl-table > tbody > tr:has(+ tr.cl-row.is-open) > td { border-bottom-color: transparent; }
+/* 5. no white gap after the panel */
+.cl-detail + tr td { border-top: 0 !important; }
+/* 6. chevron centred on the row */
+.cl-table > tbody > tr.cl-row > td:last-child { vertical-align: middle; }
+.cl-chev { vertical-align: middle; line-height: 0; }
+/* Period buttons: one width, so their edges line up down the column. */
+.cl-periods .btn--primary { min-width: 148px; justify-content: space-between; }
+.cl-detail > td { padding-top: 16px !important; }
+.cl-periods .btn--primary { min-width: 0; }

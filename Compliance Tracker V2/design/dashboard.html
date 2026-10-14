@@ -1,0 +1,433 @@
+<title>Compliance Tracker V2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap">
+<style>
+/* Layout: Jira shell (48px top bar, 240px sidebar) around the V1 dashboard, in V1's order: KPI row, three chart cards, 30-day runway, work queue. Colours are Atlassian Design System tokens (light + dark). */
+:root{
+  --text:#292A2E; --text-subtle:#505258; --text-subtlest:#6B6E76; --link:#1868DB; --text-inverse:#FFFFFF;
+  --surface:#FFFFFF; --sunken:#F8F8F8; --overlay:#FFFFFF;
+  --border:#0B120E24; --border-input:#8C8F97;
+  --neutral:#0515240F; --neutral-hov:#0B120E24; --subtle-hov:#0515240F;
+  --brand:#1868DB; --brand-hov:#1558BC; --selected:#E9F2FE; --text-selected:#1868DB; --focus:#4688EC;
+  --danger-bold:#C9372C; --danger:#FFECEB; --text-danger:#AE2E24;
+  --warning:#FFF5DB; --text-warning:#9E4C00; --success:#EFFFD6; --text-success:#4C6B1F; --info:#E9F2FE; --text-info:#1558BC; --discovery:#F8EEFE; --text-discovery:#803FA5; --gray:#F0F1F2;
+  --lz-gray:#DDDEE1; --lz-gray-t:#292A2E; --lz-green:#D3F1A7; --lz-green-t:#4C6B1F; --lz-red:#FFD5D2; --lz-red-t:#AE2E24;
+  --lz-yellow:#FCE4A6; --lz-yellow-t:#7F5F01; --lz-blue:#CFE1FD; --lz-blue-t:#1558BC; --lz-purple:#EED7FC; --lz-purple-t:#803FA5; --lz-teal:#C6EDFB; --lz-teal-t:#206A83;
+  --ch-success:#82B536; --ch-brand:#357DE8; --ch-danger:#E2483D; --ch-warning:#F68909; --ch-neutral:#8C8F97;
+  --shadow-overlay:0px 8px 12px #1E1F2126,0px 0px 1px #1E1F214F;
+  --font:"Atlassian Sans","Inter",ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Ubuntu,"Helvetica Neue",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --text:#CECFD2; --text-subtle:#A9ABAF; --text-subtlest:#96999E; --link:#669DF1; --text-inverse:#1F1F21;
+  --surface:#1F1F21; --sunken:#18191A; --overlay:#2B2C2F; --border:#E3E4F21F; --border-input:#7E8188;
+  --neutral:#CECED912; --neutral-hov:#E3E4F21F; --subtle-hov:#CECED912;
+  --brand:#669DF1; --brand-hov:#8FB8F6; --selected:#1C2B42; --text-selected:#669DF1;
+  --danger-bold:#F87168; --danger:#42221F; --text-danger:#FD9891; --warning:#3A2C1F; --text-warning:#FBC828; --success:#28311B; --text-success:#B3DF72; --info:#1C2B42; --text-info:#8FB8F6; --discovery:#35243F; --text-discovery:#D8A0F7; --gray:#303134;
+  --lz-gray:#4B4D51; --lz-gray-t:#CECFD2; --lz-green:#37471F; --lz-green-t:#B3DF72; --lz-red:#5D1F1A; --lz-red-t:#FD9891;
+  --lz-yellow:#533F04; --lz-yellow-t:#EED12B; --lz-blue:#123263; --lz-blue-t:#8FB8F6; --lz-purple:#48245D; --lz-purple-t:#D8A0F7; --lz-teal:#164555; --lz-teal-t:#9DD9EE;
+  --ch-brand:#4688EC; --ch-neutral:#7E8188; --shadow-overlay:0 0 0 1px #BDBDBD1F,0 8px 12px #0104045C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --text:#CECFD2; --text-subtle:#A9ABAF; --text-subtlest:#96999E; --link:#669DF1; --text-inverse:#1F1F21;
+  --surface:#1F1F21; --sunken:#18191A; --overlay:#2B2C2F; --border:#E3E4F21F; --border-input:#7E8188;
+  --neutral:#CECED912; --neutral-hov:#E3E4F21F; --subtle-hov:#CECED912;
+  --brand:#669DF1; --brand-hov:#8FB8F6; --selected:#1C2B42; --text-selected:#669DF1;
+  --danger-bold:#F87168; --danger:#42221F; --text-danger:#FD9891; --warning:#3A2C1F; --text-warning:#FBC828; --success:#28311B; --text-success:#B3DF72; --info:#1C2B42; --text-info:#8FB8F6; --discovery:#35243F; --text-discovery:#D8A0F7; --gray:#303134;
+  --lz-gray:#4B4D51; --lz-gray-t:#CECFD2; --lz-green:#37471F; --lz-green-t:#B3DF72; --lz-red:#5D1F1A; --lz-red-t:#FD9891;
+  --lz-yellow:#533F04; --lz-yellow-t:#EED12B; --lz-blue:#123263; --lz-blue-t:#8FB8F6; --lz-purple:#48245D; --lz-purple-t:#D8A0F7; --lz-teal:#164555; --lz-teal-t:#9DD9EE;
+  --ch-brand:#4688EC; --ch-neutral:#7E8188; --shadow-overlay:0 0 0 1px #BDBDBD1F,0 8px 12px #0104045C; color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{background:var(--surface);color:var(--text);font:400 14px/20px var(--font)}
+h1,h2,h3,p{margin:0}
+button,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+
+/* Atlassian buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:32px;padding:0 12px;border-radius:4px;border:0;font-weight:500;cursor:pointer;white-space:nowrap;background:var(--neutral);color:var(--text-subtle)}
+.btn:hover{background:var(--neutral-hov);color:var(--text)}
+.btn.primary{background:var(--brand);color:var(--text-inverse)}
+.btn.primary:hover{background:var(--brand-hov)}
+.btn.sm{height:24px;padding:0 8px}
+.icon-btn{width:32px;padding:0;background:transparent}
+.icon-btn:hover{background:var(--subtle-hov)}
+.link{background:none;border:0;padding:0;color:var(--link);cursor:pointer;font-weight:500;display:inline-flex;align-items:center;gap:4px}
+.link:hover{text-decoration:underline}
+.lz{display:inline-block;padding:0 4px;border-radius:3px;font-size:11px;line-height:16px;font-weight:653;text-transform:uppercase;white-space:nowrap;background:var(--lz-gray);color:var(--lz-gray-t)}
+.lz.red{background:var(--lz-red);color:var(--lz-red-t)}.lz.yellow{background:var(--lz-yellow);color:var(--lz-yellow-t)}.lz.green{background:var(--lz-green);color:var(--lz-green-t)}.lz.blue{background:var(--lz-blue);color:var(--lz-blue-t)}.lz.purple{background:var(--lz-purple);color:var(--lz-purple-t)}.lz.teal{background:var(--lz-teal);color:var(--lz-teal-t)}
+.badge{display:inline-flex;min-width:20px;justify-content:center;padding:0 6px;border-radius:8px;font-size:12px;line-height:16px;font-weight:500;background:var(--neutral);color:var(--text)}
+.badge.red{background:var(--danger-bold);color:var(--text-inverse)}
+
+/* top nav */
+.topnav{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;height:48px;display:flex;align-items:center;gap:4px;padding:0 12px;background:var(--surface);border-bottom:1px solid var(--border)}
+.prod{display:flex;align-items:center;gap:8px;height:32px;padding:0 6px;border-radius:4px;border:0;background:none;cursor:pointer;font-weight:653}
+.prod:hover{background:var(--subtle-hov)}
+.prod small{font-weight:400;color:var(--text-subtlest)}
+.tile{width:24px;height:24px;border-radius:6px;background:var(--brand);display:grid;place-items:center;color:var(--text-inverse);font-size:11px;font-weight:700;flex:none}
+.tile svg{width:14px;height:14px;stroke-width:2.4}
+.mid{flex:1;display:flex;justify-content:center;gap:8px;min-width:0;padding:0 12px}
+.search{flex:1;max-width:680px;height:32px;display:flex;align-items:center;gap:8px;padding:0 8px;border:1px solid var(--border-input);border-radius:6px;color:var(--text-subtlest);cursor:text;min-width:0}
+.search:hover{background:var(--sunken)}
+.search span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search kbd{margin-left:auto;font:500 11px var(--font);border:1px solid var(--border);border-radius:3px;padding:0 5px}
+.right{display:flex;align-items:center;gap:2px}
+.av{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;font-size:10px;font-weight:653;color:#fff;background:#1868DB;flex:none}
+.notif{position:relative}
+.notif .badge{position:absolute;top:0;right:-2px;transform:scale(.85)}
+.pop{position:absolute;top:44px;width:320px;background:var(--overlay);border-radius:8px;box-shadow:var(--shadow-overlay);padding:8px 0;z-index:30}
+.pop h4{margin:8px 16px 4px;font-size:12px;font-weight:653;color:var(--text-subtlest)}
+.pop .pi{display:flex;gap:12px;align-items:center;width:100%;border:0;background:none;padding:8px 16px;cursor:pointer;text-align:left}
+.pop .pi:hover{background:var(--subtle-hov)}
+.pop .pi[aria-current="true"]{background:var(--selected);box-shadow:inset 2px 0 var(--brand)}
+.pop small{display:block;color:var(--text-subtlest);font-size:12px;line-height:16px}
+
+/* shell */
+.shell{display:grid;grid-template-columns:240px minmax(0,1fr)}
+.shell.collapsed{grid-template-columns:0 minmax(0,1fr)}
+.shell.collapsed .side{visibility:hidden}
+.side{border-right:1px solid var(--border);padding:12px 8px;position:sticky;top:48px;height:calc(100vh - 48px);overflow:auto;display:flex;flex-direction:column;gap:2px}
+.ni{position:relative;display:flex;align-items:center;gap:8px;width:100%;height:32px;padding:0 8px;border:0;border-radius:4px;background:none;cursor:pointer;color:var(--text-subtle);font-weight:500;text-align:left;white-space:nowrap}
+.ni:hover{background:var(--subtle-hov);color:var(--text)}
+.ni[aria-current="page"]{background:var(--selected);color:var(--text-selected)}
+.ni[aria-current="page"]::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:2px;border-radius:0 2px 2px 0;background:var(--brand)}
+.ni .end{margin-left:auto}
+.sec{margin:16px 8px 4px;font-size:12px;line-height:16px;font-weight:653;color:var(--text-subtlest)}
+.week-box{margin-top:auto;border:1px solid var(--border);border-radius:8px;padding:12px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.week-box .t{grid-column:1/-1;font-size:12px;font-weight:653;color:var(--text-subtlest);margin-bottom:4px}
+.week-box button{border:0;background:none;padding:4px;border-radius:4px;text-align:left;cursor:pointer}
+.week-box button:hover{background:var(--subtle-hov)}
+.week-box b{display:block;font-size:16px;font-weight:653}
+.week-box small{color:var(--text-subtlest);font-size:12px}
+
+/* page */
+.main{min-width:0;padding:20px 32px 64px;max-width:1440px}
+.crumbs{color:var(--text-subtle)}
+.ph{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:4px 0 20px}
+.ph h1{font-size:24px;line-height:28px;font-weight:653}
+.sub{color:var(--text-subtlest)}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.seg{display:inline-flex;background:var(--neutral);border-radius:6px;padding:2px}
+.seg button{border:0;background:none;height:28px;padding:0 10px;border-radius:4px;color:var(--text-subtle);font-weight:500;cursor:pointer}
+.seg button:hover{color:var(--text)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--text-selected);box-shadow:0 1px 1px #1E1F2140,0 0 1px #1E1F214F}
+.sel{height:32px;border-radius:4px;border:1px solid var(--border-input);background:var(--surface);padding:0 8px;cursor:pointer}
+
+.secrow{display:flex;justify-content:space-between;align-items:baseline;margin:28px 0 12px}
+.secrow h2{font-size:16px;line-height:20px;font-weight:653}
+
+/* KPI row */
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
+@media(max-width:1200px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{border:1px solid var(--border);border-radius:8px;background:var(--surface);padding:16px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:4px;width:100%;transition:border-color .12s,background .12s}
+.kpi:hover{background:var(--sunken);border-color:var(--border-input)}
+.kpi .top{display:flex;justify-content:space-between;align-items:center;color:var(--text-subtle);font-weight:500}
+.kpi .ic{width:28px;height:28px;border-radius:6px;display:grid;place-items:center}
+.kpi .v{font-size:28px;line-height:32px;font-weight:653;margin-top:4px}
+.kpi .s{color:var(--text-subtlest);font-size:12px;line-height:16px;min-height:32px}
+.kpi .go{color:var(--link);font-weight:500;margin-top:4px}
+.kpi:hover .go{text-decoration:underline}
+
+/* cards */
+.card{border:1px solid var(--border);border-radius:8px;background:var(--surface);min-width:0;display:flex;flex-direction:column}
+.ch{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:16px 20px 0}
+.ch h2{font-size:16px;line-height:20px;font-weight:653}
+.ch p{color:var(--text-subtlest);font-size:12px;line-height:16px;margin-top:2px}
+.cb{padding:16px 20px 20px;flex:1}
+.cf{border-top:1px solid var(--border);padding:10px 20px}
+.row3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+@media(max-width:1100px){.row3{grid-template-columns:minmax(0,1fr)}}
+
+/* week bars */
+.wk{display:flex;align-items:flex-end;gap:8px;height:196px}
+.wk button{flex:1;min-width:0;height:100%;border:0;background:none;padding:0;cursor:pointer;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;border-radius:4px}
+.wk button:hover{background:var(--subtle-hov)}
+.wk .b{width:70%;max-width:36px;border-radius:4px 4px 0 0;background:var(--ch-brand)}
+.wk .b.zero{height:2px;background:var(--border);border-radius:0}
+.wk .n{font-size:12px;font-weight:653}
+.wk .d{font-size:12px;color:var(--text-subtlest);padding-bottom:2px}
+.wk .today .d{color:var(--text);font-weight:653}
+.wkb{display:flex;justify-content:space-between;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-subtlest)}
+.wkb b{color:var(--text)}
+
+/* donut */
+.donut{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.donut .arc{cursor:pointer;transition:opacity .15s}
+.donut svg:hover .arc{opacity:.45}
+.donut svg .arc:hover{opacity:1}
+.leg{display:flex;flex-direction:column;gap:2px;flex:1;min-width:150px}
+.leg button{display:flex;align-items:center;gap:8px;border:0;background:none;padding:4px 6px;border-radius:4px;cursor:pointer;text-align:left}
+.leg button:hover{background:var(--subtle-hov)}
+.leg i{width:10px;height:10px;border-radius:2px;background:var(--c);flex:none}
+.leg .v{margin-left:auto;font-weight:500}
+.leg .p{color:var(--text-subtlest);width:36px;text-align:right;font-size:12px}
+
+/* horizontal bars */
+.hb{display:flex;flex-direction:column;gap:4px}
+.hb button{display:grid;grid-template-columns:120px minmax(0,1fr) 64px;gap:10px;align-items:center;border:0;background:none;padding:5px 4px;border-radius:4px;cursor:pointer;text-align:left}
+.hb button:hover{background:var(--subtle-hov)}
+.hb .tr{height:16px;background:var(--neutral);border-radius:3px;overflow:hidden}
+.hb .tr i{display:block;height:100%;background:var(--ch-brand);border-radius:3px}
+.hb .amt{text-align:right;font-weight:653}
+.hb .lab{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-subtle)}
+
+/* runway */
+.rw{overflow-x:auto}
+.rw svg{display:block;min-width:760px;width:100%;height:auto}
+.rw .col{cursor:pointer}
+.rw .col:hover .hit{fill:var(--subtle-hov)}
+.rw text{font:400 11px var(--font);fill:var(--text-subtlest)}
+.rw text.n{font-weight:653;fill:var(--text)}
+.rw text.td{fill:var(--text);font-weight:653}
+.rleg{display:flex;gap:16px;font-size:12px;color:var(--text-subtlest);flex-wrap:wrap}
+.rleg span{display:inline-flex;gap:6px;align-items:center}
+.rleg i{width:10px;height:10px;border-radius:2px;background:var(--c)}
+
+/* queue */
+.tabs{display:flex;padding:0 20px;margin-top:8px;box-shadow:inset 0 -2px 0 var(--border);overflow-x:auto}
+.tabs button{border:0;background:none;padding:8px 8px 10px;margin-right:8px;color:var(--text-subtle);font-weight:500;cursor:pointer;position:relative;white-space:nowrap;display:flex;gap:6px;align-items:center}
+.tabs button:hover{color:var(--text)}
+.tabs button[aria-selected="true"]{color:var(--text-selected)}
+.tabs button[aria-selected="true"]::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:var(--brand)}
+.tblw{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;min-width:820px}
+.tbl th{text-align:left;font-size:12px;font-weight:653;color:var(--text-subtlest);padding:8px;border-bottom:2px solid var(--border);white-space:nowrap}
+.tbl td{padding:10px 8px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl th:first-child,.tbl td:first-child{padding-left:20px}
+.tbl th:last-child,.tbl td:last-child{padding-right:20px;text-align:right}
+.tbl .r{text-align:right}
+.tbl tr.row{cursor:pointer}
+.tbl tr.row:hover td{background:var(--subtle-hov)}
+.tbl tr.row:hover .nm{color:var(--link);text-decoration:underline}
+.nm{font-weight:500}
+.tbl small{display:block;color:var(--text-subtlest);font-size:12px;line-height:16px}
+.late{color:var(--text-danger);font-weight:500}
+.pg{display:flex;align-items:center;gap:8px;min-width:150px}
+.pg .tr{flex:1;height:8px;border-radius:4px;background:var(--neutral);display:flex;overflow:hidden;gap:1px}
+.pg i{display:block;height:100%}
+.pg span{font-size:12px;color:var(--text-subtlest);width:34px}
+.cfoot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 20px;color:var(--text-subtlest)}
+
+.tip{position:fixed;z-index:40;background:var(--text);color:var(--surface);padding:4px 8px;border-radius:3px;font-size:12px;line-height:16px;pointer-events:none;max-width:280px}
+.flag{position:fixed;left:24px;bottom:calc(24px + env(safe-area-inset-bottom,0px));z-index:40;background:var(--overlay);box-shadow:var(--shadow-overlay);border-radius:8px;padding:16px;display:flex;gap:12px;align-items:flex-start;max-width:min(400px,calc(100% - 48px))}
+.flag svg{color:var(--brand);width:20px;height:20px}
+
+@media(max-width:900px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .side{position:fixed;left:0;top:48px;width:260px;z-index:15;background:var(--surface);box-shadow:var(--shadow-overlay);transform:translateX(-105%);transition:transform .2s}
+  .shell.open .side{transform:none}
+  .shell.collapsed .side{visibility:visible}
+  .main{padding:16px 16px 56px}
+  .search span,.search kbd{display:none}.search{flex:0 0 32px;justify-content:center;padding:0}
+  .mid{justify-content:flex-end;padding:0 4px}
+  .hide-sm{display:none}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<header class="topnav">
+  <button class="btn icon-btn" id="tgl" aria-label="Collapse sidebar"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+  <button class="btn icon-btn" id="apps" aria-label="Switch app"><svg class="i" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="5" cy="5" r="1.8"/><circle cx="12" cy="5" r="1.8"/><circle cx="19" cy="5" r="1.8"/><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/><circle cx="5" cy="19" r="1.8"/><circle cx="12" cy="19" r="1.8"/><circle cx="19" cy="19" r="1.8"/></g></svg></button>
+  <button class="prod" data-go="Dashboard"><span class="tile"><svg class="i" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><span class="hide-sm">Compliance Tracker <small>· Spectrum Cloud</small></span></button>
+  <div class="mid">
+    <div class="search" data-go="Search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><span>Search clients, compliances, PAN, GSTIN or TAN</span><kbd>/</kbd></div>
+    <button class="btn primary" data-go="Create: client, compliance or reminder"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Create</button>
+  </div>
+  <div class="right">
+    <button class="btn icon-btn notif" id="bell" aria-label="Notifications, 3 unread"><svg class="i" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0"/></svg><span class="badge red">3</span></button>
+    <button class="btn icon-btn hide-sm" data-go="Help" aria-label="Help"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6v.6M12 17h.01"/></svg></button>
+    <button class="btn icon-btn" data-go="Profile" aria-label="Profile"><span class="av">KK</span></button>
+  </div>
+  <div class="pop" id="pop-apps" style="left:44px" hidden>
+    <h4>Spectrum Cloud</h4>
+    <button class="pi" aria-current="true" data-go="Compliance Tracker"><span class="tile"><svg class="i" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></svg></span><span><b>Compliance Tracker</b><small>You are here</small></span></button>
+    <button class="pi" data-go="GST returns app"><span class="tile" style="background:#1F845A">G</span><span><b>GST</b><small>Prepare and file GST returns</small></span></button>
+    <button class="pi" data-go="TDS returns app"><span class="tile" style="background:#964AC0">T</span><span><b>TDS</b><small>Returns, challans and certificates</small></span></button>
+    <button class="pi" data-go="Income Tax app"><span class="tile" style="background:#BD5B00">I</span><span><b>Income Tax</b><small>ITR, tax audit, advance tax</small></span></button>
+    <button class="pi" data-go="ROC / MCA app"><span class="tile" style="background:#227D9B">R</span><span><b>ROC / MCA</b><small>Company and LLP filings</small></span></button>
+  </div>
+  <div class="pop" id="pop-bell" style="right:48px" hidden>
+    <h4>Notifications</h4>
+    <button class="pi" data-go="Tracker · In arrears"><span class="tile" style="background:var(--danger-bold)">!</span><span><b>148 clients have not paid TDS for September</b><small>Due 7 Oct · open the list</small></span></button>
+    <button class="pi" data-go="Calendar · 15 Oct"><span class="tile" style="background:var(--ch-warning)">!</span><span><b>116 filings are due on Thursday</b><small>PF, ESI and TCS return</small></span></button>
+    <button class="pi" data-go="Clients · Unowned"><span class="tile" style="background:var(--ch-neutral)">!</span><span><b>1,135 open items have no owner</b><small>Assign them to staff</small></span></button>
+  </div>
+</header>
+
+<div class="shell" id="shell">
+  <nav class="side" aria-label="Main">
+    <button class="ni" aria-current="page" data-go="Dashboard"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</button>
+    <button class="ni" data-go="Calendar"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Calendar<span class="end badge">3</span></button>
+    <button class="ni" data-go="Compliances"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M5 7l-3 7a4 4 0 0 0 6 0zM19 7l-3 7a4 4 0 0 0 6 0zM8 21h8"/></svg>Compliances<span class="end badge">52</span></button>
+    <button class="ni" data-go="Tracker"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>Tracker<span class="end badge red" id="nav-arrears">556</span></button>
+    <button class="ni" data-go="Clients"><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.5 3.2-5.5 6.5-5.5s5.9 2 6.5 5.5M17 11a3 3 0 1 0-1-5.7M18 14.6c2 .6 3.3 2.4 3.5 5.4"/></svg>Clients<span class="end badge">1.5k</span></button>
+    <button class="ni" data-go="Reminders"><svg class="i" viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8v6H4z"/></svg>Reminders</button>
+    <button class="ni" data-go="Settings"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Settings</button>
+    <div class="week-box" id="weekbox"></div>
+  </nav>
+  <main class="main" id="main"></main>
+</div>
+<div class="tip" id="tip" hidden></div>
+<div class="flag" id="flag" hidden><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg><div><b id="flag-t"></b><div class="sub">Sample screen. This would open in the app.</div></div></div>
+
+<script>
+/* Sample data, shaped like the V1 demo book (1,510 clients, 52 compliances). Today is Tue 13 Oct 2026. */
+const HEADS={GST:['GST','green'],TDS:['TDS','purple'],IT:['Income Tax','yellow'],ROC:['ROC/MCA','teal'],LLP:['ROC/MCA (LLP)','teal'],LAB:['Labour','blue'],OTH:['Other Statutory','']};
+const D={
+ firm:{
+  kpi:{due7:116,dueForms:3,arrears:556,arrCl:365,arrFee:3930000,open:19629,filed:1513,unowned:1135},
+  week:[['Today',0],['Wed',0],['Thu',116],['Fri',0],['Sat',0],['Sun',0],['Mon',0]],
+  status:[['Filed',8248,'var(--ch-success)'],['Pending',19629,'var(--ch-brand)'],['Overdue',556,'var(--ch-danger)'],['Not applicable',429,'var(--ch-neutral)']],
+  fees:[['OTH',2400000],['TDS',1100000],['IT',220000],['GST',190000],['ROC',20000],['LLP',8800]],
+  q:{arrears:[
+     ['TDS/TCS payment','Sep 2026','TDS','07 Oct',-6,148,[62,0,38],640000],
+     ['Professional Tax return','Sep 2026','OTH','30 Sep',-13,121,[71,0,29],1810000],
+     ['Tax audit report (3CA/3CD)','AY 2026-27','IT','30 Sep',-13,74,[23,0,77],150000],
+     ['GSTR-1','Sep 2026','GST','11 Oct',-2,96,[92,0,8],19200],
+     ['DIR-3 KYC','FY 2026-27','ROC','30 Sep',-13,4,[95,0,5],20000]],
+   week:[
+     ['PF (EPF) payment','Sep 2026','LAB','15 Oct',2,58,[0,64,36],0],
+     ['ESI payment','Sep 2026','LAB','15 Oct',2,36,[0,58,42],0],
+     ['TCS return 27EQ','Q2 FY 2026-27','TDS','15 Oct',2,22,[0,41,59],0]],
+   horizon:[
+     ['GSTR-3B','Sep 2026','GST','20 Oct',7,392,[0,67,33],0],
+     ['AOC-4','FY 2025-26','ROC','30 Oct',17,86,[12,20,68],0],
+     ['TDS return 24Q / 26Q','Q2 FY 2026-27','TDS','31 Oct',18,402,[0,40,60],0],
+     ['ITR, audit cases','AY 2026-27','IT','31 Oct',18,96,[0,23,77],0],
+     ['GSTR-1','Oct 2026','GST','11 Nov',29,1204,[0,0,100],0],
+     ['MGT-7','FY 2025-26','ROC','29 Nov',47,86,[0,0,100],0]]}},
+ mine:{
+  kpi:{due7:14,dueForms:2,arrears:42,arrCl:27,arrFee:286000,open:1642,filed:131,unowned:0},
+  week:[['Today',0],['Wed',0],['Thu',14],['Fri',0],['Sat',0],['Sun',0],['Mon',0]],
+  status:[['Filed',702,'var(--ch-success)'],['Pending',1642,'var(--ch-brand)'],['Overdue',42,'var(--ch-danger)'],['Not applicable',31,'var(--ch-neutral)']],
+  fees:[['OTH',160000],['TDS',84000],['IT',30000],['GST',12000],['ROC',0],['LLP',0]],
+  q:{arrears:[
+     ['TDS/TCS payment','Sep 2026','TDS','07 Oct',-6,14,[58,0,42],84000],
+     ['Professional Tax return','Sep 2026','OTH','30 Sep',-13,16,[60,0,40],160000],
+     ['Tax audit report (3CA/3CD)','AY 2026-27','IT','30 Sep',-13,6,[25,0,75],30000],
+     ['GSTR-1','Sep 2026','GST','11 Oct',-2,6,[90,0,10],12000]],
+   week:[['PF (EPF) payment','Sep 2026','LAB','15 Oct',2,8,[0,60,40],0],['ESI payment','Sep 2026','LAB','15 Oct',2,6,[0,50,50],0]],
+   horizon:[['GSTR-3B','Sep 2026','GST','20 Oct',7,38,[0,60,40],0],['TDS return 24Q / 26Q','Q2 FY 2026-27','TDS','31 Oct',18,31,[0,35,65],0],['ITR, audit cases','AY 2026-27','IT','31 Oct',18,9,[0,22,78],0],['GSTR-1','Oct 2026','GST','11 Nov',29,112,[0,0,100],0]]}}
+};
+/* 30-day runway: offset from today, count, and an arrears column at the start */
+const RUNWAY={firm:{arrears:556,days:{2:116,7:392,9:180,11:164,17:86,18:498,25:402,29:1204}},mine:{arrears:42,days:{2:14,7:38,9:12,11:9,18:40,25:31,29:112}}};
+const QTABS=[['arrears','In arrears'],['week','This week'],['horizon','Next 45 days']];
+
+let scope='firm',qtab='arrears';
+try{if(localStorage.getItem('ct2scope')==='mine')scope='mine'}catch(e){}
+const $=s=>document.querySelector(s);
+const f=n=>n.toLocaleString('en-IN');
+const L=n=>n>=1e5?'₹'+(n/1e5).toFixed(n>=1e6?0:1).replace(/\.0$/,'')+'L':n>=1e3?'₹'+(n/1e3).toFixed(1).replace(/\.0$/,'')+'k':'₹'+n;
+const ICO={cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',alert:'<path d="M12 3 2 20h20zM12 10v4M12 17h.01"/>',inbox:'<path d="M4 13h4l2 3h4l2-3h4M4 13l2-8h12l2 8v6H4z"/>',check:'<circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/>',user:'<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',chev:'<path d="m9 6 6 6-6 6"/>'};
+const ic=n=>`<svg class="i" viewBox="0 0 24 24">${ICO[n]}</svg>`;
+
+function kpis(k){
+ const T=[
+  ['cal','info','Due in next 7 days',f(k.due7),`filings across ${k.dueForms} compliances`,'Open calendar'],
+  ['alert','danger','In arrears',f(k.arrears),`${f(k.arrCl)} clients · ${L(k.arrFee)} late fees`,'See arrears'],
+  ['inbox','gray','Open',f(k.open),'pending, not yet due','See open work'],
+  ['check','success','Filed this month',f(k.filed),'completed in Oct, any due date','See filed'],
+  ['user','warning','Unowned',f(k.unowned),k.unowned?'open items with no staff':'everything is owned',k.unowned?'Assign owners':'View owners']];
+ return T.map(t=>`<button class="kpi" data-go="${t[2]}"><div class="top">${t[2]}<span class="ic" style="background:var(--${t[1]});color:var(--text-${t[1]=='gray'?'subtle':t[1]})">${ic(t[0])}</span></div>
+   <div class="v num" style="${t[1]=='danger'?'color:var(--text-danger)':''}">${t[3]}</div><div class="s">${t[4]}</div><div class="go">${t[5]} →</div></button>`).join('');
+}
+function weekBars(w){
+ const max=Math.max(...w.map(x=>x[1]),1);
+ return `<div class="wk">${w.map((x,i)=>`<button class="${i==0?'today':''}" data-go="Due ${x[0]}" data-tip="${x[0]}: ${f(x[1])} filings due">${x[1]?`<span class="n num">${f(x[1])}</span>`:''}<span class="b ${x[1]?'':'zero'}" style="${x[1]?`height:${Math.max(6,x[1]/max*140)}px`:''}"></span><span class="d">${x[0]}</span></button>`).join('')}</div>`;
+}
+function donut(rows){
+ const tot=rows.reduce((a,r)=>a+r[1],0),R=62,W=20,C=2*Math.PI*R;let off=0;
+ const closed=Math.round((rows[0][1]+rows[3][1])/tot*100);
+ const arcs=rows.map(r=>{const l=Math.max(r[1]/tot*C,3);const a=`<circle class="arc" data-go="${r[0]}" data-tip="${r[0]}: ${f(r[1])} (${(r[1]/tot*100).toFixed(1)}%)" cx="80" cy="80" r="${R}" fill="none" stroke="${r[2]}" stroke-width="${W}" stroke-dasharray="${Math.max(l-2,1)} ${C}" stroke-dashoffset="${-off}" transform="rotate(-90 80 80)"/>`;off+=l;return a}).join('');
+ return `<div class="donut"><svg width="160" height="160" viewBox="0 0 160 160" role="img" aria-label="Status of every obligation">${arcs}<text x="80" y="80" text-anchor="middle" style="font:653 24px var(--font);fill:var(--text)">${closed}%</text><text x="80" y="98" text-anchor="middle" style="font:400 12px var(--font);fill:var(--text-subtlest)">closed</text></svg>
+  <div class="leg">${rows.map(r=>`<button data-go="${r[0]}"><i style="--c:${r[2]}"></i>${r[0]}<span class="v num">${f(r[1])}</span><span class="p num">${Math.round(r[1]/tot*100)}%</span></button>`).join('')}</div></div>`;
+}
+function feeBars(rows){
+ const max=Math.max(...rows.map(r=>r[1]),1);
+ return `<div class="hb">${rows.map(r=>`<button data-go="Late fees · ${HEADS[r[0]][0]}" data-tip="${HEADS[r[0]][0]}: ₹${f(r[1])}"><span class="lab">${HEADS[r[0]][0]}</span><span class="tr"><i style="width:${r[1]?Math.max(2,r[1]/max*100):0}%"></i></span><span class="amt num">${r[1]?L(r[1]):'–'}</span></button>`).join('')}</div>`;
+}
+function runway(rw){
+ const W=1100,H=170,pt=20,pb=36,n=31,cw=W/n,max=Math.max(rw.arrears,...Object.values(rw.days));
+ const DOW=['S','M','T','W','T','F','S'];let s='';
+ const base=new Date(2026,9,13);
+ for(let i=0;i<n;i++){
+  const isArr=i==0,val=isArr?rw.arrears:(rw.days[i-1]||0),dt=new Date(base);dt.setDate(base.getDate()+i-1);
+  const h=val?Math.max(4,val/max*(H-pt-pb)):2,x=i*cw+cw*.18,bw=cw*.64,y=H-pb-h;
+  const col=isArr?'var(--ch-danger)':(i-1)<=3?'var(--ch-warning)':'var(--ch-brand)';
+  const lbl=isArr?'Late':(i==1?'Today':dt.getDate());
+  const tip=isArr?`In arrears: ${f(val)} open`:`${dt.getDate()} ${dt.toLocaleString('en-IN',{month:'short'})}: ${f(val)} due`;
+  s+=`<g class="col" data-go="${isArr?'In arrears':'Due on '+dt.getDate()+' '+dt.toLocaleString('en-IN',{month:'short'})}" data-tip="${tip}"><rect class="hit" x="${i*cw}" y="0" width="${cw}" height="${H}" fill="transparent" rx="3"/>
+   <rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="${val?3:0}" fill="${val?col:'var(--border)'}"/>
+   ${val?`<text class="n" x="${x+bw/2}" y="${y-5}" text-anchor="middle">${f(val)}</text>`:''}
+   <text class="${i==1?'td':''}" x="${x+bw/2}" y="${H-20}" text-anchor="middle">${lbl}</text>
+   <text x="${x+bw/2}" y="${H-6}" text-anchor="middle">${isArr?'':DOW[dt.getDay()]}</text></g>`;
+  if(i==0)s+=`<line x1="${cw}" x2="${cw}" y1="${pt-10}" y2="${H-pb}" stroke="var(--border)" stroke-dasharray="3 3"/>`;
+ }
+ return `<div class="rw"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Filings due over the next 30 days">${s}</svg></div>`;
+}
+function queue(rows){
+ const isArr=qtab=='arrears';
+ return `<div class="tblw"><table class="tbl"><thead><tr><th>Compliance</th><th>Head</th><th>Due</th><th class="r">Open</th><th>Progress</th><th class="r">Late fees</th><th></th></tr></thead><tbody>
+ ${rows.map(r=>{const h=HEADS[r[2]];const due=r[4]<0?`<span class="late">${r[3]}</span><small>${-r[4]} days late</small>`:`${r[3]}<small>${r[4]==0?'today':'in '+r[4]+' days'}</small>`;
+  return `<tr class="row" data-go="${r[0]} · ${r[1]}"><td><div class="nm">${r[0]}</div><small>${r[1]}</small></td><td><span class="lz ${h[1]}">${h[0]}</span></td><td>${due}</td><td class="r num"><b>${f(r[5])}</b><small>clients</small></td>
+  <td><div class="pg" data-tip="Filed ${r[6][0]}% · Prepared ${r[6][1]}% · Not started ${r[6][2]}%"><div class="tr"><i style="width:${r[6][0]}%;background:var(--ch-success)"></i><i style="width:${r[6][1]}%;background:var(--ch-brand)"></i></div><span class="num">${r[6][0]}%</span></div></td>
+  <td class="r num ${r[7]?'late':''}">${r[7]?'₹'+f(r[7]):'–'}</td>
+  <td><button class="btn sm ${isArr?'primary':''}" data-go="${isArr?'Send reminders · ':'Open '}${r[0]}">${isArr?'Remind '+f(r[5]):'Open'}</button></td></tr>`}).join('')}
+ </tbody></table></div>`;
+}
+function render(){
+ const d=D[scope],k=d.kpi;
+ $('#nav-arrears').textContent=f(k.arrears);
+ $('#weekbox').innerHTML=`<div class="t">This week</div><button data-go="Due this week"><b class="num">${f(k.due7)}</b><small>due</small></button><button data-go="In arrears"><b class="num" style="color:var(--text-danger)">${f(k.arrears)}</b><small>late</small></button><button data-go="Filed this month"><b class="num">${f(k.filed)}</b><small>filed</small></button>`;
+ const qs=d.q[qtab];
+ $('#main').innerHTML=`
+ <div class="crumbs">Compliance Tracker</div>
+ <div class="ph"><div><h1>Dashboard</h1><div class="sub">Tuesday, 13 October 2026</div></div>
+  <div class="tools">
+   <select class="sel" id="fy" aria-label="Financial year"><option>FY 2026-27</option><option>FY 2025-26</option></select>
+   <div class="seg" role="group" aria-label="Scope"><button data-scope="firm" aria-pressed="${scope=='firm'}">Whole firm</button><button data-scope="mine" aria-pressed="${scope=='mine'}">My clients</button></div>
+   <button class="btn" data-go="Export"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>Export</button>
+  </div></div>
+
+ <div class="kpis">${kpis(k)}</div>
+
+ <div class="secrow"><h2>At a glance</h2></div>
+ <div class="row3">
+  <section class="card"><div class="ch"><div><h2>Due in the next 7 days</h2><p>${f(k.due7)} filings across ${k.dueForms} compliances</p></div><button class="link" data-go="Calendar">Calendar →</button></div>
+   <div class="cb">${weekBars(d.week)}<div class="wkb"><span>Busiest day <b>Thu 15 Oct</b></span><span>None due <b>today</b></span></div></div></section>
+  <section class="card"><div class="ch"><div><h2>Where every obligation stands</h2><p>FY 2026-27, all heads</p></div><button class="link" data-go="Tracker">Tracker →</button></div>
+   <div class="cb">${donut(d.status)}</div></section>
+  <section class="card"><div class="ch"><div><h2>Late fees by head</h2><p>Estimated, as of today</p></div><button class="link" data-go="Late fees report">Details →</button></div>
+   <div class="cb">${feeBars(d.fees)}</div></section>
+ </div>
+
+ <div class="secrow"><h2>Filing runway</h2><div class="rleg"><span><i style="--c:var(--ch-danger)"></i>In arrears</span><span><i style="--c:var(--ch-warning)"></i>Next 3 days</span><span><i style="--c:var(--ch-brand)"></i>Later</span></div></div>
+ <section class="card"><div class="ch"><div><h2>Next 30 days</h2><p>${f(Object.values(RUNWAY[scope].days).reduce((a,b)=>a+b,0))} filings due · ${f(RUNWAY[scope].arrears)} in arrears · click a day to see what is due</p></div><button class="link" data-go="Calendar">Open calendar →</button></div>
+  <div class="cb">${runway(RUNWAY[scope])}</div></section>
+
+ <div class="secrow"><h2>Work queue</h2></div>
+ <section class="card">
+  <div class="tabs" role="tablist">${QTABS.map(t=>{const n=f(d.q[t[0]].reduce((a,r)=>a+r[5],0));return `<button role="tab" data-q="${t[0]}" aria-selected="${qtab==t[0]}">${t[1]}<span class="${t[0]=='arrears'?'lz red':'badge'}">${n}</span></button>`}).join('')}</div>
+  ${queue(qs)}
+  <div class="cfoot"><span>${qs.length} compliances · ${f(qs.reduce((a,r)=>a+r[5],0))} open clients</span><button class="btn" data-go="Tracker">Open tracker ${ic('chev')}</button></div>
+ </section>`;
+}
+
+const flag=m=>{$('#flag-t').textContent='Opens: '+m;$('#flag').hidden=false;clearTimeout(flag.k);flag.k=setTimeout(()=>$('#flag').hidden=true,2400)};
+document.addEventListener('click',e=>{
+ const t=e.target;
+ if(t.closest('#tgl')){const s=$('#shell');innerWidth<=900?s.classList.toggle('open'):s.classList.toggle('collapsed');return}
+ if(t.closest('#apps')){$('#pop-apps').hidden=!$('#pop-apps').hidden;$('#pop-bell').hidden=true;return}
+ if(t.closest('#bell')){$('#pop-bell').hidden=!$('#pop-bell').hidden;$('#pop-apps').hidden=true;return}
+ if(!t.closest('.pop')){$('#pop-apps').hidden=true;$('#pop-bell').hidden=true}
+ const sc=t.closest('[data-scope]');if(sc){scope=sc.dataset.scope;try{localStorage.setItem('ct2scope',scope)}catch(x){}render();return}
+ const q=t.closest('[data-q]');if(q){qtab=q.dataset.q;render();return}
+ const g=t.closest('[data-go]');if(g){flag(g.dataset.go);$('#pop-apps').hidden=true;$('#pop-bell').hidden=true;if(innerWidth<=900)$('#shell').classList.remove('open')}
+});
+const tip=$('#tip');
+document.addEventListener('mousemove',e=>{const t=e.target.closest&&e.target.closest('[data-tip]');if(!t){tip.hidden=true;return}tip.textContent=t.dataset.tip;tip.hidden=false;tip.style.left=Math.min(e.clientX+12,innerWidth-290)+'px';tip.style.top=(e.clientY+16)+'px'});
+render();
+</script>

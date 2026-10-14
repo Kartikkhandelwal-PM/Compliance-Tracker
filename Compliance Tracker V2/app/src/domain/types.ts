@@ -1,0 +1,590 @@
+/* ============================================================================
+   DOMAIN TYPES
+   Modelled directly on the four source workbooks:
+     • Master Compliance Calendar      → ComplianceDef / Occurrence
+     • Applicability & Status Rules    → ClientProfile fields, RuleHit, Status
+     • Client Mapping Worked Examples  → Obligation
+   ========================================================================== */
+
+export type Head =
+  | "GST"
+  | "Income Tax"
+  | "TDS"
+  | "ROC/MCA"
+  | "ROC/MCA (LLP)"
+  | "Other Statutory";
+
+export type Frequency =
+  | "Monthly"
+  | "Quarterly"
+  | "Half-yearly"
+  | "Annual"
+  | "Event-based";
+
+/* --- Client profile: every field the rule engine reads --------------------
+   Mirrors the "Client Data Points (Profile Fields)" sheet one-for-one. */
+
+export type EntityType =
+  | "Individual"
+  | "HUF"
+  | "Firm"
+  | "LLP"
+  | "Company"
+  | "Trust"
+  | "AOP/BOI";
+
+export type CompanyType = "Private" | "Public" | "OPC" | "Small Company" | "Listed";
+export type Residential = "Resident" | "RNOR" | "Non-Resident";
+export type GstRegType =
+  | "Regular"
+  | "Composition"
+  | "TDS Deductor"
+  | "E-commerce Operator"
+  | "ISD"
+  | "Non-Resident Taxable"
+  | "Unregistered";
+export type StateCategory = "Category A" | "Category B";
+export type PaymentNature =
+  | "Salary"
+  | "Contractor"
+  | "Rent"
+  | "Professional Fees"
+  | "Interest"
+  | "Commission"
+  | "Non-Resident";
+
+/* --- Three unlinked records ------------------------------------------------
+   GST, TDS and Income-Tax/ROC each come from a different KDK module, and
+   none of them share a common ID — a TDS-module record carries a TAN, never
+   a PAN, so there is no reliable key to join it back to a GST or ITR record.
+   Guessing a link from name/address would sometimes guess wrong, and a wrong
+   merge is worse than none, so these are three separate, unrelated record
+   types: `Client` (PAN, ITR/ROC), `GstEntity` (GSTIN, GST — labelled "Firm"
+   in the UI) and `TdsDeductor` (TAN, TDS + payroll). The same real business
+   may legitimately appear as two or three rows with no code-level tie
+   between them.
+
+   `Party` is only the handful of fields every one of the three needs for
+   messaging, assignment and search — name, contact, owner. It is not a
+   fourth "unified client" concept. */
+export interface Party {
+  id: string;
+  name: string;
+  legalName: string;
+  state: string;
+  assigneeId: string;
+  archetype: string;
+  /** Whether this record accepts WhatsApp — affects reminder channel */
+  whatsapp: boolean;
+  email: string;
+  /** Whether this record accepts email reminders — same idea as `whatsapp`,
+   *  the other reminder channel. A record with both off gets no automatic
+   *  reminder on either channel; it still shows up everywhere else. */
+  emailEnabled: boolean;
+  phone: string;
+}
+
+/** Which of the three records an `Obligation`/`OutboxEntry` belongs to —
+ *  the discriminant that picks which lookup map (`CLIENT_BY_ID`,
+ *  `GST_ENTITY_BY_ID`, `TDS_DEDUCTOR_BY_ID`) `clientId` joins into. */
+export type RecordType = "Client" | "GstEntity" | "TdsDeductor";
+
+export interface ClientProfile {
+  entityType: EntityType;
+  companyType?: CompanyType;
+  residential: Residential;
+  /** Estimated total income for the year, ₹ */
+  totalIncome: number;
+  /** Turnover / gross receipts of the preceding FY, ₹ — drives the tax-audit
+   *  threshold. This is the ENTITY's own business turnover for 44AB
+   *  purposes; a GstEntity's `turnover` is that GST registration's own
+   *  figure and is not assumed to be the same number. */
+  turnover: number;
+  housePropertyCount: number;
+  agriculturalIncome: number;
+  hasCapitalGains: boolean;
+  isDirector: boolean;
+  holdsUnlistedShares: boolean;
+  hasForeignAssets: boolean;
+  hasBusinessIncome: boolean;
+  presumptiveOpted: boolean;
+  isPartnerInFirm: boolean;
+  /** Derived from turnover/receipts — drives the ITR-AUDIT due-date route */
+  taxAuditApplicable: boolean;
+  isLlp: boolean;
+  isDinHolder: boolean;
+  hasDeposits: boolean;
+  msmeDuesOverdue: boolean;
+  section139Special: boolean; /* 139(4A)–(4D): trusts, political parties, institutions */
+  claimsSection11: boolean;
+  hasTransferPricing: boolean;
+  /** 0–1. How reliably this client files on time. Drives the simulated
+   *  filing history; in production this comes from actual filing records. */
+  discipline: number;
+}
+
+export interface Client extends Party {
+  pan: string;
+  cin?: string;
+  profile: ClientProfile;
+}
+
+/** GST-only profile — what drives `GstEntity`'s return type and frequency. */
+export interface GstProfile {
+  gstRegType: GstRegType;
+  gstQrmpOpted: boolean;
+  gstStateCategory: StateCategory;
+  /** This registration's own turnover — see the note on `ClientProfile.turnover`. */
+  turnover: number;
+  discipline: number;
+}
+
+/** A GST registration. Labelled "Firm" in the UI. */
+export interface GstEntity extends Party {
+  gstin: string;
+  profile: GstProfile;
+}
+
+/** TDS + payroll profile — what drives `TdsDeductor`'s returns (24Q/26Q/27Q/
+ *  27EQ, the TDS challan) and the payroll-linked filings (PF, ESI, PTAX)
+ *  that exist for the same reason: the entity runs payroll. */
+export interface DeductorProfile {
+  entityType: EntityType;
+  /** Gates the "always deducts" / 27EQ-turnover-threshold rules. */
+  taxAuditApplicable: boolean;
+  turnover: number;
+  paymentNatures: PaymentNature[];
+  epfCovered: boolean;
+  esiCovered: boolean;
+  professionalTaxState?: string;
+  /** Quarterly TDS deducted, ₹ — caps the 234E late fee */
+  tdsPerQuarter: number;
+  /** Monthly payroll, ₹ — base for PF/ESI interest exposure */
+  monthlyPayroll: number;
+  discipline: number;
+}
+
+/** A TAN-registered deductor. */
+export interface TdsDeductor extends Party {
+  tan: string;
+  profile: DeductorProfile;
+}
+
+export interface Staff {
+  id: string;
+  name: string;
+  role: "Partner" | "Senior" | "Article" | "Manager";
+  initials: string;
+}
+
+/* --- Late fee models ------------------------------------------------------ */
+
+export type LateFee =
+  /** ₹X per day of delay, optionally capped */
+  | { kind: "perDay"; amount: number; nilAmount?: number; cap?: number | "turnoverPct" | "tdsAmount"; capPct?: number; note: string }
+  /** Fixed penalty regardless of delay */
+  | { kind: "flat"; amount: number; note: string }
+  /** § 234F — slab on total income */
+  | { kind: "s234f"; note: string }
+  /** Interest at a monthly percentage on a base amount.
+   *  `basisPct` scales the base — PF is ~24% of payroll (12% each side),
+   *  ESI ~3.25%, so they must not share one rate. */
+  | { kind: "interest"; monthlyPct: number; basis: "tdsPerQuarter" | "taxDue" | "contribution"; basisPct?: number; note: string }
+  /** Percentage of turnover with an absolute cap — § 271B */
+  | { kind: "turnoverPct"; pct: number; cap: number; note: string };
+
+/* --- Compliance definition & generated occurrences ------------------------ */
+
+export interface ComplianceDef {
+  code: string;
+  head: Head;
+  form: string;
+  description: string;
+  frequency: Frequency;
+  /** Human statement of the recurring rule, e.g. "20th of the following month" */
+  dueRule: string;
+  /** Who it applies to, verbatim from the master calendar */
+  applicability: string;
+  lateFee: LateFee;
+  /** Filing is the client's own act vs. an internal-only task */
+  clientFacing: boolean;
+}
+
+export interface Occurrence {
+  /** `${defCode}::${periodKey}` — stable id for a filing run */
+  runId: string;
+  defCode: string;
+  periodKey: string;
+  periodLabel: string;
+  dueDate: string; /* ISO yyyy-mm-dd */
+  /** The financial year this occurrence was generated for (its `fyStart`),
+   *  not derived from `dueDate` — an annual return's due date often falls in
+   *  the calendar year *after* the year it reports on. */
+  fy: number;
+}
+
+/* --- Applicability outcome ------------------------------------------------ */
+
+export interface RuleHit {
+  /** e.g. "ITR Form Applicability · Priority 4" */
+  ruleRef: string;
+  /** The condition text, quoted so staff can audit it */
+  condition: string;
+  /** The profile fields that actually fired, for the "why" panel */
+  facts: { field: string; value: string }[];
+}
+
+export type FilingStatus = "Filed" | "Pending" | "Overdue" | "Not Applicable";
+
+/** The ways of arriving at a tax liability figure — see the note on
+ *  `Obligation.taxBasis`. Grouped by compliance, not by owner type, because
+ *  GSTR-3B and GSTR-9 (both `GstEntity`) don't share a set, and nor do ITR
+ *  and Advance Tax (both `Client`) — see `TAX_BASIS_OPTIONS` in engine.ts
+ *  for exactly which compliance offers which.
+ *
+ *  - TDS doesn't offer a basis for the figure at all — it offers a
+ *    reconciliation state instead, since a deductor's real question isn't
+ *    "which number do I trust" but "what's actually mapped yet":
+ *    `challanUnmapped` (deductee-wise transactions are in the software,
+ *    but no challan has been matched to them — the most reliable of the
+ *    three, since the deductee data is the detailed source), then
+ *    `deducteeMissing` (a challan is in the software, but no deductee-wise
+ *    transactions are, so there's nothing to match it against yet), then
+ *    `partiallyMapped` (both exist, but matching between them is
+ *    incomplete).
+ *  - GSTR-3B: `g3bBooks` (books data is in the software), then
+ *    `g3bPortal` (not in the software, so taken from the government
+ *    portal's own auto-populated form), then `g3bNoGstr1` (no books, and
+ *    GSTR-1 for the period isn't even filed, so this is a rough estimate).
+ *  - GSTR-9: `g9BooksPortal` (books and portal data both in the
+ *    software), then `g9Snapshot` (that combination isn't there in the
+ *    software, but both books and portal data are available in the
+ *    snapshot instead).
+ *  - ITR: `itrSoftware` (the client's own software has it), then
+ *    `itrAis` (taken from the AIS instead).
+ *  - Advance Tax: `advCalculator` (the Advance Tax Calculator has it),
+ *    then `advPrevYear` (it doesn't, so estimated from the previous
+ *    year's income). */
+export type TaxBasis =
+  | "challanUnmapped" | "deducteeMissing" | "partiallyMapped"
+  | "g3bBooks" | "g3bPortal" | "g3bNoGstr1"
+  | "g9BooksPortal" | "g9Snapshot"
+  | "itrSoftware" | "itrAis"
+  | "advCalculator" | "advPrevYear";
+
+export type StatusBasis =
+  /** The engine itself decided the compliance does not apply. */
+  | "Rule-excluded"
+  /** A person took it off the client, against what the engine concluded.
+      Kept distinct from "Rule-excluded" so the engine's own accuracy stays
+      measurable, and so the audit trail never claims the engine made a call
+      a human actually made. */
+  | "Manually excluded"
+  | "Portal verified"
+  | "Filed via KDK"
+  | "Manually marked"
+  | "Due date not passed"
+  | "Due date passed"
+  /** The rule-excluded reason for IFF/GSTR-1A once their due date passes
+   *  unfiled — nothing was wrong, the facility they never used just isn't
+   *  open anymore. See `NO_LATE_VALUE_CODES` in engine.ts. */
+  | "Window closed";
+
+export interface Obligation {
+  id: string;
+  /** Which record type `clientId` joins into — see `RecordType`. */
+  ownerType: RecordType;
+  clientId: string;
+  runId: string;
+  defCode: string;
+  /** The financial year this obligation's occurrence belongs to — see the
+   *  same note on `Occurrence.fy`. Lets any screen filter to one year without
+   *  re-deriving it from `dueDate`, which would misclassify annual returns
+   *  due the following calendar year. */
+  fy: number;
+  head: Head;
+  form: string;
+  periodLabel: string;
+  dueDate: string;
+  status: FilingStatus;
+  basis: StatusBasis;
+  rule: RuleHit;
+  /** Set when a human overrode the engine */
+  override?: { by: string; on: string; reason: string; action: "excluded" | "included" };
+  assigneeId: string;
+  /** Days past due; 0 or negative when not yet due */
+  daysOverdue: number;
+  /** Estimated accruing penalty in ₹ — 0 unless overdue */
+  exposure: number;
+  exposureFormula: string;
+  /** Estimated tax due on this filing, in ₹ — 0 for compliances that carry
+   *  no tax liability of their own (GST: penalty is the only risk there).
+   *  For ITR-family obligations this is one client-level figure, the same
+   *  on every open obligation for that client and year — placeholder
+   *  calculation for now, since `estimatedTax()` in rules.ts is a single
+   *  formula per entity type, not the default/fallback ladder the real KDK
+   *  figure uses. For TDS obligations it depends on `taxBasis` below. Swap
+   *  the calculation once that spec is in; nothing that reads this field
+   *  needs to change. */
+  taxLiability: number;
+  /** Which basis (GST, ITR, Advance Tax) or reconciliation state (TDS) is
+   *  currently selected for `taxLiability` — set on GST, TDS and Income Tax
+   *  obligations alike, where staff can switch it (see `setTaxBasis`); see
+   *  `TAX_BASIS_OPTIONS` for which values a given *compliance* (not owner
+   *  type — GSTR-3B and GSTR-9 differ despite both being GST) offers.
+   *  Placeholder figures per basis until KDK supplies the real ones for
+   *  each. */
+  taxBasis?: TaxBasis;
+  /** Set when the chosen basis has no data for this client: the liability
+   *  shows as "–" rather than a figure nobody has. */
+  taxNoData?: boolean;
+  /** Informational note on the interest that applies if this filing (or its
+   *  tax payment) is late — always present alongside a nonzero `taxLiability`
+   *  for GST, TDS and ITR, regardless of status, since it is a standing rule
+   *  of that head rather than a fact about this one obligation. See
+   *  `INTEREST_BY_HEAD` in engine.ts. */
+  interestNote?: string;
+  /** Interest actually accrued in ₹, computed once this obligation is either
+   *  still overdue or was filed after its due date. 0/undefined otherwise —
+   *  an on-time filing owes no interest. */
+  interestAccrued?: number;
+  interestFormula?: string;
+  filedOn?: string;
+  /** Who recorded the filing. Always set when a person marked it — including
+   *  through a bulk action, where it is the only thing that can be captured.
+   *  Absent on portal and software confirmations, which have no human author. */
+  filedBy?: string;
+  /** Portal acknowledgement: ARN, receipt or token number.
+   *
+   *  Deliberately optional. Marking one client filed can ask for it, but a bulk
+   *  action covering 400 clients cannot collect 400 different numbers, and
+   *  demanding one would either stop the bulk action being used or get it filled
+   *  with junk. So a filed obligation may legitimately have no acknowledgement,
+   *  and the record says so rather than pretending otherwise. */
+  arn?: string;
+  reminderStage: ReminderStage;
+  /** A single free-text note staff can leave on this filing — replaced, not
+   *  appended, the way the override reason is: one current note per filing,
+   *  not a log. */
+  note?: { text: string; by: string; on: string };
+}
+
+export type ReminderStage =
+  | "Not scheduled"
+  | "T-7 scheduled"
+  | "T-7 sent"
+  | "T-3 sent"
+  | "Due-date sent"
+  | "Overdue escalation"
+  | "Cancelled: resolved"
+  | "N/A";
+
+/* --- Aggregates ----------------------------------------------------------- */
+
+export interface FilingRun {
+  runId: string;
+  def: ComplianceDef;
+  periodLabel: string;
+  dueDate: string;
+  daysOverdue: number;
+  total: number;
+  filed: number;
+  pending: number;
+  overdue: number;
+  exposure: number;
+  clientIds: string[];
+}
+
+export type Channel = "WhatsApp" | "Email";
+
+export type DeliveryStatus =
+  | "Delivered"
+  | "Read"
+  | "Queued (quiet hours)"
+  /** Held for quiet hours, then dropped because the return was settled before
+   *  the hold expired. Kept in the log rather than deleted: "we did not chase
+   *  them because they had already filed" is a thing staff need to be able to
+   *  see, and a vanished row looks like a system that lost the message. */
+  | "Cancelled"
+  | "Failed";
+
+export interface OutboxEntry {
+  id: string;
+  /** Which record type `clientId` joins into — see `RecordType`. */
+  ownerType: RecordType;
+  clientId: string;
+  obligationId: string;
+  channel: Channel;
+  stage: ReminderStage;
+  /** Which template `compose()` used — see `StepKind`. */
+  kind: StepKind;
+  /** `yyyy-mm-ddThh:mm`. A date alone cannot separate two sends on the same
+   *  day, nor answer whether the client had working hours left to act. */
+  sentAt: string;
+  status: DeliveryStatus;
+  /** Did the scheduler send this, or did a person press the button? Every row
+   *  in the log has to be attributable — "the system chased them" and "Priya
+   *  chased them" are different answers to the same client question. */
+  origin: "Automatic" | "Manual";
+  /** Staff id for a manual send; absent when the scheduler sent it. */
+  sentBy?: string;
+  /** Set on a copy created by Resend, pointing at the row it repeats. */
+  resendOf?: string;
+  /** How many times this obligation+channel has now gone out. */
+  attempt: number;
+  /** The compliance def, denormalised so the log can filter by head and form
+   *  without joining back through the obligation on every keystroke. */
+  defCode: string;
+  head: Head;
+  form: string;
+  /** One line for the log table. */
+  preview: string;
+  /** The message exactly as the client received it. */
+  body: string;
+  /** Email only. */
+  subject: string;
+}
+
+/* ---------------------------------------------------------------------------
+   AUTOMATIC REMINDERS
+   ---------------------------------------------------------------------------
+   The cadence is a ladder of steps hung off the statutory due date. A step is
+   an offset, not a date: "three days before, on WhatsApp" holds for every
+   compliance in the book, so one ladder drives 31 compliances × 640 clients
+   without anyone maintaining a calendar.
+
+   Offsets are signed days relative to the due date — negative before, 0 on the
+   day, positive after. `sendAt` is the wall clock the step fires at, inside
+   the quiet-hours window.
+   ------------------------------------------------------------------------- */
+
+/** Which rung of the ladder a message was composed for — the exact template
+ *  `compose()` used. Kept on the sent record (not just derived from status)
+ *  so a resend or a released hold reuses the same wording category instead
+ *  of drifting to a different one if the obligation's state has moved on. */
+export type StepKind = "t7" | "t3" | "t0" | "p1" | "p7" | "p30";
+
+export interface ScheduleStep {
+  id: StepKind;
+  /** Signed days from the due date. -7 = a week before, +1 = day after. */
+  offset: number;
+  /** What the client sees this as, and what the log records. */
+  stage: ReminderStage;
+  label: string;
+  /** Why this step exists — shown once, in the automation editor. */
+  intent: string;
+  channels: Channel[];
+  /** Hour of day, 24h, inside quiet hours. */
+  sendAt: number;
+  enabled: boolean;
+  /** Escalation steps also copy the engagement owner. */
+  ccOwner?: boolean;
+}
+
+/** One future send the ladder implies: a whole filing run × one step.
+ *  Aggregated by run, never by client — a 10,000-client book would otherwise
+ *  put 10,000 rows on a screen nobody can act on. */
+export interface ScheduledSend {
+  key: string;
+  runId: string;
+  defCode: string;
+  head: Head;
+  form: string;
+  periodLabel: string;
+  dueDate: string;
+  step: ScheduleStep;
+  /** When this batch fires. */
+  fireAt: string;
+  /** Clients still unfiled, and so still in scope when it fires. */
+  clientCount: number;
+  /** Of those, how many can take WhatsApp. */
+  whatsappCount: number;
+  obligationIds: string[];
+  /** Suppressed by a person — kept visible, struck through, rather than
+   *  vanishing, so "why didn't they get chased?" stays answerable. */
+  skipped: boolean;
+}
+
+export interface ReminderSettings {
+  /** Master switch. Off means the ladder still computes and displays, but
+   *  nothing leaves the building. */
+  autoSend: boolean;
+  quietHours: boolean;
+  /** The sending window, 24h. Configurable because a practice in one state
+   *  keeps different hours from one in another, and because "09:00–20:00" was
+   *  a constant in the source that the settings screen claimed to govern. */
+  quietStart: number;
+  quietEnd: number;
+  /** Statutory dates do not move for a Sunday, but a chase can wait for
+   *  Monday — nobody assembles working papers on a weekend. */
+  skipWeekends: boolean;
+  /** One combined message where a client has several items in the same window. */
+  digest: boolean;
+}
+
+/* ---------------------------------------------------------------------------
+   ORGANISATION SETTINGS
+   ---------------------------------------------------------------------------
+   Who the firm is, and who its messages come from. This is not decoration:
+   the sender block is reproduced verbatim at the foot of every reminder, and
+   a client who cannot tell whose business account is asking them for money
+   will either ignore it or report it.
+   ------------------------------------------------------------------------- */
+
+export interface FirmProfile {
+  name: string;
+  pan: string;
+  gstin: string;
+  addressLine: string;
+  city: string;
+  state: string;
+  pincode: string;
+  phone: string;
+  email: string;
+  website: string;
+}
+
+export interface SenderProfile {
+  /** The WhatsApp Business display name clients see — "CA Connect". */
+  waName: string;
+  waNumber: string;
+  waVerified: boolean;
+  fromEmail: string;
+  replyTo: string;
+  /** Which account each channel actually sends through — see `Sender` in
+   *  messages.ts, the source these mirror. */
+  waProvider: "kdk" | "rampwin";
+  emailProvider: "kdk" | "zeptomail";
+  rampwin: {
+    displayName: string;
+    apiKey: string;
+    channelId: string;
+    connected: boolean;
+  };
+  zeptomail: {
+    domain: string;
+    fromName: string;
+    fromAddress: string;
+    dkim: { host: string; value: string };
+    cname: { host: string; value: string };
+    /** "checking" is its own state, not folded into "pending" — the button
+     *  that triggers a check needs to visibly go away while one is running,
+     *  or a second click mid-check reads as the first one having failed
+     *  silently. "failed" is its own state too, not a bounce back to
+     *  "pending": the reader just acted on this screen and needs to see
+     *  that the click did something, even when that something was "not yet". */
+    status: "unverified" | "pending" | "checking" | "verified" | "failed";
+    checkAttempts: number;
+  };
+}
+
+/** Per-compliance overrides. A firm that does not do payroll should not be
+ *  tracking PF and ESI at all, and whether a filing is the client's own act
+ *  decides whether they are ever chased about it. */
+export interface ComplianceOverride {
+  tracked: boolean;
+  clientFacing: boolean;
+}
+
+/** Which of the bell alerts are raised. Keyed by the notification's own id. */
+export type NotificationSettings = Record<string, boolean>;
