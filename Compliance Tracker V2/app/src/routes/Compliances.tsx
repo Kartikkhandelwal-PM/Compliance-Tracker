@@ -102,6 +102,9 @@ function YearStats({ runs, clients }: { runs: FilingRun[]; clients: number }) {
   );
 }
 
+/** Compliances whose windows run across several years, so the year picker does not apply. */
+const ALL_YEARS_CODE = "ITR-U";
+
 export function CompliancesPage() {
   const obligations = useObligations();
   const untracked = useEngine(untrackedCodes);
@@ -140,7 +143,12 @@ export function CompliancesPage() {
 
   /* Every period of every compliance in the year, grouped by compliance. */
   const byDef = useMemo(() => {
-    const runs = buildRuns(obligations.filter((o) => o.fy === fy));
+    /* The updated return is open for 48 months after the assessment year, so its
+       open windows sit in earlier years' filings and never in the year picked
+       here. It is read across every year, like its own page does, and years that
+       have not opened yet are left out. */
+    const runs = buildRuns(obligations.filter((o) => o.fy === fy || o.defCode === ALL_YEARS_CODE))
+      .filter((r) => r.def.code !== ALL_YEARS_CODE || r.filed + r.pending + r.overdue > 0);
     const m = new Map<string, { runs: FilingRun[]; late: number; fees: number; clients: Set<string>; next?: FilingRun; current?: FilingRun }>();
     for (const r of runs) {
       let s = m.get(r.def.code);
@@ -351,7 +359,7 @@ export function CompliancesPage() {
                                     </dl>
                                   </section>
                                   <section className="cl-panel">
-                                    <h4>Due in {fyLabel(fy)}</h4>
+                                    <h4>{d.code === ALL_YEARS_CODE ? "Open windows, all years" : `Due in ${fyLabel(fy)}`}</h4>
                                     <YearStats runs={s?.runs ?? []} clients={s?.clients.size ?? 0} />
                                   </section>
                                 </div>

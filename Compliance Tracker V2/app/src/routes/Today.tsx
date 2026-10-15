@@ -99,6 +99,11 @@ export function TodayPage() {
     () => all.filter((o) => o.fy === FY_START && (scope !== "mine" || o.assigneeId === me.id)),
     [all, scope, me.id],
   );
+  /* Every year, for the one card whose windows run past the current year. */
+  const allYearsScoped = useMemo(
+    () => all.filter((o) => scope !== "mine" || o.assigneeId === me.id),
+    [all, scope, me.id],
+  );
 
   const summary = useMemo(() => summarise(obligations), [obligations]);
   const liability = useMemo(() => taxLiabilitySummary(obligations), [obligations]);
@@ -360,7 +365,7 @@ export function TodayPage() {
       <div className="ep-grid3">
         <NoticesCard />
         <TaxLiabilityCard obligations={obligations} />
-        <CorrectionsCard obligations={obligations} />
+        <CorrectionsCard obligations={obligations} allYears={allYearsScoped} />
       </div>
 
       <h2 className="ep-section">Coming up<span>The next 30 days, big annual dates and reminders to follow up</span></h2>

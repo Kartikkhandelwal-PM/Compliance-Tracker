@@ -79,17 +79,23 @@ const CORRECTION_GROUPS: { key: string; label: string; codes: string[]; note: st
 
 export const CORRECTION_CODES = new Set(CORRECTION_GROUPS.flatMap((g) => g.codes));
 
-export function CorrectionsCard({ obligations }: { obligations: Obligation[] }) {
+export function CorrectionsCard({ obligations, allYears }: { obligations: Obligation[]; allYears: Obligation[] }) {
   const nav = useNavigate();
   const rows = useMemo(() => CORRECTION_GROUPS.map((g) => {
-    const open = obligations.filter((o) => g.codes.includes(o.defCode) && o.status === "Pending");
+    /* The updated return is optional and open to every client for 48 months, so
+       its open windows sit in earlier years and are not "work to do" the way the
+       others are. It is read across all years and shown as a fact (how many
+       assessment years are open, for how many clients), and left out of the total. */
+    const info = g.key === "itru";
+    const open = (info ? allYears : obligations).filter((o) => g.codes.includes(o.defCode) && o.status === "Pending");
     const soonest = open.reduce<string | null>((d, o) => (d === null || o.dueDate < d ? o.dueDate : d), null);
     const closingSoon = open.filter((o) => o.dueDate <= addDays(TODAY, 30)).length;
     const clients = new Set(open.map((o) => o.clientId)).size;
-    return { ...g, open: open.length, clients, soonest, closingSoon };
-  }), [obligations]);
-  const total = rows.reduce((a, r) => a + r.open, 0);
-  const closing = rows.reduce((a, r) => a + r.closingSoon, 0);
+    const years = new Set(open.map((o) => o.runId)).size;
+    return { ...g, open: open.length, clients, soonest, closingSoon, info, years };
+  }), [obligations, allYears]);
+  const total = rows.reduce((a, r) => a + (r.info ? 0 : r.open), 0);
+  const closing = rows.reduce((a, r) => a + (r.info ? 0 : r.closingSoon), 0);
 
   /* Same template as Penalty running: title + link, hero number, clean list. */
   return (
@@ -106,10 +112,14 @@ export function CorrectionsCard({ obligations }: { obligations: Obligation[] }) 
             <button type="button" onClick={() => nav(`/compliances?open=${encodeURIComponent(r.codes[0])}`)}>
               <span className="ec__main">
                 <b>{r.label}</b>
-                <small>{r.soonest ? <>{n(r.clients)} clients · next closes {fmtShort(r.soonest)}</> : r.note}</small>
+                <small>
+                  {r.info
+                    ? (r.years > 0 ? <>{n(r.years)} assessment {r.years === 1 ? "year" : "years"} open · {n(r.clients)} clients · optional</> : r.note)
+                    : r.soonest ? <>{n(r.clients)} clients · next closes {fmtShort(r.soonest)}</> : r.note}
+                </small>
               </span>
-              {r.soonest && daysLeft(r.soonest) <= 90 ? <span className={`ec__count${daysLeft(r.soonest) <= 7 ? " is-soon" : ""}`}>closes in {daysLeft(r.soonest)} days</span> : null}
-              <span className={`ec__val num${r.open ? "" : " ep-muted"}`}>{n(r.open)}</span>
+              {!r.info && r.soonest && daysLeft(r.soonest) <= 90 ? <span className={`ec__count${daysLeft(r.soonest) <= 7 ? " is-soon" : ""}`}>closes in {daysLeft(r.soonest)} days</span> : null}
+              <span className={`ec__val num${(r.info ? r.years : r.open) ? "" : " ep-muted"}`} title={r.info ? "Assessment years still open" : undefined}>{n(r.info ? r.years : r.open)}</span>
               <Icon name="chevronRight" size={14} />
             </button>
           </li>
