@@ -400,6 +400,16 @@ function interestFor(
   };
 }
 
+/* ---- "Not applicable from now on" -------------------------------------------
+   A person can mark a compliance not applicable for one client's registration
+   for good: every open filing now, and every filing created for it in a future
+   financial year. The decision is kept here, per registration and compliance,
+   and checked whenever filings are created, so next year's filings arrive
+   already marked not applicable instead of reappearing as pending. */
+interface NaRule { reason: string; by: string; on: string }
+const NA_RULES = new Map<string, NaRule>();
+const naKey = (ownerType: RecordType, ownerId: string, defCode: string) => `${ownerType}|${ownerId}|${defCode}`;
+
 /** One pass over one of the three unlinked arrays, applying its own
  *  applicability function and producing `Obligation`s tagged with its
  *  `ownerType`. The status-simulation logic below is identical for all
@@ -442,7 +452,12 @@ function buildFor<T extends Party & { profile: { discipline: number } }>(
         /* ~1.5% of the book carries a human override — the spec requires
            rule-driven and manual decisions to be told apart, so some must
            exist to look at. */
-        if (h(id + "|ovr") < 0.015) {
+        const naRule = NA_RULES.get(naKey(ownerType, owner.id, app.defCode));
+        if (naRule) {
+          status = "Not Applicable";
+          basis = "Manually excluded";
+          override = { by: naRule.by, on: naRule.on, action: "excluded", reason: naRule.reason, permanent: true };
+        } else if (h(id + "|ovr") < 0.015) {
           status = "Not Applicable";
           /* A person made this call, not the engine. Labelling it
              "Rule-excluded" contradicted the override recorded alongside it. */
@@ -935,8 +950,13 @@ export function unmarkFiled(ids: string[]): number {
 }
 
 /** Manual override: take a compliance off a client with a recorded reason. */
-export function markNotApplicable(ids: string[], reason: string, by: string) {
+export function markNotApplicable(ids: string[], reason: string, by: string, permanent = false) {
   const set = new Set(ids);
+  if (permanent) {
+    for (const o of OBLIGATIONS) {
+      if (set.has(o.id)) NA_RULES.set(naKey(o.ownerType, o.clientId, o.defCode), { reason, by, on: TODAY });
+    }
+  }
   OBLIGATIONS = OBLIGATIONS.map((o) => {
     if (!set.has(o.id)) return o;
     return {
@@ -947,7 +967,7 @@ export function markNotApplicable(ids: string[], reason: string, by: string) {
       exposure: 0,
       exposureFormula: "Not applicable. No penalty exposure.",
       reminderStage: "N/A",
-      override: { by, on: TODAY, action: "excluded", reason },
+      override: { by, on: TODAY, action: "excluded", reason, ...(permanent ? { permanent: true } : {}) },
     };
   });
   emit();
@@ -956,6 +976,11 @@ export function markNotApplicable(ids: string[], reason: string, by: string) {
 /** Put a rule-excluded compliance back on a client. */
 export function reinstate(ids: string[], reason: string, by: string) {
   const set = new Set(ids);
+  /* Bringing a compliance back ends any "not applicable from now on" for it,
+     or the next financial year would switch it off again. */
+  for (const o of OBLIGATIONS) {
+    if (set.has(o.id)) NA_RULES.delete(naKey(o.ownerType, o.clientId, o.defCode));
+  }
   OBLIGATIONS = OBLIGATIONS.map((o) => {
     if (!set.has(o.id)) return o;
     const def = DEF_BY_CODE[o.defCode];

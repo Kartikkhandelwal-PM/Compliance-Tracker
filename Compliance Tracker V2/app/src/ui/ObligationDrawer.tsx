@@ -104,8 +104,9 @@ export function ObligationDrawer({
       && x.status !== "Filed" && x.status !== "Not Applicable")
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const regId = ownerIdOf(o);
-  /* With only this one filing open there is nothing to choose between. */
-  const askScope = series.length > 1;
+  /* Always asked: even with one filing open, "from now on" is a real choice,
+     because it also covers every future financial year. */
+  const askScope = true;
 
   const close = () => {
     setAsking(null);
@@ -316,6 +317,7 @@ export function ObligationDrawer({
               <b>{o.override.by}</b> {o.override.action === "excluded" ? "removed" : "added back"} this
               compliance on <span className="num">{fmtLong(o.override.on)}</span>. Reason given:
               “{o.override.reason}”
+              {o.override.permanent ? " It stays not applicable in every future financial year." : ""}
             </>
           ) : (
             o.rule.condition
@@ -534,9 +536,12 @@ export function ObligationDrawer({
                 >
                   <span className="scope__radio" />
                   <span className="scope__txt">
-                    <b>All {series.length} open {o.form} filings for this {regId.label}</b>
+                    <b>Not applicable from now on</b>
                     <small>
-                      {series[0].periodLabel} to {series[series.length - 1].periodLabel}. Filings already made are kept.
+                      {series.length > 1
+                        ? `All ${series.length} open ${o.form} filings (${series[0].periodLabel} to ${series[series.length - 1].periodLabel}), and every future financial year.`
+                        : `${o.form} for this ${regId.label}, in every future financial year.`}
+                      {" "}Filings already made are kept.
                     </small>
                   </span>
                 </button>
@@ -561,10 +566,11 @@ export function ObligationDrawer({
                 disabled={reason.trim().length < 4 || (asking === "na" && askScope && scope === null)}
                 onClick={() => {
                   if (asking === "na") {
-                    const ids = askScope && scope === "all" ? series.map((x) => x.id) : [o.id];
-                    markNotApplicable(ids, reason.trim(), me.name);
-                    toast(ids.length > 1
-                      ? `${ids.length} ${o.form} filings marked not applicable`
+                    const forever = scope === "all";
+                    const ids = forever && series.length > 0 ? series.map((x) => x.id) : [o.id];
+                    markNotApplicable(ids, reason.trim(), me.name, forever);
+                    toast(forever
+                      ? `${o.form} marked not applicable from now on, including future years`
                       : "Marked not applicable");
                   } else {
                     reinstate([o.id], reason.trim(), me.name);

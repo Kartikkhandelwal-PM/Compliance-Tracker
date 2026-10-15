@@ -330,7 +330,11 @@ export interface Obligation {
   basis: StatusBasis;
   rule: RuleHit;
   /** Set when a human overrode the engine */
-  override?: { by: string; on: string; reason: string; action: "excluded" | "included" };
+  override?: {
+    by: string; on: string; reason: string; action: "excluded" | "included";
+    /** Set when the person chose "not applicable from now on": it also holds for every future financial year. */
+    permanent?: boolean;
+  };
   assigneeId: string;
   /** Days past due; 0 or negative when not yet due */
   daysOverdue: number;
