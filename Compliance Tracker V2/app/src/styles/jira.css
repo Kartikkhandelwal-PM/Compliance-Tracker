@@ -270,7 +270,7 @@ button.stat:hover,
    ========================================================================== */
 .ep-apps {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--s4);
   margin-bottom: var(--s4);
 }
@@ -1763,7 +1763,6 @@ button.cd-tr__head:hover { box-shadow: var(--shadow-3); transform: translateY(-1
 .nt-stage i { width: 7px; height: 7px; border-radius: 50%; background: var(--sc); }
 .nt-stage--received { --sc: #F68909; }
 .nt-stage--review { --sc: #357DE8; }
-.nt-stage--drafted { --sc: #8B5CF6; }
 .nt-stage--replied { --sc: #0EA5A0; }
 .nt-stage--closed { --sc: #7B8190; }
 .nt-outcome { margin-top: 3px; font-size: 12px; color: var(--ink-3); }
@@ -1793,7 +1792,6 @@ button.cd-tr__head:hover { box-shadow: var(--shadow-3); transform: translateY(-1
 .nt-steps li { --sc: var(--accent); }
 .nt-steps li.nt-stage--received { --sc: #F68909; }
 .nt-steps li.nt-stage--review { --sc: #357DE8; }
-.nt-steps li.nt-stage--drafted { --sc: #8B5CF6; }
 .nt-steps li.nt-stage--replied { --sc: #0EA5A0; }
 .nt-steps li.nt-stage--closed { --sc: #7B8190; }
 .nt-step:hover .nt-step__dot { border-color: var(--accent); }

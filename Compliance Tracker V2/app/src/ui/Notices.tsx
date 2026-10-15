@@ -35,7 +35,7 @@ export function kdkNoticeUrl(_n: Notice): string {
 
 /** The stage's own class, so each stage has its own colour. */
 const STAGE_KEY: Record<string, string> = {
-  Received: "received", "Under review": "review", "Reply drafted": "drafted", Replied: "replied", Closed: "closed",
+  Received: "received", "In progress": "review", Replied: "replied", Closed: "closed",
 };
 
 /** "GSTIN 27…", "TAN MUMS…", "PAN ABC…" for the registration a notice was issued on. */
@@ -203,7 +203,7 @@ export function NoticeDrawer({ notice, onClose }: { notice: Notice | null; onClo
               <Icon name="arrowRight" size={15} /> Move to {next}
             </button>
           ) : (
-            <button type="button" className="btn" onClick={() => { setNoticeStatus(n.id, "Under review", me.name); toast("Notice reopened"); }}>
+            <button type="button" className="btn" onClick={() => { setNoticeStatus(n.id, "In progress", me.name); toast("Notice reopened"); }}>
               Reopen
             </button>
           )}

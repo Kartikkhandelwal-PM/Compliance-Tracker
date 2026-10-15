@@ -391,7 +391,7 @@ export function TodayPage() {
 
       {/* The app shortcuts are useful but not urgent, so they close the page
           rather than open it. */}
-      <h2 className="ep-section">Work by head<span>Jump into GST, TDS, Income Tax or ROC</span></h2>
+      <h2 className="ep-section">Work by head<span>Jump into GST, TDS or Income Tax</span></h2>
       <AppStrip obligations={obligations} />
 
       <FiledDrawer open={filedOpen} onClose={() => setFiledOpen(false)} />

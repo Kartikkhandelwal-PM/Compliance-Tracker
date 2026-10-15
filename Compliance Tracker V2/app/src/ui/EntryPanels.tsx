@@ -31,7 +31,6 @@ const APPS: { head: Head; label: string; mark: string; cls: string }[] = [
   { head: "GST", label: "GST", mark: "G", cls: "head-gst" },
   { head: "TDS", label: "TDS", mark: "T", cls: "head-tds" },
   { head: "Income Tax", label: "Income Tax", mark: "I", cls: "head-it" },
-  { head: "ROC/MCA", label: "ROC / MCA", mark: "R", cls: "head-roc" },
 ];
 
 export function AppStrip({ obligations }: { obligations: Obligation[] }) {
@@ -40,8 +39,7 @@ export function AppStrip({ obligations }: { obligations: Obligation[] }) {
     const m: Record<string, { open: number; late: number }> = {};
     for (const a of APPS) m[a.head] = { open: 0, late: 0 };
     for (const o of obligations) {
-      const head = o.head === "ROC/MCA (LLP)" ? "ROC/MCA" : o.head;
-      const c = m[head];
+      const c = m[o.head];
       if (!c) continue;
       if (o.status === "Pending") c.open++;
       if (o.status === "Overdue") { c.open++; c.late++; }

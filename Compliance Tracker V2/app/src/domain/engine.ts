@@ -2435,17 +2435,17 @@ export function setNoticeStatus(id: string, status: NoticeStatus, by: string) {
       /* Dates and the outcome follow the stage: reaching Replied or Closed
          stamps today, and stepping back before either clears what no longer
          holds. */
-      repliedOn: at >= 3 ? n.repliedOn ?? TODAY : undefined,
-      replyRef: at >= 3 ? n.replyRef : undefined,
-      closedOn: at >= 4 ? n.closedOn ?? TODAY : undefined,
-      outcome: at >= 4 ? n.outcome : undefined,
+      repliedOn: at >= 2 ? n.repliedOn ?? TODAY : undefined,
+      replyRef: at >= 2 ? n.replyRef : undefined,
+      closedOn: at >= 3 ? n.closedOn ?? TODAY : undefined,
+      outcome: at >= 3 ? n.outcome : undefined,
       history: [...n.history, { on: TODAY, by, text: `Moved to ${status}` }],
     };
   });
   emit();
 }
 
-const NOTICE_ORDER: NoticeStatus[] = ["Received", "Under review", "Reply drafted", "Replied", "Closed"];
+const NOTICE_ORDER: NoticeStatus[] = ["Received", "In progress", "Replied", "Closed"];
 
 export function setNoticeOutcome(id: string, outcome: NoticeOutcome, by: string) {
   NOTICES = NOTICES.map((n) => (n.id !== id ? n : {

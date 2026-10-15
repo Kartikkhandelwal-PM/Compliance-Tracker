@@ -55,7 +55,6 @@ import { CalendarPage } from "./routes/Calendar.tsx";
 import { ClientsPage } from "./routes/Clients.tsx";
 import { ClientDetailPage } from "./routes/ClientDetail.tsx";
 import { MatrixPage } from "./routes/Matrix.tsx";
-import { TeamPage } from "./routes/Team.tsx";
 import { RulesPage } from "./routes/Rules.tsx";
 import { RemindersPage } from "./routes/Reminders.tsx";
 import { NoticesPage } from "./routes/Notices.tsx";
@@ -564,7 +563,6 @@ export function App() {
           <Route path="/compliances/:code" element={<ComplianceDetailPage />} />
           <Route path="/tracker" element={<MatrixPage />} />
           <Route path="/matrix" element={<MatrixPage />} />
-          <Route path="/team" element={<TeamPage />} />
           <Route path="/notices" element={<NoticesPage />} />
           <Route path="/reminders" element={<RemindersPage />} />
           {/* Settings holds only what a person can change — currently the
@@ -598,7 +596,6 @@ function breadcrumbs(path: string): { label: string; to?: string }[] {
     compliances: "Compliances",
     tracker: "Tracker",
     matrix: "Tracker",
-    team: "Team",
     rules: "Settings",
     reminders: "Reminders",
     notices: "Notices",

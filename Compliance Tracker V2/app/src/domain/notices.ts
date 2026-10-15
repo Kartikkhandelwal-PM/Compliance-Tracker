@@ -22,8 +22,8 @@ import { TODAY, addDays } from "./dates.ts";
 
 export type NoticeDept = "Income Tax" | "GST" | "TDS";
 
-/** Received → Under review → Reply drafted → Replied → Closed. */
-export const NOTICE_STAGES = ["Received", "Under review", "Reply drafted", "Replied", "Closed"] as const;
+/** Received → In progress → Replied → Closed. */
+export const NOTICE_STAGES = ["Received", "In progress", "Replied", "Closed"] as const;
 export type NoticeStatus = (typeof NOTICE_STAGES)[number];
 
 /** How a closed notice ended. */
@@ -113,7 +113,7 @@ function periodFor(dept: NoticeDept, key: string): string {
   return r < 0.5 ? "Q1 FY 2026-27" : "Q4 FY 2025-26";
 }
 
-const STATUS_AT = [0.22, 0.52, 0.72, 0.88, 1] as const;
+const STATUS_AT = [0.22, 0.72, 0.88, 1] as const;
 
 export function buildNotices(): Notice[] {
   const out: Notice[] = [];
@@ -131,7 +131,7 @@ export function buildNotices(): Notice[] {
     const ref = `${dept === "Income Tax" ? "ITBA" : dept === "GST" ? "ZD" : "TRACES"}${String(Math.floor(h(key + "|r") * 9e9) + 1e9)}`;
     /* When each stage was reached, spread across the notice's age so the
        dates rise in order and never run past today. */
-    const at = [0, 0.2, 0.45, 0.7, 0.9].map((f) => addDays(receivedOn, Math.round(age * f)));
+    const at = [0, 0.3, 0.7, 0.9].map((f) => addDays(receivedOn, Math.round(age * f)));
     const history: NoticeEvent[] = [{ on: receivedOn, by: SOURCE[dept], text: "Notice received" }];
     const step = NOTICE_STAGES.indexOf(status);
     for (let s = 1; s <= step; s++) {
@@ -150,10 +150,10 @@ export function buildNotices(): Notice[] {
       period: periodFor(dept, key), receivedOn, replyDue,
       demand: k.demand ? Math.round((h(key + "|a") * 480000 + 8000) / 100) * 100 : 0,
       status, assigneeId: assignee, source: SOURCE[dept], history,
-      repliedOn: step >= 3 ? at[3] : undefined,
-      replyRef: step >= 3 ? `${dept === "Income Tax" ? "IT" : dept === "GST" ? "GST" : "TDS"}-RPL-${String(Math.floor(h(key + "|ack") * 9e7) + 1e7)}` : undefined,
-      closedOn: step >= 4 ? at[4] : undefined,
-      outcome: step >= 4 ? outcomes[Math.floor(h(key + "|o") * outcomes.length)] : undefined,
+      repliedOn: step >= 2 ? at[2] : undefined,
+      replyRef: step >= 2 ? `${dept === "Income Tax" ? "IT" : dept === "GST" ? "GST" : "TDS"}-RPL-${String(Math.floor(h(key + "|ack") * 9e7) + 1e7)}` : undefined,
+      closedOn: step >= 3 ? at[3] : undefined,
+      outcome: step >= 3 ? outcomes[Math.floor(h(key + "|o") * outcomes.length)] : undefined,
     });
   };
 
@@ -173,7 +173,7 @@ export function buildNotices(): Notice[] {
 
 /** Still waiting on us: no reply has gone out yet. */
 export function needsReply(n: Notice): boolean {
-  return n.status === "Received" || n.status === "Under review" || n.status === "Reply drafted";
+  return n.status === "Received" || n.status === "In progress";
 }
 
 export function isOpen(n: Notice): boolean {
