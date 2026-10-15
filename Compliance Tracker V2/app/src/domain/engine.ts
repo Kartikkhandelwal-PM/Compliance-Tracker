@@ -34,7 +34,7 @@ import {
   TODAY, addDays, dateOf, diffDays, inQuietHours, inr, iso, nextSendableAt, stamp,
 } from "./dates.ts";
 import type { Sender } from "./messages.ts";
-import { compose, getSender, setSender } from "./messages.ts";
+import { compose, emailFrom, getSender, setSender } from "./messages.ts";
 
 /** One financial year's occurrences, grouped by compliance code. Computed
  *  fresh from the recurring rules rather than read off the precomputed
@@ -1914,12 +1914,14 @@ export function skipScheduled(key: string, on = true) {
 
 /** Simulated delivery outcome. Real deployments read this back from the
  *  WhatsApp Business and mail-transport webhooks; the shape is the same. */
-function outcome(seed: string, at: string): DeliveryStatus {
+function outcome(seed: string, at: string, ch?: Channel): DeliveryStatus {
   if (SETTINGS.quietHours && inQuietHours(at, SETTINGS.quietStart, SETTINGS.quietEnd)) {
     return "Queued (quiet hours)";
   }
   const r = h(seed);
   if (r < 0.05) return "Failed";
+  /* Own mail server: it accepts the message and says nothing more. */
+  if (ch === "Email" && emailFrom(getSender()).chosen === "smtp" && emailFrom(getSender()).ready) return "SMTP";
   if (r < 0.52) return "Read";
   return "Delivered";
 }
@@ -1945,7 +1947,7 @@ function entryFor(
     stage,
     kind,
     sentAt: at,
-    status: outcome(`${o.id}|${ch}|${at}`, at),
+    status: outcome(`${o.id}|${ch}|${at}`, at, ch),
     origin,
     attempt: 1,
     defCode: o.defCode,

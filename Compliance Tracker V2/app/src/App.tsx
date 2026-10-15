@@ -607,7 +607,10 @@ function breadcrumbs(path: string): { label: string; to?: string }[] {
   /* Settings is a real parent, so its child keeps a readable label rather
      than the raw slug every other detail route falls back to. */
   if (first === "settings") {
-    return [{ label: "Settings" }, { label: map[seg[1]] ?? seg[1] ?? "" }];
+    /* Settings opens on a section chosen inside the page, so on its own it is a
+       top-level screen with no trail. Only an old nested address shows a second part. */
+    const sub = seg[1] && seg[1] !== "rules" ? (map[seg[1]] ?? seg[1]) : "";
+    return sub ? [{ label: "Settings" }, { label: sub }] : [{ label: "Settings" }];
   }
   /* "Filing" has no listing page of its own to link back to — a run is only
      ever reached from Calendar, Compliances, or Tracker, never browsed as

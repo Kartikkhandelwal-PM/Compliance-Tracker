@@ -426,6 +426,9 @@ export type Channel = "WhatsApp" | "Email";
 export type DeliveryStatus =
   | "Delivered"
   | "Read"
+  /** Email handed to the firm's own SMTP server. A plain mail server never
+   *  reports delivery, so this stands in for a result. */
+  | "SMTP"
   | "Queued (quiet hours)"
   /** Held for quiet hours, then dropped because the return was settled before
    *  the hold expired. Kept in the log rather than deleted: "we did not chase

@@ -72,6 +72,7 @@ export function MessagePreview({
 
   const statusTag = e.status === "Failed" ? "tag--overdue"
     : e.status.startsWith("Queued") ? "tag--pending"
+    : e.status === "SMTP" ? "tag--neutral"
     : "tag--filed";
 
   return (
@@ -208,6 +209,11 @@ export function MessagePreview({
           <div className="mailpane__body">
             {e.body.split("\n").map((ln, i) => (ln ? <p key={i}>{ln}</p> : null))}
           </div>
+          {e.status === "SMTP" && (
+            <div className="wapane__note">
+              Handed to your mail server. It does not report whether the message was delivered or opened.
+            </div>
+          )}
         </div>
       )}
 

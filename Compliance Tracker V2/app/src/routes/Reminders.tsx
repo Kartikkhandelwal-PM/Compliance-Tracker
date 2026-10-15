@@ -17,6 +17,7 @@
 import { Pagination, usePagination } from "../ui/Pagination.tsx";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { emailFrom, getSender } from "../domain/messages.ts";
 import { useApp, useEngine, useOutbox } from "../ui/app-state.tsx";
 import { staffOf } from "../domain/book.ts";
 import { HEADS } from "../domain/catalog.ts";
@@ -49,6 +50,7 @@ const DEFAULT_TO = TODAY;
 const DELIVERY_TAG: Record<string, string> = {
   Read: "tag--read",
   Delivered: "tag--delivered",
+  SMTP: "tag--neutral",
   "Queued (quiet hours)": "tag--queued",
   /* Cancelled is not a failure — the client filed, so the chase was correctly
      dropped. Neutral grey, never the red that would have staff investigating a
@@ -72,6 +74,7 @@ const STATUS_PARAM: Record<string, string> = {
   held: "Queued (quiet hours)",
   read: "Read",
   delivered: "Delivered",
+  smtp: "SMTP",
   cancelled: "Cancelled",
 };
 
@@ -363,6 +366,7 @@ function LogTab() {
             { value: "Delivered", label: "Delivered, not read" },
             { value: "Queued (quiet hours)", label: "Held" },
             { value: "Cancelled", label: "Cancelled, already filed" },
+            { value: "SMTP", label: "SMTP (no result)" },
             { value: "Failed", label: "Failed" },
           ]}
         />
@@ -570,7 +574,10 @@ function LogTab() {
                       )}
                     </td>
                     <td>
-                      <span className={`tag ${DELIVERY_TAG[e.status] ?? "tag--neutral"}`}>
+                      <span
+                        className={`tag ${DELIVERY_TAG[e.status] ?? "tag--neutral"}`}
+                        title={e.status === "SMTP" ? "Sent through your mail server. It does not report delivery." : undefined}
+                      >
                         <i className="tag__dot" />{e.status.startsWith("Queued") ? "Held" : e.status}
                       </span>
                     </td>
@@ -621,6 +628,7 @@ function LogTab() {
 function ScheduledTab() {
   const { toast, me } = useApp();
   const sends = useEngine(() => scheduledSends(45));
+  const viaSmtp = useEngine(() => { const m = emailFrom(getSender()); return m.chosen === "smtp" && m.ready; });
   const settings = useEngine(getReminderSettings);
   const [q, setQ] = useState("");
   const [scope, setScope] = useState("all");
@@ -835,6 +843,9 @@ function ScheduledTab() {
                           size={16}
                         />
                       ))}
+                      {viaSmtp && s.step.channels.includes("Email") && (
+                        <span className="tag tag--neutral" title="Email goes through your mail server, so these show the status SMTP and no delivery result.">SMTP</span>
+                      )}
                       <span className="u-visually-hidden">
                         {s.step.channels.join(" and ")}
                       </span>
