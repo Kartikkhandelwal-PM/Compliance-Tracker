@@ -45,7 +45,7 @@ function parse(text: string, ok: (mins: number) => boolean): number | null {
 }
 
 export function TimePicker({
-  value, onChange, from, to, disabled, ariaLabel,
+  value, onChange, from, to, disabled, ariaLabel, wholeHours, hint,
 }: {
   /** Hours as a number, 24h: 14.5 is 2:30 PM. */
   value: number;
@@ -55,6 +55,10 @@ export function TimePicker({
   to: number;
   disabled?: boolean;
   ariaLabel?: string;
+  /** Whole hours only (9:00, 10:00): the minute column is just :00 and typed minutes are rounded. */
+  wholeHours?: boolean;
+  /** Line under the columns. Defaults to the sending window; null hides it. */
+  hint?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState(fmtClock(value));
@@ -64,7 +68,9 @@ export function TimePicker({
   useEffect(() => { setText(fmtClock(value)); }, [value]);
 
   const lo = Math.round(from * 60);
-  const hi = Math.round(to * 60) - 1;          // last allowed minute of the day
+  /* Last allowed minute. With whole hours the last allowed time is the whole hour
+     before the closing one, so a clamped value is still a whole hour. */
+  const hi = wholeHours ? (Math.round(to) - 1) * 60 : Math.round(to * 60) - 1;
   const ok = (mins: number) => mins >= lo && mins <= hi;
   const clamp = (mins: number) => Math.min(hi, Math.max(lo, mins));
 
@@ -74,7 +80,8 @@ export function TimePicker({
   const pm = h24 >= 12;
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
 
-  const commit = (m: number) => { const c = clamp(m); if (c !== mins) onChange(c / 60); };
+  const snap = (m: number) => (wholeHours ? Math.round(m / 60) * 60 : m);
+  const commit = (m: number) => { const c = clamp(snap(m)); if (c !== mins) onChange(c / 60); };
 
   const pick = (nh12: number, nmm: number, npm: boolean) => {
     const base = ((nh12 % 12) + (npm ? 12 : 0)) * 60 + nmm;
@@ -88,7 +95,7 @@ export function TimePicker({
     const parsed = parse(text, ok);
     if (parsed === null) { setText(fmtClock(value)); return; }
     commit(Math.round(parsed * 60));
-    setText(fmtClock(clamp(Math.round(parsed * 60)) / 60));
+    setText(fmtClock(clamp(snap(Math.round(parsed * 60))) / 60));
   };
 
   const place = () => {
@@ -122,7 +129,7 @@ export function TimePicker({
   }, [open, !!pos]);
 
   const hours = Array.from({ length: 12 }, (_, i) => i + 1);
-  const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
+  const minutes = wholeHours ? [0] : Array.from({ length: 12 }, (_, i) => i * 5);
   const hourOk = (h: number) => minutes.some((m) => ok(((h % 12) + (pm ? 12 : 0)) * 60 + m));
   const minuteOk = (m: number) => ok(((h12 % 12) + (pm ? 12 : 0)) * 60 + m);
   const markOk = (p: boolean) => hours.some((h) => minutes.some((m) => ok(((h % 12) + (p ? 12 : 0)) * 60 + m)));
@@ -174,7 +181,7 @@ export function TimePicker({
               ))}
             </div>
           </div>
-          <p className="tpk__hint">Sent between {fmtClock(from)} and {fmtClock(to)}</p>
+          {hint === null ? null : <p className="tpk__hint">{hint ?? `Sent between ${fmtClock(from)} and ${fmtClock(to)}`}</p>}
         </div>,
         document.body,
       ) : null}

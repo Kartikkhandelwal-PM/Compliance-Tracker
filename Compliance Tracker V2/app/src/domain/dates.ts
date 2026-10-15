@@ -139,6 +139,11 @@ export function hourOf(ts: string): number {
   return ts.length > 10 ? Number(ts.slice(11, 13)) : 0;
 }
 
+/** Minutes since midnight. */
+export function minuteOfDay(ts: string): number {
+  return ts.length > 10 ? Number(ts.slice(11, 13)) * 60 + Number(ts.slice(14, 16) || 0) : 0;
+}
+
 /** Minutes since the epoch — for arithmetic across a day boundary. */
 export function toMinutes(ts: string): number {
   const t = ts.length > 10 ? ts : `${ts}T00:00`;
@@ -216,8 +221,9 @@ export function fmtAgoIfFresh(ts: string, nowTs = stamp(TODAY, 17, 30)): string 
 /** Is this stamp outside the sending window? The window defaults to office
  *  hours but is firm configuration, so callers pass their own. */
 export function inQuietHours(ts: string, open = DAY_OPEN, close = DAY_CLOSE): boolean {
-  const h = hourOf(ts);
-  return h < open || h >= close;
+  /* Counted in minutes, so a window can open or close at half past (9.5 is 9:30). */
+  const m = minuteOfDay(ts);
+  return m < Math.round(open * 60) || m >= Math.round(close * 60);
 }
 
 /**
@@ -252,20 +258,22 @@ export function nextSendableAt(
   shift: "earlier" | "later" = "later",
 ): string {
   let date = dateOf(ts);
-  let hour = hourOf(ts);
-  if (hour >= close) {
+  let m = minuteOfDay(ts);
+  const openM = Math.round(open * 60);
+  const closeM = Math.round(close * 60);
+  if (m >= closeM) {
     date = addDays(date, 1);
-    hour = open;
-  } else if (hour < open) {
-    hour = open;
+    m = openM;
+  } else if (m < openM) {
+    m = openM;
   }
   if (skipWeekends) {
     /* At most two hops either way — Saturday to Monday, or Sunday to Friday. */
     const step = shift === "earlier" ? -1 : 1;
     while (isWeekend(date)) date = addDays(date, step);
-    if (date !== dateOf(ts)) hour = Math.max(hour, open);
+    if (date !== dateOf(ts)) m = Math.max(m, openM);
   }
-  return stamp(date, hour, date === dateOf(ts) && hour === hourOf(ts) ? Number(ts.slice(14, 16)) : 0);
+  return stamp(date, Math.floor(m / 60), m % 60);
 }
 
 export function monthLabel(y: number, m: number): string {

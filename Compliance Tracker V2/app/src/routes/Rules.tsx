@@ -48,7 +48,7 @@ import { Avatar, Check, Empty, PageHead } from "../ui/bits.tsx";
 import { BrandIcon, Icon } from "../ui/Icon.tsx";
 import { OwnerSelect } from "../ui/OwnerSelect.tsx";
 import { DaysStepper } from "../ui/DaysStepper.tsx";
-import { TimePicker } from "../ui/TimePicker.tsx";
+import { TimePicker, fmtClock } from "../ui/TimePicker.tsx";
 import type { IconName } from "../ui/Icon.tsx";
 import type { Channel, FirmProfile, SenderProfile } from "../domain/types.ts";
 
@@ -1380,8 +1380,6 @@ function EmailCard({ s }: { s: SenderProfile }) {
    REMINDERS
    ========================================================================== */
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-
 function RemindersSection() {
   const { toast } = useApp();
   const r = useEngine(getReminderSettings);
@@ -1425,7 +1423,7 @@ function RemindersSection() {
       <Card
         title="Sending hours"
         note={r.quietHours
-          ? `${String(r.quietStart).padStart(2, "0")}:00 – ${String(r.quietEnd).padStart(2, "0")}:00`
+          ? `${fmtClock(r.quietStart)} – ${fmtClock(r.quietEnd)}`
           : "Any time"}
         foot="Messages outside these hours are held and sent when the window reopens. Nothing is lost."
       >
@@ -1439,26 +1437,28 @@ function RemindersSection() {
         {r.quietHours ? (
           <div className="sgrid sgrid--tight">
             <Row label="From">
-              <select
-                className="sinput num"
-                value={r.quietStart}
-                onChange={(e) => updateReminderSettings({ quietStart: Number(e.target.value) })}
-              >
-                {HOURS.filter((h) => h < r.quietEnd).map((h) => (
-                  <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
-                ))}
-              </select>
+              <span className="sgrid__time">
+                <TimePicker
+                  value={r.quietStart}
+                  from={0}
+                  to={r.quietEnd}
+                  hint="Earliest time a reminder is sent"
+                  ariaLabel="Sending starts at"
+                  onChange={(t) => updateReminderSettings({ quietStart: t })}
+                />
+              </span>
             </Row>
             <Row label="To">
-              <select
-                className="sinput num"
-                value={r.quietEnd}
-                onChange={(e) => updateReminderSettings({ quietEnd: Number(e.target.value) })}
-              >
-                {HOURS.filter((h) => h > r.quietStart).map((h) => (
-                  <option key={h} value={h}>{String(h).padStart(2, "0")}:00</option>
-                ))}
-              </select>
+              <span className="sgrid__time">
+                <TimePicker
+                  value={r.quietEnd}
+                  from={r.quietStart + 5 / 60}
+                  to={24}
+                  hint="Nothing is sent after this time"
+                  ariaLabel="Sending stops at"
+                  onChange={(t) => updateReminderSettings({ quietEnd: t })}
+                />
+              </span>
             </Row>
           </div>
         ) : null}

@@ -2249,3 +2249,35 @@ button.cd-tr__head:hover { box-shadow: var(--shadow-3); transform: translateY(-1
 
 /* Shown under a search list that was cut short. */
 .cmd__more { padding: 10px 16px; border-top: 1px solid var(--rule); background: var(--sunk); font-size: 12px; color: var(--ink-3); position: sticky; bottom: 0; }
+
+/* The sending-hours pickers sit in the settings form: same width as the other inputs. */
+.sgrid__time { display: block; width: 140px; }
+.sgrid__time .tpk { height: 34px; width: 100%; border-radius: 8px; }
+.sgrid__time .tpk .tpk__in { font-size: 13.5px; font-weight: 600; }
+
+/* One outline only: the box shows the focus ring, never the text field inside it. This applies to
+   every time box (step times and sending hours), so they all look the same. */
+.tpk .tpk__in, .tpk .tpk__in:focus, .tpk .tpk__in:focus-visible { border: 0; outline: none; box-shadow: none; background: transparent; }
+.tpk:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* The sending-hours boxes match the step time boxes: no clock icon, centred bold time. */
+.sgrid__time .tpk { padding: 0; gap: 0; border: 1px solid var(--rule); background: var(--sheet); }
+.sgrid__time .tpk > svg { display: none; }
+.sgrid__time .tpk .tpk__in { text-align: center; padding: 0 8px; font-weight: 653; }
+
+/* ---- Reminder steps table: final column widths, and the stacked layout for narrow windows ----
+   Written last so nothing above overrides it. Wide: five named columns. Below 1260px the
+   column headers go and each step stacks as a small card: name and switch on top, then days,
+   time and channels, each on its own line. */
+.rsteps__head, .rsteps__row { grid-template-columns: minmax(150px, 1fr) 132px 100px 180px 40px; column-gap: 12px; }
+.rsteps__days .dstep__side { white-space: nowrap; }
+@media (max-width: 1260px) {
+  .rsteps__head { display: none; }
+  .rsteps__row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 10px; align-items: start; }
+  .rsteps__step { grid-column: 1; grid-row: 1; }
+  .rsteps__c { grid-column: 2; grid-row: 1; }
+  .rsteps__days, .rsteps__at, .rsteps__ch { grid-column: 1 / -1; }
+  .rsteps__at { width: 140px; }
+  .rsteps__desc { white-space: normal; }
+}
+/* A step's description wraps to a second line when the column is narrow, rather than being cut off. */
+.rsteps__desc { white-space: normal; overflow: visible; text-overflow: clip; }
