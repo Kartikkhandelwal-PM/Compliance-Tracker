@@ -30,13 +30,16 @@ type Focus = "all" | "overdue" | "week";
 
 export function NoticesPage() {
   const notices = useEngine(getNotices);
-  const [focus, setFocus] = useState<Focus>("all");
+  const [params] = useSearchParams();
+  /* A link can open on a slice: ?focus=overdue (the bell's alert) or ?focus=week. */
+  const asked = params.get("focus");
+  const [focus, setFocus] = useState<Focus>(() => (asked === "overdue" || asked === "week" ? asked : "all"));
+  useEffect(() => { if (asked === "overdue" || asked === "week") setFocus(asked); }, [asked]);
   const [q, setQ] = useState("");
   /* Each filter holds a list; empty means "not filtering". */
   const [depts, setDepts] = useState<string[]>([]);
   const [stages, setStages] = useState<string[]>([]);
   const [owners, setOwners] = useState<string[]>([]);
-  const [params] = useSearchParams();
   /* A link from the Dashboard opens straight on its notice. */
   const [peekId, setPeekId] = useState<string | null>(params.get("open"));
   useEffect(() => { const o = params.get("open"); if (o) setPeekId(o); }, [params]);

@@ -247,8 +247,19 @@ export function App() {
         kind: "failed",
       });
     }
+    const overdueNotices = noticeLate;
+    if (overdueNotices > 0 && on.notices) {
+      list.push({
+        to: "/notices?focus=overdue",
+        title: `${overdueNotices} ${overdueNotices === 1 ? "notice is" : "notices are"} past the reply date`,
+        body: "A reply is overdue",
+        tone: "risk",
+        icon: "notice",
+        kind: "notices",
+      });
+    }
     return list;
-  }, [obligations, outbox, summary.unassigned, notifSettings]);
+  }, [obligations, outbox, summary.unassigned, notifSettings, noticeLate]);
 
   /* Read against the title, not a stored flag — the same alert with a bigger
      number ("3 clients" → "5 clients") is new information and should raise
@@ -385,7 +396,7 @@ export function App() {
               which is what made this bar read as blank on top-level screens. */}
           <button type="button" className="searchbtn" onClick={() => setPaletteOpen(true)}>
             <Icon name="search" size={15} />
-            <span className="searchbtn__label">Search clients, compliances, PAN, GSTIN or TAN</span>
+            <span className="searchbtn__label">Search clients, notices, PAN, GSTIN or TAN</span>
             <span className="kbd">/</span>
           </button>
 
@@ -511,7 +522,7 @@ export function App() {
                       </span>
                     </div>
                     <div className="pop__list">
-                      <Link to="/clients" className="pop__item" role="menuitem" onClick={() => setProfileOpen(false)}>
+                      <Link to={`/clients?owner=${me.id}`} className="pop__item" role="menuitem" onClick={() => setProfileOpen(false)}>
                         <Icon name="clients" size={15} /> My clients
                       </Link>
                       <button type="button" className="pop__item" role="menuitem" onClick={() => setProfileOpen(false)}>

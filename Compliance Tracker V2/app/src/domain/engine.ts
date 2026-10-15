@@ -1491,6 +1491,7 @@ let NOTIFS: NotificationSettings = {
   dueToday: true,
   unowned: true,
   failed: true,
+  notices: true,
 };
 
 export function getNotificationSettings(): NotificationSettings {

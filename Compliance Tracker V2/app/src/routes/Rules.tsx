@@ -31,7 +31,7 @@
    ========================================================================== */
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { STAFF } from "../domain/book.ts";
 import { DEFS, HEADS, headClass } from "../domain/catalog.ts";
 import {
@@ -71,7 +71,13 @@ const SECTIONS: { id: Section; label: string; icon: IconName; note: string }[] =
 ];
 
 export function RulesPage() {
-  const [section, setSection] = useState<Section>("firm");
+  /* `?section=reminders` opens that section, so search and other screens can link straight to it. */
+  const [params] = useSearchParams();
+  const asked = params.get("section") as Section | null;
+  const [section, setSection] = useState<Section>(() => (asked && SECTIONS.some((x) => x.id === asked) ? asked : "firm"));
+  useEffect(() => {
+    if (asked && SECTIONS.some((x) => x.id === asked)) setSection(asked);
+  }, [asked]);
   const active = SECTIONS.find((s) => s.id === section)!;
 
   return (
@@ -1756,6 +1762,11 @@ const BELL: { id: string; title: string; body: string }[] = [
     id: "failed",
     title: "Failed reminders",
     body: "Reminders that were not delivered to the client.",
+  },
+  {
+    id: "notices",
+    title: "Overdue notices",
+    body: "Notices whose reply date has passed and still need a reply.",
   },
 ];
 
