@@ -2197,6 +2197,16 @@ export function getOutbox(): OutboxEntry[] {
     }));
   });
 
+  /* Some of the hand-sent emails went through a firm's own mail server in
+     the past, which reports nothing back, so the log carries a few "SMTP"
+     rows to show what that status looks like. */
+  let nth = 0;
+  for (const e of entries) {
+    if (e.origin === "Manual" && e.channel === "Email" && (e.status === "Delivered" || e.status === "Read")) {
+      if (nth++ % 2 === 0) e.status = "SMTP";
+    }
+  }
+
   outbox = entries.sort((a, z) => z.sentAt.localeCompare(a.sentAt));
 })();
 
