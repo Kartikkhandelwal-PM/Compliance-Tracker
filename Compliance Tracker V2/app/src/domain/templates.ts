@@ -152,7 +152,7 @@ export const TEMPLATES: Template[] = [
     "timing": "7 days late",
     "daysLate": 7,
     "subject": "Overdue: {{form}} for {{period}} (second notice)",
-    "body": "Dear {{client_name}},\n\nYour {{form}} for {{period}} was due on {{due_date}} and remains pending. It has now been {{days_overdue}} days, over a week past the due date.\n\nA late fee applies from the due date and continues to increase with each additional day of delay.\n\nPlease send us the pending details at the earliest so this can be completed without further delay.\n\nIf this has already been completed, please share the reference number so we can update our records.\n\nRegards,\n{{firm_name}}",
+    "body": "Dear {{client_name}},\n\nYour {{form}} for {{period}} was due on {{due_date}} and remains pending. It has now been {{days_overdue}} days.\n\nA late fee applies from the due date and continues to increase with each additional day of delay.\n\nPlease send us the pending details at the earliest so this can be completed without further delay.\n\nIf this has already been completed, please share the reference number so we can update our records.\n\nRegards,\n{{firm_name}}",
     "cc": "Engagement owner",
     "live": true,
     "offByDefault": false

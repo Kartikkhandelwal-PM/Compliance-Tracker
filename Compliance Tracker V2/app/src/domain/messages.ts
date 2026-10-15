@@ -211,7 +211,7 @@ function emailContent(
         subject: `Overdue: ${o.form} for ${o.periodLabel} (second notice)`,
         body: [
           opening, "",
-          `Your ${o.form} for ${o.periodLabel} was due on ${due} and remains pending. It has now been ${o.daysOverdue} days, over a week past the due date.`,
+          `Your ${o.form} for ${o.periodLabel} was due on ${due} and remains pending. It has now been ${o.daysOverdue} days.`,
           ...(fee ? ["", fee] : []), "",
           "Please send us the pending details at the earliest so this can be completed without further delay.", "",
           "If this has already been completed, please share the reference number so we can update our records.", "",

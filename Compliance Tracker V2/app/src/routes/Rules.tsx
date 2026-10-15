@@ -39,7 +39,7 @@ import {
   addOwnDomain, checkOwnDomain, clearOwnDomain,
   getNotificationSettings, getReminderSettings, getSchedule, getSenderProfile,
   clearSmtp, resetCompliances, resetSchedule, saveRampwin, saveSmtp, setDefaultAssignee,
-  setEmailProvider, setWaProvider, toggleStepChannel, updateCompliance, updateFirm,
+  setEmailProvider, setStepDays, setWaProvider, stepBounds, stepCanMove, stepHasChannel, stepLimitNote, toggleStepChannel, updateCompliance, updateFirm,
   updateNotificationSettings, updateReminderSettings, updateSenderProfile, updateStep,
   untrackedCount,
 } from "../domain/engine.ts";
@@ -47,6 +47,8 @@ import { useApp, useEngine } from "../ui/app-state.tsx";
 import { Avatar, Check, Empty, PageHead } from "../ui/bits.tsx";
 import { BrandIcon, Icon } from "../ui/Icon.tsx";
 import { OwnerSelect } from "../ui/OwnerSelect.tsx";
+import { DaysStepper } from "../ui/DaysStepper.tsx";
+import { TimePicker } from "../ui/TimePicker.tsx";
 import type { IconName } from "../ui/Icon.tsx";
 import type { Channel, FirmProfile, SenderProfile } from "../domain/types.ts";
 
@@ -1400,7 +1402,7 @@ function RemindersSection() {
         foot="Each step is counted from the due date. Steps are skipped if the filing is already complete."
       >
         <div className="u-row-3" style={{ marginBottom: "var(--s3)" }}>
-          <span className="setnote">Enable or disable steps, and set the channel and time.</span>
+          <span className="setnote">These are the firm's days. A compliance can use its own days under Reminders → Templates.</span>
           <span className="u-spacer" />
           <button
             type="button"
@@ -1410,8 +1412,9 @@ function RemindersSection() {
             <Icon name="history" size={14} /> Reset
           </button>
         </div>
-        <Ladder schedule={schedule} />
+        <Ladder schedule={schedule} window={r.quietHours ? { from: r.quietStart, to: r.quietEnd } : { from: 6, to: 22 }} />
       </Card>
+
 
       <Card
         title="Sending hours"
@@ -1470,33 +1473,72 @@ function RemindersSection() {
   );
 }
 
-/** The reminder steps. One row per step, every control live. */
-function Ladder({ schedule }: { schedule: ReturnType<typeof getSchedule> }) {
+/** The reminder steps. One row per step, every control live. Columns are named
+ *  in a header row, so each control needs no label of its own. */
+function Ladder({ schedule, window }: { schedule: ReturnType<typeof getSchedule>; window: { from: number; to: number } }) {
+  const { me } = useApp();
   return (
-    <div className="ladder">
+    <div className="rsteps" role="table" aria-label="Reminder steps">
+      <div className="rsteps__head" role="row">
+        <span>Step</span>
+        <span className="rsteps__hi"><Icon name="calendar" size={13} /> Days</span>
+        <span className="rsteps__hi"><Icon name="clock" size={13} /> Time</span>
+        <span>Send on</span>
+        <span className="rsteps__c">On</span>
+      </div>
       {schedule.map((s) => (
-        <div key={s.id} className={`lstep${s.enabled ? "" : " is-off"}`}>
-          {/* The offset is the step's identity, so it reads as a figure. */}
-          <span className={`lstep__off${s.offset > 0 ? " is-late" : ""}`}>
-            <b className="num">{s.offset > 0 ? `+${s.offset}` : s.offset === 0 ? "0" : s.offset}</b>
-            <em>{s.offset === 0 ? "on due date" : s.offset < 0 ? "days before" : "days after"}</em>
-          </span>
-
-          <span className="lstep__id">
-            <span className="lstep__id-row">
-              <b>{s.label}</b>
-              {s.ccOwner ? (
-                <span className="tag tag--outline u-nowrap" title="The client's owner is copied in">
-                  <Icon name="user" size={11} /> cc owner
-                </span>
-              ) : null}
+        <div key={s.id} className={`rsteps__row${s.enabled ? "" : " is-off"}`} role="row">
+          <span className="rsteps__step">
+            <i className={`rsteps__dot${s.offset > 0 ? " is-late" : ""}`} />
+            <span className="rsteps__id">
+              <span className="rsteps__name">
+                <b>{s.label}</b>
+                {s.ccOwner ? (
+                  <span className="tag tag--outline u-nowrap" title="The client's owner is copied in">
+                    <Icon name="user" size={11} /> cc owner
+                  </span>
+                ) : null}
+              </span>
+              <span className="u-mute rsteps__desc" title={s.intent}>{s.intent}</span>
             </span>
-            <span className="u-mute">{s.intent}</span>
           </span>
 
-          <span className="lstep__ch">
+          {/* Days from the due date. The ones that can move have a stepper, with
+              limits that keep the steps in order; "Due today" is the date itself. */}
+          {/* Days from the due date. The ones that can move are a number box,
+              clamped to limits that keep the steps in order; "Due today" is the
+              date itself. */}
+          <span className="rsteps__days">
+            {stepCanMove(s.id) ? (
+              <DaysStepper
+                plain
+                offset={s.offset}
+                min={stepBounds(null, s.id).min}
+                max={stepBounds(null, s.id).max}
+                onChange={(o) => setStepDays(null, s.id, o, me.name)}
+                ariaLabel={`${s.label}: days ${s.offset < 0 ? "before" : "after"} the due date`}
+                whyNotMore={stepLimitNote(null, s.id).more}
+                whyNotLess={stepLimitNote(null, s.id).less}
+              />
+            ) : (
+              <span className="rsteps__fixed">On the due date</span>
+            )}
+          </span>
+
+          <span className="rsteps__at">
+            <TimePicker
+              value={s.sendAt}
+              from={window.from}
+              to={window.to}
+              onChange={(t) => updateStep(s.id, { sendAt: t })}
+              ariaLabel={`Time ${s.label} is sent`}
+            />
+          </span>
+
+          <span className="rsteps__ch">
             {(["WhatsApp", "Email"] as Channel[]).map((ch) => {
-              const on = s.channels.includes(ch);
+              const avail = stepHasChannel(s.id, ch);
+              const on = avail && s.channels.includes(ch);
               return (
                 <button
                   key={ch}
@@ -1504,7 +1546,8 @@ function Ladder({ schedule }: { schedule: ReturnType<typeof getSchedule> }) {
                   className={`chtoggle${on ? " is-on" : ""}`}
                   onClick={() => toggleStepChannel(s.id, ch)}
                   aria-pressed={on}
-                  title={`${on ? "Stop sending" : "Also send"} on ${ch}`}
+                  disabled={!avail}
+                  title={avail ? `${on ? "Stop sending" : "Also send"} on ${ch}` : `No approved ${ch} message for this step. Email only.`}
                 >
                   <BrandIcon name={ch === "WhatsApp" ? "whatsapp" : "email"} size={14} />
                   {ch}
@@ -1513,26 +1556,15 @@ function Ladder({ schedule }: { schedule: ReturnType<typeof getSchedule> }) {
             })}
           </span>
 
-          <span className="lstep__at">
-            <select
-              className="plain"
-              value={s.sendAt}
-              onChange={(e) => updateStep(s.id, { sendAt: Number(e.target.value) })}
-              aria-label={`Time ${s.label} is sent`}
-            >
-              {[9, 10, 11, 12, 14, 16, 18].map((hh) => (
-                <option key={hh} value={hh}>{String(hh).padStart(2, "0")}:00</option>
-              ))}
-            </select>
+          <span className="rsteps__c">
+            <button
+              type="button"
+              className={`switch${s.enabled ? " is-on" : ""}`}
+              onClick={() => updateStep(s.id, { enabled: !s.enabled })}
+              aria-pressed={s.enabled}
+              aria-label={`${s.label} step`}
+            />
           </span>
-
-          <button
-            type="button"
-            className={`switch${s.enabled ? " is-on" : ""}`}
-            onClick={() => updateStep(s.id, { enabled: !s.enabled })}
-            aria-pressed={s.enabled}
-            aria-label={`${s.label} step`}
-          />
         </div>
       ))}
     </div>
@@ -1582,7 +1614,7 @@ function CompliancesSection() {
       {rows.length === 0 ? (
         <Empty title="Nothing under this head" />
       ) : (
-        <table className="ltable ltable--plain">
+        <table className="ltable ltable--plain ltable--framed">
           <thead>
             <tr>
               <th>Compliance</th>
@@ -1653,7 +1685,7 @@ function TeamSection() {
         note="Staff"
         foot="Clients and filings can be assigned to these staff members."
       >
-        <table className="ltable ltable--plain">
+        <table className="ltable ltable--plain ltable--framed">
           <thead>
             <tr>
               <th>Name</th>

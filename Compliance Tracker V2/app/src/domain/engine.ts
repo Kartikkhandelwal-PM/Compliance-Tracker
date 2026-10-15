@@ -1100,7 +1100,7 @@ const DEFAULT_SCHEDULE: ScheduleStep[] = [
     offset: -7,
     stage: "T-7 sent",
     label: "First reminder",
-    intent: "First heads-up, with time to collect documents.",
+    intent: "An early reminder so the client can get ready.",
     channels: ["WhatsApp", "Email"],
     sendAt: 10,
     enabled: true,
@@ -1110,7 +1110,7 @@ const DEFAULT_SCHEDULE: ScheduleStep[] = [
     offset: -3,
     stage: "T-3 sent",
     label: "Follow-up",
-    intent: "Last easy reminder before the deadline.",
+    intent: "A second reminder as the due date nears.",
     channels: ["WhatsApp"],
     sendAt: 11,
     enabled: true,
@@ -1120,7 +1120,7 @@ const DEFAULT_SCHEDULE: ScheduleStep[] = [
     offset: 0,
     stage: "Due-date sent",
     label: "Due today",
-    intent: "Due today. Sent in the morning.",
+    intent: "A reminder on the due date itself.",
     channels: ["WhatsApp", "Email"],
     sendAt: 9,
     enabled: true,
@@ -1130,7 +1130,7 @@ const DEFAULT_SCHEDULE: ScheduleStep[] = [
     offset: 1,
     stage: "Overdue escalation",
     label: "Missed",
-    intent: "Missed. Shows the late fee so far.",
+    intent: "Tells the client the due date has passed.",
     channels: ["WhatsApp", "Email"],
     sendAt: 10,
     enabled: true,
@@ -1140,7 +1140,7 @@ const DEFAULT_SCHEDULE: ScheduleStep[] = [
     offset: 7,
     stage: "Overdue escalation",
     label: "Escalation",
-    intent: "A week late. The client's owner is copied in.",
+    intent: "A follow-up, with the owner copied in.",
     channels: ["Email"],
     sendAt: 11,
     enabled: true,
@@ -1151,7 +1151,7 @@ const DEFAULT_SCHEDULE: ScheduleStep[] = [
     offset: 30,
     stage: "Overdue escalation",
     label: "Final notice",
-    intent: "A month late. Off by default.",
+    intent: "A final notice, with the owner copied in.",
     channels: ["Email"],
     sendAt: 11,
     enabled: false,
@@ -1523,7 +1523,14 @@ export function updateStep(id: string, patch: Partial<ScheduleStep>) {
 
 /** Toggling a channel off on its last remaining step would leave a step that
  *  fires and sends nothing, so the step switches off with it. */
+/** Whether a step has an approved message for this channel. WhatsApp only
+ *  carries the steps that have a WhatsApp template; the rest are Email-only. */
+export function stepHasChannel(id: string, ch: Channel): boolean {
+  return TEMPLATES.some((t) => t.channel === ch && t.stage === id);
+}
+
 export function toggleStepChannel(id: string, ch: Channel) {
+  if (!stepHasChannel(id, ch)) return;
   SCHEDULE = SCHEDULE.map((s) => {
     if (s.id !== id) return s;
     const channels = s.channels.includes(ch)
@@ -1621,25 +1628,221 @@ function bucketRuns(): RunBucket[] {
   return [...map.values()];
 }
 
+/** When a step fires for a filing due on `dueDate`.
+ *
+ *  A weekend step at or before the due date moves EARLIER, never later: a
+ *  warning delivered after its own deadline is worse than no warning. Steps
+ *  after the due date move later, since they cannot be sent before the date
+ *  they report as missed. */
+/** `sendAt` is hours as a number, so 10.5 is half past ten. */
+function stampAt(date: string, at: number, extraMinutes = 0): string {
+  const h = Math.floor(at);
+  const m = Math.round((at - h) * 60);
+  return stamp(date, h, Math.min(59, m + extraMinutes));
+}
+
+function fireAtFor(dueDate: string, step: ScheduleStep): string {
+  const raw = stampAt(addDays(dueDate, step.offset), step.sendAt);
+  return SETTINGS.quietHours
+    ? nextSendableAt(
+        raw, SETTINGS.quietStart, SETTINGS.quietEnd, SETTINGS.skipWeekends,
+        step.offset <= 0 ? "earlier" : "later",
+      )
+    : raw;
+}
+
+/* --- Reminder timing per compliance -----------------------------------------
+   The firm sets the default days for each step (Settings → Reminders). A
+   compliance can then carry its own days for any of the steps that move: an
+   annual return wants its first reminder a month out, a monthly GST return a
+   week. Only the DAYS change. The steps themselves (which exist, what they
+   say, which channels, what time) stay the firm's, and so do the templates:
+   their wording states the due date and the real days late, never a fixed
+   number of days.
+
+   The steps keep their order whatever is set (first reminder, follow-up, due
+   date, missed, escalation, final notice), and each has a sensible range, so
+   no combination can send a "second" reminder before the first. */
+
+export const STEP_ORDER: StepKind[] = ["t7", "t3", "t0", "p1", "p7", "p30"];
+
+/** Hard limits per step. "Due today" is the due date itself and does not move. */
+const STEP_RANGE: Partial<Record<StepKind, { min: number; max: number }>> = {
+  t7: { min: -60, max: -2 },
+  t3: { min: -30, max: -1 },
+  p1: { min: 1, max: 6 },
+  p7: { min: 2, max: 29 },
+  p30: { min: 8, max: 90 },
+};
+
+export function stepCanMove(id: string): id is StepKind {
+  return id in STEP_RANGE;
+}
+
+interface TimingOverride {
+  days: Partial<Record<StepKind, number>>;
+  by: string;
+  on: string;
+}
+let TIMING: Record<string, TimingOverride> = {};
+
+/** The steps as they apply to one compliance: the firm's, with this
+ *  compliance's own days laid over them. An override that would put a step out
+ *  of order (because the firm default moved after it was set) quietly falls
+ *  back to the default for that step. */
+export function getTimingFor(defCode: string | null): ScheduleStep[] {
+  const own = defCode ? TIMING[defCode]?.days : undefined;
+  if (!own) return SCHEDULE;
+  let prev = -Infinity;
+  return SCHEDULE.map((s) => {
+    let offset = own[s.id] ?? s.offset;
+    if (offset <= prev) offset = s.offset;
+    if (offset <= prev) offset = prev + 1;
+    prev = offset;
+    return offset === s.offset ? s : { ...s, offset };
+  });
+}
+
+export function timingMeta(defCode: string): { custom: boolean; by?: string; on?: string; changed: StepKind[] } {
+  const t = TIMING[defCode];
+  return { custom: !!t, by: t?.by, on: t?.on, changed: t ? (Object.keys(t.days) as StepKind[]) : [] };
+}
+
+/** Every compliance with its own days, for the summary in Settings. */
+export function customTimingCodes(): string[] {
+  return Object.keys(TIMING);
+}
+
+/** How far a step may move right now: between its neighbours and its own limit. */
+export function stepBounds(defCode: string | null, id: StepKind): { min: number; max: number } {
+  const range = STEP_RANGE[id];
+  if (!range) { const o = getTimingFor(defCode).find((s) => s.id === id)!.offset; return { min: o, max: o }; }
+  const steps = getTimingFor(defCode);
+  const i = STEP_ORDER.indexOf(id);
+  const before = steps.find((s) => s.id === STEP_ORDER[i - 1]);
+  const after = steps.find((s) => s.id === STEP_ORDER[i + 1]);
+  return {
+    min: Math.max(range.min, before ? before.offset + 1 : range.min),
+    max: Math.min(range.max, after ? after.offset - 1 : range.max),
+  };
+}
+
+/** Why a step cannot move further, in words: which neighbour is in the way, or
+ *  its own limit. Empty when it can still move that way. */
+export function stepLimitNote(defCode: string | null, id: StepKind): { more?: string; less?: string } {
+  const range = STEP_RANGE[id];
+  if (!range) return {};
+  const steps = getTimingFor(defCode);
+  const i = STEP_ORDER.indexOf(id);
+  const cur = steps.find((s) => s.id === id)!.offset;
+  const { min, max } = stepBounds(defCode, id);
+  const nb = (sid: StepKind | undefined, side: "before" | "after") => {
+    const n = steps.find((s) => s.id === sid);
+    return n ? `${n.label} is at ${Math.abs(n.offset)} day${Math.abs(n.offset) === 1 ? "" : "s"} ${n.offset < 0 ? "before" : n.offset > 0 ? "late" : "on the due date"}. Change it first to go ${side === "after" ? "further" : "earlier"}.` : "";
+  };
+  const out: { more?: string; less?: string } = {};
+  const later = cur >= max, earlier = cur <= min;
+  // Reported as the stepper reads them: "more" = further from the due date.
+  const laterNote = later ? (max < range.max ? nb(STEP_ORDER[i + 1], "after") : `${Math.abs(range.max)} day${Math.abs(range.max) === 1 ? "" : "s"} is as ${range.max < 0 ? "close to" : "far from"} the due date as this step can go.`) : undefined;
+  const earlierNote = earlier ? (min > range.min ? nb(STEP_ORDER[i - 1], "before") : `${Math.abs(range.min)} day${Math.abs(range.min) === 1 ? "" : "s"} is as ${range.min < 0 ? "far from" : "close to"} the due date as this step can go.`) : undefined;
+  if (cur < 0) { out.more = earlierNote; out.less = laterNote; } else { out.more = laterNote; out.less = earlierNote; }
+  return out;
+}
+
+/** A reminder whose new date has already gone by must not be sent late. Anything
+ *  that was still to come before a change, and is in the past after it, is
+ *  marked done instead. */
+function suppressNewlyPast(beforeFuture: Set<string>) {
+  for (const s of computeSends("0000", NOW)) if (beforeFuture.has(s.key)) fired.add(s.key);
+}
+function futureKeys(): Set<string> {
+  return new Set(computeSends(NOW, "9999-12-31T23:59").map((s) => s.key));
+}
+
+/** Set a step's days for one compliance, or for the firm default when
+ *  `defCode` is null. Clamped to what the step allows. */
+export function setStepDays(defCode: string | null, id: StepKind, offset: number, by: string) {
+  if (!stepCanMove(id)) return;
+  const { min, max } = stepBounds(defCode, id);
+  const value = Math.min(max, Math.max(min, Math.round(offset)));
+  const before = futureKeys();
+  if (defCode === null) {
+    SCHEDULE = SCHEDULE.map((s) => (s.id === id ? { ...s, offset: value } : s));
+  } else {
+    const def = SCHEDULE.find((s) => s.id === id)!.offset;
+    const cur = TIMING[defCode] ?? { days: {}, by, on: TODAY };
+    const days = { ...cur.days };
+    if (value === def) delete days[id];
+    else days[id] = value;
+    const next = { ...TIMING };
+    if (Object.keys(days).length === 0) delete next[defCode];
+    else next[defCode] = { days, by, on: TODAY };
+    TIMING = next;
+  }
+  suppressNewlyPast(before);
+  emit();
+}
+
+/** Back to the firm's days for one compliance. */
+export function resetTiming(defCode: string) {
+  if (!TIMING[defCode]) return;
+  const before = futureKeys();
+  const next = { ...TIMING };
+  delete next[defCode];
+  TIMING = next;
+  suppressNewlyPast(before);
+  emit();
+}
+
+/** Give other compliances the same days as this one. Returns what to restore. */
+export function copyTiming(fromCode: string, toCodes: string[], by: string): Record<string, TimingOverride> {
+  const prev = TIMING;
+  const src = getTimingFor(fromCode);
+  const before = futureKeys();
+  const next = { ...TIMING };
+  for (const code of toCodes) {
+    if (code === fromCode) continue;
+    const days: Partial<Record<StepKind, number>> = {};
+    for (const s of src) {
+      const def = SCHEDULE.find((d) => d.id === s.id)!.offset;
+      if (stepCanMove(s.id) && s.offset !== def) days[s.id] = s.offset;
+    }
+    if (Object.keys(days).length === 0) delete next[code];
+    else next[code] = { days, by, on: TODAY };
+  }
+  TIMING = next;
+  suppressNewlyPast(before);
+  emit();
+  return prev;
+}
+
+export function restoreTiming(snapshot: Record<string, TimingOverride>) {
+  const before = futureKeys();
+  TIMING = snapshot;
+  suppressNewlyPast(before);
+  emit();
+}
+
+/** "7 days before", "On the due date", "1 day late". */
+export function timingLabel(offset: number): string {
+  if (offset === 0) return "On the due date";
+  const n = Math.abs(offset);
+  return `${n} ${n === 1 ? "day" : "days"} ${offset < 0 ? "before" : "late"}`;
+}
+
 /** Every send the ladder implies inside `[from, to]`, newest first.
  *  Aggregated per run × step: one row is "GSTR-3B July, follow-up, 418
  *  clients", never 418 rows. */
 function computeSends(fromTs: string, toTs: string): ScheduledSend[] {
   const out: ScheduledSend[] = [];
+  const perCode = new Map<string, ScheduleStep[]>();
   for (const b of bucketRuns()) {
-    for (const step of SCHEDULE) {
+    /* The compliance's own days where the firm has set them, else the default. */
+    let steps = perCode.get(b.defCode);
+    if (!steps) { steps = getTimingFor(b.defCode); perCode.set(b.defCode, steps); }
+    for (const step of steps) {
       if (!step.enabled || step.channels.length === 0) continue;
-      const raw = stamp(addDays(b.dueDate, step.offset), step.sendAt);
-      /* A weekend step at or before the due date moves EARLIER, never later —
-         a warning delivered after its own deadline is worse than no warning.
-         Steps after the due date move later, since they cannot be sent before
-         the date they report as missed. */
-      const fireAt = SETTINGS.quietHours
-        ? nextSendableAt(
-            raw, SETTINGS.quietStart, SETTINGS.quietEnd, SETTINGS.skipWeekends,
-            step.offset <= 0 ? "earlier" : "later",
-          )
-        : raw;
+      const fireAt = fireAtFor(b.dueDate, step);
       if (fireAt < fromTs || fireAt > toTs) continue;
       const key = `${b.runId}|${step.id}`;
       if (fired.has(key)) continue;
@@ -1933,7 +2136,7 @@ export function getOutbox(): OutboxEntry[] {
       const r = h(`${id}|${send.step.id}`);
       /* Real sends scatter across the minutes after a batch starts rather
          than all landing on the same second. */
-      const at = stamp(dateOf(send.fireAt), send.step.sendAt, Math.floor(r * 58));
+      const at = stampAt(dateOf(send.fireAt), send.step.sendAt, Math.floor(r * 29));
       for (const ch of send.step.channels) {
         if (ch === "WhatsApp" && !owner.whatsapp) continue;
         if (ch === "Email" && !owner.emailEnabled) continue;

@@ -1656,25 +1656,6 @@ button.cd-tr__head:hover { box-shadow: var(--shadow-3); transform: translateY(-1
 .tp-pick { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-3); }
 
 /* The sequence: a line with a stop for each message, in the order sent. */
-.tp-seq {
-  position: relative; display: flex; gap: 0; margin: 0; padding: 0; list-style: none; overflow-x: auto;
-  background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px;
-}
-.tp-seq li { flex: 1 1 0; min-width: 118px; position: relative; }
-.tp-seq li + li { border-left: 1px solid var(--rule); }
-.tp-step {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; height: 100%;
-  padding: 12px 14px; border: 0; background: none; font: inherit; text-align: left; color: var(--ink-2); cursor: pointer;
-}
-.tp-step:hover { background: var(--hover); }
-.tp-step b { font-size: 14px; font-weight: 600; color: var(--ink); }
-.tp-step small { font-size: 12px; color: var(--ink-3); }
-.tp-step__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--st-pending-solid); margin-bottom: 6px; }
-.tp-step.is-late .tp-step__dot { background: var(--st-overdue-solid); }
-.tp-step.is-done .tp-step__dot { background: var(--st-filed-solid); }
-.tp-step.is-on { background: var(--selected); box-shadow: inset 0 -2px 0 var(--accent); }
-.tp-step.is-on b { color: var(--accent); }
-.tp-step:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* Two matching cards side by side: the wording, and what it looks like. */
 .tp-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); align-items: stretch; }
@@ -1711,22 +1692,8 @@ button.cd-tr__head:hover { box-shadow: var(--shadow-3); transform: translateY(-1
 
 /* Templates: sender line and approval status */
 .tp-seg { display: inline-flex; align-items: center; gap: 7px; }
-.tp-from {
-  display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; padding: 10px var(--s4);
-  background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px;
-}
-.tp-from__ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--sunk-2); flex-shrink: 0; }
-.tp-from__who { display: flex; flex-direction: column; min-width: 0; }
-.tp-from__who small { font-size: 11px; font-weight: 653; color: var(--ink-3); line-height: 14px; }
-.tp-from__who b { font-size: 14px; font-weight: 600; color: var(--ink); line-height: 20px; }
-.tp-from__kind {
-  padding: 2px 10px; border-radius: 10px; background: var(--sunk-2); color: var(--ink-2); font-size: 12px; font-weight: 500;
-}
-.tp-from__status { margin-left: auto; display: inline-flex; align-items: center; gap: var(--s3); font-size: 13px; }
 .tp-ok { display: inline-flex; align-items: center; gap: 6px; color: var(--st-filed-fg); font-weight: 600; }
 .tp-wait { color: var(--ink-2); }
-.tp-from__note { flex-basis: 100%; padding-left: 48px; font-size: 12px; color: var(--ink-3); }
-.tp-from__note .cd-link { margin-left: 0; }
 
 .ec--liability .ec__mini i { background: var(--accent); }
 
@@ -1966,3 +1933,316 @@ button.cd-tr__head:hover { box-shadow: var(--shadow-3); transform: translateY(-1
 /* Forces the line of text under the figure, however short it is. */
 .ec__hero--stack { flex-wrap: wrap; }
 .ec__hero--stack > span { flex-basis: 100%; }
+
+/* ============================================================================
+   DAYS STEPPER and per-compliance timing
+   ========================================================================== */
+.dstep { display: inline-flex; align-items: center; gap: 6px; }
+.dstep__b {
+  width: 26px; height: 26px; display: inline-grid; place-items: center; padding: 0;
+  border: 0; border-radius: 6px; background: var(--hover); color: var(--ink-2);
+  font: inherit; font-size: 16px; line-height: 1; cursor: pointer;
+}
+.dstep__b:hover:not(:disabled) { background: var(--active); color: var(--ink); }
+.dstep__b:disabled { opacity: 0.35; cursor: not-allowed; }
+.dstep__b:focus-visible, .dstep__n:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.dstep__n {
+  width: 38px; height: 26px; padding: 0; text-align: center; border: 1px solid var(--rule); border-radius: 6px;
+  background: var(--sheet); color: var(--ink); font: inherit; font-size: 13px; font-weight: 653;
+}
+.dstep__n:disabled { background: var(--sunk); color: var(--ink-3); }
+.dstep__side { font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.dstep.is-disabled { opacity: 0.6; }
+
+.tp-timing {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s4); flex-wrap: wrap;
+  padding: 10px var(--s4); background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px;
+}
+.tp-timing__tag { padding: 1px 8px; border-radius: 9px; background: var(--sunk-2); color: var(--ink-2); font-size: 11px; font-weight: 653; }
+.tp-timing__tag.is-custom { background: var(--accent-soft); color: var(--accent); }
+.tp-timing__acts { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+/* The stepper sits under its step, inside the same cell. */
+
+.lstep__off--edit { display: inline-flex; align-items: center; }
+.ctiming { display: flex; flex-wrap: wrap; gap: 8px; }
+.ctiming__chip {
+  display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 14px;
+  background: var(--accent-soft); color: var(--accent); font-size: 13px; font-weight: 600; text-decoration: none;
+}
+.ctiming__chip:hover { background: var(--accent-line); }
+/* Room for the days stepper in the first column of the steps list. */
+.lstep { grid-template-columns: 196px minmax(200px, 1fr) auto 96px 34px; }
+.lstep__off { align-items: flex-start; text-align: left; padding-left: 6px; }
+.lstep__off--edit { padding-left: 0; }
+@media (max-width: 1100px) { .lstep { grid-template-columns: 196px minmax(160px, 1fr) auto 96px 34px; } }
+
+/* Why a days control has stopped: shown under the box when it hits a limit. */
+.dstep__tip { display: inline-flex; }
+
+
+/* ---- Templates screen: timeline on the left, the message on the right ---- */
+.tp-top { gap: var(--s3); }
+.tp-sender {
+  display: inline-flex; align-items: center; gap: 7px; max-width: 360px; padding: 5px 10px;
+  border: 1px solid var(--rule); border-radius: 999px; background: var(--sheet); font-size: 12.5px; color: var(--ink-3);
+}
+.tp-sender span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-sender b { font-weight: 600; color: var(--ink); }
+.tp-sender i { font-style: normal; padding-left: 7px; border-left: 1px solid var(--rule); white-space: nowrap; }
+.tp-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s4); flex-wrap: wrap;
+  padding: 10px var(--s4); border: 1px solid var(--rule); border-radius: 10px; background: var(--sheet); font-size: 13px;
+}
+.tp-banner--note { background: var(--sunk); color: var(--ink-2); justify-content: flex-start; }
+.tp-main { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: var(--s4); align-items: start; }
+.tp-right { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+.tp-when { position: sticky; top: 72px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; }
+.tp-when__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px var(--s4); border-bottom: 1px solid var(--rule); }
+.tp-when__head span:first-child { display: flex; flex-direction: column; min-width: 0; }
+.tp-when__head b { font-size: 14px; font-weight: 653; color: var(--ink); }
+.tp-when__head small { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-timing__tag { padding: 2px 9px; border-radius: 9px; background: var(--sunk-2); color: var(--ink-2); font-size: 11px; font-weight: 653; white-space: nowrap; }
+.tp-timing__tag.is-custom { background: var(--accent-soft); color: var(--accent); }
+.tp-timing__acts { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+
+.tflow { list-style: none; margin: 0; padding: 8px 0; position: relative; }
+.tflow__item { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px; padding: 0 var(--s4) 0 0; }
+/* The rail the dots sit on. */
+.tflow__item::before { content: ""; position: absolute; left: 25px; top: 0; bottom: 0; width: 2px; background: var(--rule); }
+.tflow__item:first-child::before { top: 50%; }
+.tflow__item:last-child::before { bottom: 50%; }
+.tflow__main { display: flex; align-items: center; gap: 14px; min-width: 0; padding: 11px 0 11px 18px; text-align: left; background: none; border: 0; cursor: pointer; border-radius: 8px; }
+.tflow__main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tflow__dot { position: relative; z-index: 1; flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--st-pending-solid); box-shadow: 0 0 0 3px var(--sheet); }
+.tflow__item.is-late .tflow__dot { background: var(--st-overdue-solid); }
+.tflow__item.is-done .tflow__dot { background: var(--st-filed-solid); }
+.tflow__txt { display: flex; flex-direction: column; min-width: 0; }
+.tflow__txt b { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+.tflow__txt small { font-size: 12px; color: var(--ink-3); }
+.tflow__item:hover { background: var(--hover); }
+.tflow__item.is-on { background: var(--selected); }
+.tflow__item.is-on .tflow__txt b { color: var(--accent); }
+.tflow__item.is-on .tflow__dot { box-shadow: 0 0 0 3px var(--selected); }
+.tflow__why { grid-column: 1 / -1; margin: -4px 0 10px 50px; font-size: 12px; line-height: 1.4; color: var(--ink-3); }
+.dstep--compact .dstep__n { width: 40px; }
+.tp-when__foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 12px var(--s4); border-top: 1px solid var(--rule); background: var(--sunk); }
+.tp-when__hint { font-size: 12px; color: var(--ink-3); }
+
+.tp-pair { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+@media (max-width: 1100px) {
+  .tp-main { grid-template-columns: minmax(0, 1fr); }
+  .tp-when { position: static; }
+}
+
+/* The variable list: name on the left, what it is and its example stacked beside it, never cut off. */
+.tp-vars li { grid-template-columns: 150px minmax(0, 1fr); grid-template-areas: "tok what" "tok eg"; row-gap: 0; align-items: start; padding: 4px 0; }
+.tp-vars li .tpl-tok { grid-area: tok; align-self: center; }
+.tp-vars__what { grid-area: what; font-size: 11.5px; }
+.tp-vars__eg { grid-area: eg; white-space: normal; overflow: visible; }
+.tp-sender { max-width: 440px; }
+.tp-vars li { grid-template-columns: 138px 84px minmax(0, 1fr); grid-template-areas: none; row-gap: 0; align-items: center; padding: 0; }
+.tp-vars li .tpl-tok, .tp-vars__what, .tp-vars__eg { grid-area: auto; }
+.tp-vars__what { font-size: 12px; }
+
+
+/* Steps read as buttons: each is its own card that lifts on hover and takes the accent when selected. */
+.tflow { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.tflow__item::before { display: none; }
+.tflow__item {
+  padding: 0 12px 0 0; border: 1px solid var(--rule); border-radius: 10px; background: var(--sheet); cursor: pointer;
+  transition: border-color .12s, box-shadow .12s, background .12s;
+}
+.tflow__item:hover { border-color: var(--accent); background: var(--hover); box-shadow: 0 2px 8px rgb(9 30 66 / 8%); }
+.tflow__item.is-on { border-color: var(--accent); background: var(--selected); box-shadow: 0 0 0 1px var(--accent); }
+.tflow__dot, .tflow__item.is-on .tflow__dot { box-shadow: none; }
+.tflow__main { padding: 11px 0 11px 14px; }
+.tflow__why { margin-left: 42px; }
+.tp-when__foot { justify-content: space-between; }
+/* The short line joining one step card to the next, so they read as a sequence. */
+.tflow__item:not(:last-child)::after {
+  content: ""; position: absolute; left: 21px; top: 100%; width: 2px; height: 10px; background: var(--rule);
+}
+
+/* Which sender kind (shared or the firm's own), shown next to the From line inside the preview. */
+.tp-kind { margin-left: 8px; padding: 1px 8px; border-radius: 9px; background: var(--sunk-2); color: var(--ink-3); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.mailpane__meta .tp-kind { display: inline-block; margin: 3px 0 0; }
+
+/* Compliance picker over the timeline, channel switch over the message. */
+.tp-top { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: var(--s4); align-items: end; }
+.tp-pick { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.tp-top .tp-pick select { width: 100%; height: 36px; font-size: 14px; font-weight: 600; color: var(--ink); }
+@media (max-width: 1100px) { .tp-top { grid-template-columns: minmax(0, 1fr); } }
+.tp-top { align-items: start; }
+
+
+/* ---- Settings: reminder steps as a table with named columns ---- */
+.rsteps { border: 1px solid var(--rule); border-radius: 12px; overflow: hidden; background: var(--sheet); }
+.rsteps__head, .rsteps__row {
+  display: grid; grid-template-columns: minmax(240px, 1fr) 250px 210px 96px 64px; align-items: center; column-gap: var(--s4);
+  padding: 0 var(--s4);
+}
+.rsteps__head { height: 38px; background: var(--sunk); border-bottom: 1px solid var(--rule); font-size: 11.5px; font-weight: 653; color: var(--ink-3); }
+.rsteps__row { min-height: 68px; padding-top: 10px; padding-bottom: 10px; }
+.rsteps__row + .rsteps__row { border-top: 1px solid var(--rule); }
+.rsteps__row:hover { background: var(--hover); }
+.rsteps__c { display: flex; justify-content: center; }
+.rsteps__step { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.rsteps__dot { flex: none; width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: var(--st-pending-solid); }
+.rsteps__dot.is-late { background: var(--st-overdue-solid); }
+.rsteps__id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.rsteps__name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rsteps__name b { font-size: 14px; font-weight: 600; color: var(--ink); }
+.rsteps__id .u-mute { font-size: 12.5px; line-height: 1.4; }
+.rsteps__fixed { display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 8px; background: var(--sunk-2); color: var(--ink-2); font-size: 13px; font-weight: 600; }
+.rsteps__ch { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.rsteps__at select { width: 100%; }
+.rsteps__row.is-off .rsteps__id b, .rsteps__row.is-off .rsteps__id .u-mute { color: var(--ink-3); }
+.rsteps__row.is-off .rsteps__dot { background: var(--rule-strong); }
+@media (max-width: 1100px) {
+  .rsteps__head { display: none; }
+  .rsteps__row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 10px; }
+  .rsteps__step { grid-column: 1; }
+  .rsteps__c { grid-column: 2; grid-row: 1; }
+  .rsteps__when, .rsteps__ch, .rsteps__at { grid-column: 1 / -1; }
+  .rsteps__at select { width: auto; }
+}
+.rsteps__head, .rsteps__row { grid-template-columns: minmax(180px, 1fr) 226px 196px 92px 52px; column-gap: 14px; }
+.rsteps__ch { flex-wrap: nowrap; }
+
+.chtoggle:disabled { opacity: 0.45; cursor: not-allowed; background: var(--sunk); border-style: dashed; }
+.chtoggle:disabled:hover { border-color: var(--rule); color: var(--ink-3); }
+
+/* Days and time are one column: "7 days before at 10:00". */
+.rsteps__head, .rsteps__row { grid-template-columns: minmax(180px, 1fr) 372px 196px 52px; }
+.rsteps__when { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rsteps__at { display: inline-flex; align-items: center; gap: 8px; }
+.rsteps__at em { font-style: normal; font-size: 13px; color: var(--ink-3); }
+.rsteps__at select { width: 88px; }
+.rsteps__when > .dstep, .rsteps__when > .rsteps__fixed { min-width: 214px; }
+.rsteps__when > .rsteps__fixed { justify-content: flex-start; width: 214px; box-sizing: border-box; }
+.rsteps__when > .rsteps__fixed { background: none; padding: 0; height: 28px; color: var(--ink); font-size: 13.5px; }
+
+/* Compact: one line per step. The description is a hover tip on the name. */
+.rsteps__head { height: 34px; }
+.rsteps__row { min-height: 52px; padding-top: 6px; padding-bottom: 6px; }
+.rsteps__head, .rsteps__row { grid-template-columns: minmax(150px, 1fr) 312px 184px 44px; column-gap: 12px; }
+.rsteps__step { align-items: center; }
+.rsteps__dot { margin-top: 0; }
+.rsteps__when { flex-wrap: nowrap; gap: 6px; }
+.rsteps__when > .dstep, .rsteps__when > .rsteps__fixed { min-width: 186px; }
+.rsteps__when > .rsteps__fixed { width: 186px; }
+.rsteps__at { gap: 6px; }
+.rsteps__at select { width: 80px; }
+.rsteps__at select { width: 90px; } .rsteps__head, .rsteps__row { grid-template-columns: minmax(150px, 1fr) 322px 184px 44px; }
+
+/* The description stays under the name, on one line. */
+.rsteps__row { min-height: 56px; }
+.rsteps__step { align-items: center; }
+.rsteps__id { gap: 1px; }
+.rsteps__desc { font-size: 12px; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rsteps__head, .rsteps__row { grid-template-columns: minmax(200px, 1fr) 322px 176px 44px; }
+.rsteps__head, .rsteps__row { column-gap: 18px; grid-template-columns: minmax(200px, 1fr) 322px 172px 40px; }
+
+/* Days and time are separate columns, each with its own icon. */
+.rsteps__head, .rsteps__row { grid-template-columns: minmax(200px, 1fr) 150px 110px 172px 40px; column-gap: 16px; }
+.rsteps__hi { display: inline-flex; align-items: center; gap: 6px; }
+.rsteps__days { display: flex; align-items: center; }
+.rsteps__days .dstep--plain .dstep__b { display: none; }
+.rsteps__days .dstep__tip { display: none; }
+.rsteps__at { position: relative; display: block; }
+.rsteps__at > svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--ink-3); pointer-events: none; }
+.rsteps__at select { width: 100%; padding-left: 30px; }
+.rsteps__head, .rsteps__row { grid-template-columns: minmax(190px, 1fr) 150px 108px 196px 44px; column-gap: 14px; } .rsteps__ch { gap: 6px; }
+/* The time box reads as an input, like the days box: white with a border, not a grey fill. */
+.rsteps__at select { background-color: var(--sheet); border: 1px solid var(--rule-strong, var(--rule)); height: 30px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.rsteps__at select:hover { border-color: var(--accent); }
+.rsteps__at select:focus-visible { outline: 2px solid var(--focus, var(--accent)); outline-offset: 1px; }
+.rsteps__row.is-off .rsteps__at select { color: var(--ink-3); }
+.rsteps__head, .rsteps__row { grid-template-columns: minmax(190px, 1fr) 140px 138px 190px 44px; column-gap: 12px; }
+.rsteps__at select { padding-right: 24px; font-size: 13px; }
+
+
+/* ---- Time picker ---- */
+.rsteps__at { position: static; }
+.rsteps__at > svg { display: none; }
+.tpk { position: relative; display: flex; align-items: center; width: 100%; height: 30px; padding: 0 8px; gap: 6px; background: var(--sheet); border: 1px solid var(--rule-strong, var(--rule)); border-radius: 8px; color: var(--ink-3); }
+.tpk:hover, .tpk:focus-within { border-color: var(--accent); }
+.tpk.is-disabled { background: var(--sunk); opacity: 0.6; }
+.tpk__in { flex: 1; min-width: 0; width: 100%; border: 0; background: transparent; outline: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); }
+.tpk__pop { position: fixed; z-index: 1000; width: 256px; padding: 10px; background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; box-shadow: 0 8px 28px rgb(9 30 66 / 20%); }
+.tpk__cols { display: grid; grid-template-columns: 1fr 1fr 0.9fr; gap: 6px; }
+.tpk__col { display: flex; flex-direction: column; gap: 2px; max-height: 208px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+.tpk__col small { position: sticky; top: 0; z-index: 1; padding: 2px 0 4px; background: var(--sheet); font-size: 11px; font-weight: 653; color: var(--ink-3); text-align: center; }
+.tpk__col button { height: 30px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 13px; color: var(--ink); cursor: pointer; }
+.tpk__col button:hover:not(:disabled) { background: var(--hover); }
+.tpk__col button.is-on { background: var(--accent); color: #fff; font-weight: 600; }
+.tpk__col button:disabled { color: var(--ink-3); opacity: 0.35; cursor: not-allowed; }
+.tpk__hint { margin: 8px 2px 0; padding-top: 8px; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--ink-3); }
+
+/* The time box matches the days box: same height, corners, border and type. No clock icon (the column header has it). */
+.rsteps__at .tpk { height: 26px; width: 96px; padding: 0; gap: 0; border: 1px solid var(--rule); border-radius: 6px; background: var(--sheet); }
+.rsteps__at .tpk > svg { display: none; }
+.rsteps__at .tpk .tpk__in, .rsteps__at .tpk .tpk__in:focus, .rsteps__at .tpk .tpk__in:focus-visible {
+  border: 0; outline: none; box-shadow: none; background: transparent; text-align: center; padding: 0 6px; font-size: 13px; font-weight: 653; color: var(--ink);
+}
+.rsteps__at .tpk:hover { border-color: var(--rule-strong, var(--rule)); }
+.rsteps__at .tpk:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.rsteps__head, .rsteps__row { grid-template-columns: minmax(190px, 1fr) 150px 120px 190px 44px; }
+
+/* ---- Settings tables (Compliances, Team): one framed table with a plain header row ----
+   The page-level frozen-header styling gave these a floating, boxed header over
+   rows with no frame. Here the whole table is the frame and the header is its first row. */
+.ltable--framed { width: 100%; border: 1px solid var(--rule); border-radius: 10px; border-collapse: separate; border-spacing: 0; }
+.ltable--framed thead th {
+  position: static; box-shadow: none; background: var(--sunk); border: 0; border-bottom: 1px solid var(--rule) !important;
+  padding: 10px 14px; height: auto; font-size: 12px; color: var(--ink-3); text-align: left;
+}
+.ltable--framed thead th.u-center { text-align: center; }
+.ltable--framed thead th.u-right { text-align: right; }
+.ltable--framed thead th:first-child { border-top-left-radius: 9px; }
+.ltable--framed thead th:last-child { border-top-right-radius: 9px; }
+.ltable--framed tbody td { padding-left: 14px; padding-right: 14px; }
+.ltable--framed tbody tr:last-child td { border-bottom: 0; }
+.ltable--framed thead th { border-top: 0 !important; box-shadow: none !important; }
+.ltable--framed thead { border: 0; }
+.ltable--framed td.u-center .rowcheck { margin-left: auto; margin-right: auto; }
+
+/* Settings tables run edge to edge inside their card: no second frame inside the card's own.
+   The header row is a plain shaded band, rows end at the card's edges, and the table meets the footer. */
+.ltable--framed {
+  width: calc(100% + 2 * var(--s4)); margin: 0 calc(-1 * var(--s4)) calc(-1 * var(--s4));
+  border: 0; border-top: 1px solid var(--rule); border-radius: 0;
+}
+.ltable--framed thead th:first-child, .ltable--framed thead th:last-child { border-radius: 0; }
+.ltable--framed thead th:first-child, .ltable--framed tbody td:first-child { padding-left: var(--s4); }
+.ltable--framed thead th:last-child, .ltable--framed tbody td:last-child { padding-right: var(--s4); }
+.ltable--framed tbody tr:last-child td { border-bottom: 0; }
+.sheet__body > .ltable--framed:first-child { margin-top: calc(-1 * var(--s4)); border-top: 0; }
+
+/* ---- Pagination bar under a table ---- */
+.pgn { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; padding: 10px var(--s4); border-top: 1px solid var(--rule); background: var(--sheet); font-size: 12.5px; color: var(--ink-3); border-radius: 0 0 12px 12px; }
+.pgn__count b { color: var(--ink); font-weight: 600; }
+.pgn__size { display: inline-flex; align-items: center; gap: 8px; }
+.pgn__size select { height: 28px; }
+.pgn__nav { display: inline-flex; align-items: center; gap: 4px; }
+.pgn__b { min-width: 28px; height: 28px; padding: 0 6px; display: inline-grid; place-items: center; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--ink-2); font: inherit; font-size: 13px; cursor: pointer; }
+.pgn__b:hover:not(:disabled):not(.is-on) { background: var(--hover); border-color: var(--rule); }
+.pgn__b:disabled { opacity: 0.35; cursor: not-allowed; }
+.pgn__b.is-on { background: var(--accent); color: #fff; font-weight: 600; }
+.pgn__b:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pgn__gap { padding: 0 4px; color: var(--ink-3); }
+.pgn--bare { padding: 0; border: 0; background: none; border-radius: 0; }
+
+/* ---- Tracker: the grid fills the screen and is the only thing that scrolls ----
+   The grid used to be capped at 68% of the window while the page around it was
+   taller than the window, so there were two scroll areas: the page shifted
+   whenever the wheel carried on past the end of the grid. Now the page is
+   exactly the height of the window, the grid takes whatever is left under the
+   filters, and the legend sits at the bottom. */
+.page--wide:has(.trkbox:not(.is-expanded)) { height: 100%; display: flex; flex-direction: column; }
+.page--wide:has(.trkbox:not(.is-expanded)) > .trkbox { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.page--wide:has(.trkbox:not(.is-expanded)) .trkbox:not(.is-expanded) .trkwrap { flex: 1 1 0; min-height: 360px; max-height: none; }
+.page--wide:has(.trkbox:not(.is-expanded)) .trkbox:not(.is-expanded) .trkfoot { flex: none; }
+.trkwrap { overscroll-behavior: contain; }
+.page--wide:has(.trkbox:not(.is-expanded)) { box-sizing: border-box; max-height: 100%; }
+.page--wide:has(.trkbox:not(.is-expanded)) { height: calc(100% - var(--topline-h, 48px)); max-height: none; padding-bottom: var(--s4); }

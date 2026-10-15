@@ -10,6 +10,7 @@
    nothing on this screen is sent to a client.
    ========================================================================== */
 
+import { Pagination, usePagination } from "../ui/Pagination.tsx";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CLIENT_BY_ID } from "../domain/book.ts";
@@ -26,7 +27,6 @@ import { PageHead } from "../ui/bits.tsx";
 
 type Focus = "all" | "overdue" | "week";
 
-const PAGE = 40;
 
 export function NoticesPage() {
   const notices = useEngine(getNotices);
@@ -36,7 +36,6 @@ export function NoticesPage() {
   const [depts, setDepts] = useState<string[]>([]);
   const [stages, setStages] = useState<string[]>([]);
   const [owners, setOwners] = useState<string[]>([]);
-  const [limit, setLimit] = useState(PAGE);
   const [params] = useSearchParams();
   /* A link from the Dashboard opens straight on its notice. */
   const [peekId, setPeekId] = useState<string | null>(params.get("open"));
@@ -65,8 +64,9 @@ export function NoticesPage() {
     return [...list].sort((a, b) => rank(a) - rank(b) || a.replyDue.localeCompare(b.replyDue));
   }, [notices, focus, q, depts, stages, owners]);
 
+  const pg = usePagination(shown, [focus, q, depts, stages, owners]);
   const peek = peekId ? notices.find((n) => n.id === peekId) ?? null : null;
-  const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setLimit(PAGE); };
+  const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); };
 
   return (
     <div className="page page--wide">
@@ -113,25 +113,17 @@ export function NoticesPage() {
         />
         <ClearFilters
           count={(depts.length ? 1 : 0) + (stages.length ? 1 : 0) + (owners.length ? 1 : 0)}
-          onClear={() => { setDepts([]); setStages([]); setOwners([]); setLimit(PAGE); }}
+          onClear={() => { setDepts([]); setStages([]); setOwners([]); }}
         />
       </div>
 
       <div className="sheet">
         <NoticeTable
-          list={shown.slice(0, limit)}
+          list={pg.items}
           onOpen={(n: Notice) => setPeekId(n.id)}
           empty="No notices match these filters."
         />
-        {limit < shown.length ? (
-          <div className="sheet__foot u-row" style={{ justifyContent: "center" }}>
-            <button type="button" className="btn btn--sm" onClick={() => setLimit((l) => l + PAGE * 2)}>
-              Show {Math.min(PAGE * 2, shown.length - limit)} more · {shown.length - limit} remaining
-            </button>
-          </div>
-        ) : (
-          <div className="sheet__foot u-center">Showing all {shown.length} {shown.length === 1 ? "notice" : "notices"}</div>
-        )}
+        <Pagination pg={pg} noun={shown.length === 1 ? "notice" : "notices"} />
       </div>
 
       <NoticeDrawer notice={peek} onClose={() => setPeekId(null)} />

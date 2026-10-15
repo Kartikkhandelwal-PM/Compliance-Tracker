@@ -14,6 +14,7 @@
    and the record.
    ========================================================================== */
 
+import { Pagination, usePagination } from "../ui/Pagination.tsx";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useApp, useEngine, useOutbox } from "../ui/app-state.tsx";
@@ -213,10 +214,8 @@ function LogTab() {
   }, [outbox]);
 
   /* Every message matching the current filters, uncapped — what Export
-     downloads. The on-screen table only ever shows the most recent 250 of
-     these (`rows`, below); a long list is unusable to scroll and slow to
-     render, but a downloaded workbook has neither problem, so there is no
-     reason to also truncate the file someone actually asked for. */
+     downloads. The table shows one page of these at a time (`rows`, below),
+     newest first, with page controls under it. */
   const filtered = useMemo(() => {
     let list = outbox;
     if (channels.length) list = list.filter((e) => channels.includes(e.channel));
@@ -244,7 +243,8 @@ function LogTab() {
     return list;
   }, [outbox, channels, scope, statuses, senders, from, to, q]);
 
-  const rows = useMemo(() => filtered.slice(0, 250), [filtered]);
+  const pg = usePagination(filtered, [channels, scope, statuses, senders, from, to, q]);
+  const rows = pg.items;
 
   /* "Reached the client" counted Delivered and Read together and painted them
      one green, which is the one distinction that matters here: a message on
@@ -393,7 +393,7 @@ function LogTab() {
           <ClearFilters count={filterCount} onClear={clearAll} />
           <span className="u-spacer" />
           <span className="u-mute num" style={{ fontSize: "var(--t-12)" }}>
-            {rows.length} of {filtered.length} matching
+            {filtered.length.toLocaleString("en-IN")} matching
           </span>
           <button type="button" className="btn btn--sm" onClick={exportXlsxFile}>
             <Icon name="download" size={14} /> Export
@@ -599,6 +599,7 @@ function LogTab() {
             </tbody>
           </table>
         )}
+        <Pagination pg={pg} noun="messages" />
         <div className="sheet__foot">
           Updated {fmtDateTime(NOW)}.
         </div>
@@ -648,7 +649,7 @@ function ScheduledTab() {
     return out;
   }, [sends]);
 
-  const rows = useMemo(() => {
+  const filteredSends = useMemo(() => {
     let list = sends;
     if (scope.startsWith("head:")) {
       const hd = scope.slice(5);
@@ -664,6 +665,8 @@ function ScheduledTab() {
     if (needle) list = list.filter((s) => s.form.toLowerCase().includes(needle));
     return list;
   }, [sends, scope, channels, status, q]);
+  const pg = usePagination(filteredSends, [scope, channels, status, q]);
+  const rows = pg.items;
 
   const filterCount = (scope !== "all" ? 1 : 0) + (channels.length ? 1 : 0) + (status !== "all" ? 1 : 0);
   const clearAll = () => { setScope("all"); setChannels([]); setStatus("all"); };
@@ -753,7 +756,7 @@ function ScheduledTab() {
           <ClearFilters count={filterCount} onClear={clearAll} />
           <span className="u-spacer" />
           <span className="u-mute num" style={{ fontSize: "var(--t-12)" }}>
-            {rows.length} of {sends.length} matching
+            {filteredSends.length.toLocaleString("en-IN")} of {sends.length.toLocaleString("en-IN")} matching
           </span>
           <button
             type="button"
@@ -880,6 +883,7 @@ function ScheduledTab() {
             </tbody>
           </table>
         )}
+        <Pagination pg={pg} noun="reminders" />
         <div className="sheet__foot">
           Counts update as clients file. Clients who file before a batch is sent are excluded from it.
         </div>

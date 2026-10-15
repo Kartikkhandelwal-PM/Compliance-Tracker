@@ -20,6 +20,7 @@
    narrowing question is a filter rather than a separate view.
    ========================================================================== */
 
+import { Pagination, usePagination } from "../ui/Pagination.tsx";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { EntityType } from "../domain/types.ts";
@@ -43,7 +44,6 @@ type SortKey = "exposure" | "overdue" | "name" | "turnover";
 type Health = "all" | "arrears" | "clear";
 /** What the old GST / TDS / ITR tabs used to answer, as one filter. */
 type RegFilter = "all" | "gst" | "tds" | "both" | "multi" | "itr";
-const PAGE = 40;
 
 const ENTITY_OPTIONS: EntityType[] = ["Individual", "Company", "LLP", "Firm", "Trust", "AOP/BOI", "HUF"];
 
@@ -112,7 +112,6 @@ export function ClientsPage() {
      predict; "who owes the most" is a question you ask by changing the sort,
      not the state the screen should greet you in. */
   const [sort, setSort] = useState<SortKey>("name");
-  const [limit, setLimit] = useState(PAGE);
 
   /* Every filing under the PAN counts toward its client's row, whichever
      GSTIN or TAN it is filed under. */
@@ -160,7 +159,8 @@ export function ClientsPage() {
     return sorted;
   }, [rows, q, entities, reg, states, owners, health, sort]);
 
-  const visible = filtered.slice(0, limit);
+  const pg = usePagination(filtered, [q, entities, reg, states, owners, health, sort]);
+  const visible = pg.items;
   const gstinTotal = useMemo(() => rows.reduce((n, r) => n + r.gstins.length, 0), [rows]);
   const tanTotal = useMemo(() => rows.reduce((n, r) => n + r.tans.length, 0), [rows]);
 
@@ -172,7 +172,7 @@ export function ClientsPage() {
     toast("Synced: 0 new clients · 0 new GSTINs · 0 new TANs");
   };
 
-  const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setLimit(PAGE); };
+  const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); };
 
   return (
     <div className="page page--wide">
@@ -310,15 +310,7 @@ export function ClientsPage() {
           </tbody>
         </table>
         {filtered.length === 0 ? <Empty title="No clients match these filters" /> : null}
-        {limit < filtered.length ? (
-          <div className="sheet__foot u-row" style={{ justifyContent: "center" }}>
-            <button type="button" className="btn btn--sm" onClick={() => setLimit((l) => l + PAGE * 2)}>
-              Show {Math.min(PAGE * 2, filtered.length - limit)} more · {filtered.length - limit} remaining
-            </button>
-          </div>
-        ) : (
-          <div className="sheet__foot u-center">Showing all {filtered.length} matching clients</div>
-        )}
+        <Pagination pg={pg} noun="clients" />
       </div>
     </div>
   );

@@ -14,11 +14,15 @@
    ========================================================================== */
 
 import { useMemo, useState } from "react";
-import type { Channel } from "../domain/types.ts";
+import type { Channel, StepKind } from "../domain/types.ts";
 import { DEFS, OCCURRENCES } from "../domain/catalog.ts";
 import { TODAY, fmtLong } from "../domain/dates.ts";
-import { Link } from "react-router-dom";
-import { complianceSetting, getTemplateApprovals, submitTemplates } from "../domain/engine.ts";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  complianceSetting, getSchedule, getTemplateApprovals, getTimingFor, resetTiming,
+  setStepDays, stepBounds, stepLimitNote, stepCanMove, submitTemplates, timingLabel, timingMeta,
+} from "../domain/engine.ts";
+import { DaysStepper } from "../ui/DaysStepper.tsx";
 import { emailFrom, getSender } from "../domain/messages.ts";
 import { TEMPLATES } from "../domain/templates.ts";
 import type { Template } from "../domain/templates.ts";
@@ -75,8 +79,12 @@ const VARIABLE_LABELS: Record<string, string> = {
 };
 
 export function TemplatesTab() {
-  const { toast } = useApp();
+  const { toast, me } = useApp();
   const sender = useEngine(getSender);
+  /* Subscribes this screen to timing changes; the days themselves are read
+     directly below, since they depend on the compliance picked. */
+  useEngine(getSchedule);
+  const [params] = useSearchParams();
   const approvals = useEngine(getTemplateApprovals);
   const options = useMemo(buildOptions, []);
   const heads = useMemo(() => [...new Set(options.map((o) => o.head))], [options]);
@@ -84,7 +92,11 @@ export function TemplatesTab() {
   const [channel, setChannel] = useState<Channel>("WhatsApp");
   const list = TEMPLATES.filter((t) => t.channel === channel);
   const [stage, setStage] = useState<string>(list[0].stage);
-  const [code, setCode] = useState(options.find((o) => o.form.includes("GSTR-3B"))?.code ?? options[0].code);
+  const [code, setCode] = useState(() => {
+    const asked = params.get("compliance");
+    if (asked && options.some((o) => o.code === asked)) return asked;
+    return options.find((o) => o.form.includes("GSTR-3B"))?.code ?? options[0].code;
+  });
 
   const sel: Template = list.find((t) => t.stage === stage) ?? list[0];
   const opt = options.find((o) => o.code === code) ?? options[0];
@@ -110,9 +122,15 @@ export function TemplatesTab() {
      the compliance picked, which a cached engine read would not notice. */
   const sendingOn = remindersOn(code);
 
+  /* This compliance's own days where it has them, else the firm's. */
+  const steps = getTimingFor(code);
+  const offsetOf = (stage: string) => steps.find((s) => s.id === stage)?.offset;
+  const meta = timingMeta(code);
+
   const vals = {
     client_name: CLIENT, firm_name: sender.by, form: opt.form, period: opt.period, due_date: opt.due,
-    days_overdue: String(Math.max(1, sel.daysLate)), ack_no: "AB2610204518",
+    /* The sample follows the days set for this compliance. */
+    days_overdue: String(Math.max(1, sel.stage === "done" ? 1 : (offsetOf(sel.stage) ?? sel.daysLate))), ack_no: "AB2610204518",
   };
   const subject = fill(sel.subject, vals);
   const body = fill(sel.body, vals);
@@ -124,22 +142,17 @@ export function TemplatesTab() {
     setStage((next.find((t) => t.stage === stage) ?? next[0]).stage);
   };
 
-  const copy = () => {
-    void navigator.clipboard?.writeText(isWa ? body : `${subject}\n\n${body}`);
-    toast("Message copied");
-  };
-
+  const sendNote = isWa
+    ? (waReady ? null : waOwn ? { text: "Your own number is not connected yet, so messages go through CA Connect until it is.", link: "Connect it in Settings" } : null)
+    : (mailOwn && !mailReady
+        ? { text: mail.chosen === "smtp" ? "Your mail server is not connected yet, so emails go from the shared address until it is." : "Your own domain is not verified yet, so emails go from the shared address until it is.", link: mail.chosen === "smtp" ? "Connect it in Settings" : "Verify it in Settings" }
+        : null);
   return (
     <div className="tp">
+      {/* The two choices that decide what is shown below, lined up with the
+          columns they control: the compliance over the timeline, the channel
+          over the message. */}
       <div className="tp-top">
-        <Seg<Channel>
-          value={channel}
-          onChange={switchChannel}
-          options={[
-            { value: "WhatsApp", label: <span className="tp-seg"><BrandIcon name="whatsapp" size={16} />WhatsApp</span> },
-            { value: "Email", label: <span className="tp-seg"><BrandIcon name="email" size={16} />Email</span> },
-          ]}
-        />
         <label className="tp-pick">
           <span>Compliance</span>
           <select className="plain" value={code} onChange={(e) => setCode(e.target.value)}>
@@ -152,80 +165,109 @@ export function TemplatesTab() {
             ))}
           </select>
         </label>
-        <span className="u-spacer" />
-        <button type="button" className="btn btn--sm" onClick={copy}>
-          <Icon name="copy" size={14} /> Copy message
-        </button>
+        <div className="tp-pick">
+          <span>Send through</span>
+          <Seg<Channel>
+            value={channel}
+            onChange={switchChannel}
+            options={[
+              { value: "WhatsApp", label: <span className="tp-seg"><BrandIcon name="whatsapp" size={16} />WhatsApp</span> },
+              { value: "Email", label: <span className="tp-seg"><BrandIcon name="email" size={16} />Email</span> },
+            ]}
+          />
+        </div>
       </div>
 
-      {/* Who it is sent from, and (for a firm's own WhatsApp number) whether
-          WhatsApp has approved the templates on that account. */}
-      <div className="tp-from">
-        <span className="tp-from__ic">
-          {isWa ? <BrandIcon name="whatsapp" size={20} /> : <BrandIcon name="email" size={20} />}
-        </span>
-        <span className="tp-from__who">
-          <small>Sent from</small>
-          <b>{isWa ? waName : mailFrom}</b>
-        </span>
-        <span className="tp-from__kind">
-          {isWa ? (waReady ? "Your own number" : "Shared CA Connect number") : mailReady ? (mail.chosen === "smtp" ? "Your own mail server" : "Your own address") : "Shared address"}
-        </span>
-
-        {isWa && waReady ? (
-          <span className="tp-from__status">
-            {approved === waList.length ? (
-              <span className="tp-ok"><Icon name="check" size={14} /> All {waList.length} templates approved</span>
-            ) : (
-              <span className="tp-wait">
-                {approved} of {waList.length} approved{pending > 0 ? ` · waiting on ${pending}` : ""}
-              </span>
-            )}
-            {unsent.length > 0 ? (
-              <button type="button" className="btn btn--sm btn--primary" onClick={() => {
-                submitTemplates(unsent.map((t) => t.id));
-                toast(`${unsent.length} ${unsent.length === 1 ? "template" : "templates"} sent for approval`);
-              }}>
-                <Icon name="send" size={14} /> Send {unsent.length === waList.length ? "all" : unsent.length} for approval
-              </button>
-            ) : null}
-          </span>
-        ) : null}
-
-        {isWa && waOwn && !waReady ? (
-          <span className="tp-from__note">
-            Your own number is not connected yet, so messages go through CA Connect until it is.
-            {" "}<Link to="/settings" className="cd-link">Connect it in Settings</Link>
-          </span>
-        ) : null}
-        {!isWa && mailOwn && !mailReady ? (
-          <span className="tp-from__note">
-            {mail.chosen === "smtp"
-              ? "Your mail server is not connected yet, so emails go from the shared address until it is."
-              : "Your own domain is not verified yet, so emails go from the shared address until it is."}
-            {" "}<Link to="/settings" className="cd-link">{mail.chosen === "smtp" ? "Connect it in Settings" : "Verify it in Settings"}</Link>
-          </span>
-        ) : null}
-      </div>
-
-      {/* The sequence a client moves through, in order. Picking a step shows
-          the message sent at that point. */}
-      <ol className="tp-seq" aria-label="When it is sent">
-        {list.map((t) => (
-          <li key={t.id}>
-            <button
-              type="button"
-              className={`tp-step${t.stage === sel.stage ? " is-on" : ""}${t.daysLate > 0 ? " is-late" : ""}${t.stage === "done" ? " is-done" : ""}`}
-              onClick={() => setStage(t.stage)}
-            >
-              <i className="tp-step__dot" />
-              <b>{t.name}</b>
-              <small>{t.timing}</small>
+      {/* Own WhatsApp number: whether WhatsApp has approved the templates. */}
+      {isWa && waReady ? (
+        <div className="tp-banner">
+          {approved === waList.length ? (
+            <span className="tp-ok"><Icon name="check" size={14} /> All {waList.length} templates approved by WhatsApp</span>
+          ) : (
+            <span className="tp-wait">
+              {approved} of {waList.length} templates approved{pending > 0 ? ` · waiting on ${pending}` : ""}
+            </span>
+          )}
+          {unsent.length > 0 ? (
+            <button type="button" className="btn btn--sm btn--primary" onClick={() => {
+              submitTemplates(unsent.map((t) => t.id));
+              toast(`${unsent.length} ${unsent.length === 1 ? "template" : "templates"} sent for approval`);
+            }}>
+              <Icon name="send" size={14} /> Send {unsent.length === waList.length ? "all" : unsent.length} for approval
             </button>
-          </li>
-        ))}
-      </ol>
+          ) : null}
+        </div>
+      ) : null}
+      {sendNote ? (
+        <div className="tp-banner tp-banner--note">
+          <span>{sendNote.text}</span>
+          <Link to="/settings" className="cd-link">{sendNote.link}</Link>
+        </div>
+      ) : null}
 
+      <div className="tp-main">
+        {/* When messages go out for THIS compliance. The days start at the
+            firm's and can be changed here for just this one; the wording does
+            not change. Picking a step shows the message sent at that point. */}
+        <aside className="tp-when">
+          <header className="tp-when__head">
+            <span>
+              <b>When it is sent</b>
+              <small>{opt.form}</small>
+            </span>
+            {meta.custom ? (
+              <span className="tp-timing__tag is-custom" title={meta.by ? `Changed by ${meta.by} on ${meta.on}` : undefined}>Custom days</span>
+            ) : (
+              <span className="tp-timing__tag">Firm default</span>
+            )}
+          </header>
+
+          <ol className="tflow" aria-label="When it is sent">
+            {list.map((t) => {
+              const off = t.stage === "done" ? undefined : offsetOf(t.stage);
+              const moves = t.stage !== "done" && stepCanMove(t.stage);
+              const b = moves ? stepBounds(code, t.stage as StepKind) : null;
+              const on = t.stage === sel.stage;
+              const note = on && moves && sendingOn ? (() => { const n = stepLimitNote(code, t.stage as StepKind); return n.more ?? n.less; })() : undefined;
+              return (
+                <li key={t.id} onClick={() => setStage(t.stage)}
+                  className={`tflow__item${on ? " is-on" : ""}${(off ?? 0) > 0 ? " is-late" : ""}${t.stage === "done" ? " is-done" : ""}`}>
+                  <button type="button" className="tflow__main" onClick={() => setStage(t.stage)} aria-current={on ? "true" : undefined}>
+                    <i className="tflow__dot" />
+                    <span className="tflow__txt">
+                      <b>{t.name}</b>
+                      <small>{off === undefined ? t.timing : timingLabel(off)}</small>
+                    </span>
+                  </button>
+                  {moves && b && off !== undefined ? (
+                    <DaysStepper
+                      compact
+                      offset={off} min={b.min} max={b.max} disabled={!sendingOn}
+                      onChange={(o) => setStepDays(code, t.stage as StepKind, o, me.name)}
+                      ariaLabel={`${t.name}: days ${off < 0 ? "before" : "after"} the due date`}
+                      whyNotMore={stepLimitNote(code, t.stage as StepKind).more}
+                      whyNotLess={stepLimitNote(code, t.stage as StepKind).less}
+                    />
+                  ) : null}
+                  {note ? <p className="tflow__why">{note}</p> : null}
+                </li>
+              );
+            })}
+          </ol>
+
+          <footer className="tp-when__foot">
+            <span className="tp-when__hint">Same days for WhatsApp and Email.</span>
+            <span className="tp-timing__acts">
+              {meta.custom ? (
+                <button type="button" className="btn btn--sm" onClick={() => { resetTiming(code); toast(`${opt.form} is back to the firm's days`); }}>
+                  Reset
+                </button>
+              ) : null}
+            </span>
+          </footer>
+        </aside>
+
+        <div className="tp-right">
       <div className="tp-pair">
         {/* The approved wording, with what changes per client highlighted. */}
         <section className="tp-card">
@@ -307,6 +349,8 @@ export function TemplatesTab() {
       ) : sel.offByDefault ? (
         <p className="tp-note">Switched off unless you turn it on in Settings.</p>
       ) : null}
+        </div>
+      </div>
     </div>
   );
 }

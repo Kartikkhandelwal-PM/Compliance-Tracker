@@ -315,16 +315,29 @@ export function MatrixPage() {
     const root = wrapRef.current;
     const target = endRef.current;
     if (!root || !target) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) setLimit((l) => l + ROWS);
-      },
-      /* Fires a little before the true end, so the rows are already there by
-         the time the reader gets to them. */
-      { root, rootMargin: "300px" },
-    );
-    io.observe(target);
-    return () => io.disconnect();
+    /* Asked directly on every scroll, rather than through an
+       IntersectionObserver: the observer never reported the end marker as
+       visible once the reader had reached it with the mouse wheel, so rows only
+       loaded from the button. This looks at where the marker actually is, and
+       loads the next batch when it is within 300px of the visible bottom (the
+       grid's own edge or the window's, whichever is higher), so the rows are
+       there before the reader gets to them. */
+    const check = () => {
+      const t = target.getBoundingClientRect().top;
+      const bottom = Math.min(root.getBoundingClientRect().bottom, window.innerHeight);
+      if (t <= bottom + 300) setLimit((l) => l + ROWS);
+    };
+    root.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("scroll", check, { passive: true, capture: true });
+    window.addEventListener("resize", check);
+    /* A batch that does not fill the screen pulls the next one straight away. */
+    const frame = requestAnimationFrame(check);
+    return () => {
+      root.removeEventListener("scroll", check);
+      window.removeEventListener("scroll", check, { capture: true });
+      window.removeEventListener("resize", check);
+      cancelAnimationFrame(frame);
+    };
   }, [hasMore, limit, expanded]);
 
   /**
