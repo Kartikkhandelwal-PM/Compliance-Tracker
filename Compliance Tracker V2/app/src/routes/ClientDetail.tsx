@@ -8,10 +8,10 @@
      • a header with what is common to the whole client: identity, PAN, owner,
        and the client's main contact. The owner is set once and copied to
        every GSTIN and TAN; contact details are each registration's own.
-     • tabs: Overview, Income tax and ROC, GST, TDS, Messages. Each tab
+     • tabs: Overview, Income Tax, GST, TDS, Messages. Each tab
        carries its own status dot, so a late branch GSTIN shows on the GST
        tab without opening it.
-     • Overview draws the client as a tree, PAN → Income tax / GST → each
+     • Overview draws the client as a tree, PAN → Income Tax / GST → each
        GSTIN / TDS → each TAN, with every node clickable, then lists what is
        due next across all of them.
      • GST and TDS open on all of that client's GSTINs (or TANs) together,
@@ -57,7 +57,7 @@ interface Reg {
   id: string;
   /** PAN / GSTIN / TAN */
   number: string;
-  /** "Income tax and ROC", "Gujarat", "Pune branch" */
+  /** "Income Tax", "Gujarat", "Pune branch" */
   title: string;
   sub: string;
   party: Party;
@@ -100,7 +100,7 @@ function tone(t: Tally): "overdue" | "pending" | "filed" | "na" {
 
 const KIND_LABEL: Record<RecordType, string> = { Client: "PAN", GstEntity: "GSTIN", TdsDeductor: "TAN" };
 const KIND_HEAD: Record<RecordType, { cls: string; mark: string; name: string }> = {
-  Client: { cls: "head-it", mark: "IT", name: "Income tax" },
+  Client: { cls: "head-it", mark: "IT", name: "Income Tax" },
   GstEntity: { cls: "head-gst", mark: "G", name: "GST" },
   TdsDeductor: { cls: "head-tds", mark: "T", name: "TDS" },
 };
@@ -108,7 +108,7 @@ const KIND_HEAD: Record<RecordType, { cls: string; mark: string; name: string }>
 function regsOf(client: Client): { itr: Reg; gst: Reg[]; tds: Reg[] } {
   return {
     itr: {
-      kind: "Client", id: client.id, number: client.pan, title: "Income tax and ROC",
+      kind: "Client", id: client.id, number: client.pan, title: "Income Tax",
       sub: "Filed on the PAN", party: client,
     },
     gst: (GSTINS_BY_CLIENT[client.id] ?? []).map((g: GstEntity) => ({
@@ -365,7 +365,7 @@ export function ClientDetailPage() {
         <span className="cd-tabs__sep" aria-hidden />
         <TabBtn
           on={tab === "itr"} onClick={() => select(client.id)}
-          art="itr" label="Income tax and ROC"
+          art="itr" label="Income Tax"
         />
         {regs.gst.length ? (
           <TabBtn
@@ -410,7 +410,7 @@ export function ClientDetailPage() {
       ) : tab === "itr" ? (
         <>
           <HeadBanner
-            art="itr" cls="Client" title="Income tax and ROC"
+            art="itr" cls="Client" title="Income Tax"
             sub={<>{itr.form} · <button type="button" className="cd-copy num" onClick={() => copy("PAN", client.pan)}>PAN {client.pan} <Icon name="copy" size={12} /></button></>}
             t={tally(of(client.id))}
           />
@@ -560,9 +560,9 @@ function ChannelSwitches({ kind, party }: { kind: RecordType; party: Party }) {
   );
 }
 
-/** "Income tax and ROC", "GST · Kerala", "TDS · Pune branch" */
+/** "Income Tax", "GST · Kerala", "TDS · Pune branch" */
 function regName(r: Reg): string {
-  return r.kind === "Client" ? "Income tax and ROC" : `${KIND_HEAD[r.kind].name} · ${r.title}`;
+  return r.kind === "Client" ? "Income Tax" : `${KIND_HEAD[r.kind].name} · ${r.title}`;
 }
 
 /** Who a registration's reminders go to, by name. */
@@ -576,7 +576,7 @@ function contactName(r: Reg, client: Client): string {
    A dashboard for one client, not a second structure view (that is the
    Structure tab). Top to bottom:
 
-     1. One card per head (Income tax and ROC, GST, TDS) with its own
+     1. One card per head (Income Tax, GST, TDS) with its own
         illustration: how that head stands and what is due next. A head the
         client is not registered for shows a quiet empty card.
      2. What needs action: delayed, due this week, coming up. */
@@ -601,7 +601,7 @@ function OverviewPane({
     <>
       <div className="cd-heads">
         <HeadCard
-          art="itr" cls="Client" title="Income tax and ROC"
+          art="itr" cls="Client" title="Income Tax"
           sub={`${itr.form} · filed on the PAN`}
           t={tally(of(client.id))} onOpen={() => onSelect(client.id)}
         />
@@ -850,7 +850,7 @@ function StructurePane({
 
   const rows: { kind: RecordType; art: "itr" | "gst" | "tds"; title: string; sub: string; t?: Tally; node: Node; kids: ReactNode[] }[] = [
     {
-      kind: "Client", art: "itr", title: "Income tax", sub: "With ROC",
+      kind: "Client", art: "itr", title: "Income Tax", sub: "Filed on the PAN",
       t: tally(itrList), node: client.id,
       kids: itrHeads.map(({ h, t }) => (
         <button type="button" key={h} className="cd-tr__leaf" onClick={() => onSelect(client.id)}>
@@ -978,7 +978,7 @@ function ContactDrawer({
       open
       onClose={onClose}
       title="Change contact"
-      subtitle={reg.kind === "Client" ? `Income tax and ROC · PAN ${reg.number}` : `${KIND_HEAD[reg.kind].name} · ${reg.title} · ${reg.number}`}
+      subtitle={reg.kind === "Client" ? `Income Tax · PAN ${reg.number}` : `${KIND_HEAD[reg.kind].name} · ${reg.title} · ${reg.number}`}
       footer={
         <>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
@@ -1002,7 +1002,7 @@ function ContactDrawer({
               <b>{c.name}{c.key === current ? <span className="tag tag--outline" style={{ marginLeft: 8 }}>Current</span> : null}</b>
               <small>{c.email} · <span className="num">{c.phone}</span></small>
               <small className="cd-pick__uses">
-                Handles {c.usedBy.map((r) => (r.kind === "Client" ? "income tax" : `${KIND_HEAD[r.kind].name} ${r.title}`)).join(", ")}
+                Handles {c.usedBy.map((r) => (r.kind === "Client" ? "Income Tax" : `${KIND_HEAD[r.kind].name} ${r.title}`)).join(", ")}
               </small>
             </span>
           </button>
