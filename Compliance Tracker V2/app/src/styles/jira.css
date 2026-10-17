@@ -1928,9 +1928,10 @@ button.cd-tr__head:hover { box-shadow: var(--shadow-3); transform: translateY(-1
 .cprofile__names .u-row { justify-content: center; margin-top: 6px !important; flex-wrap: wrap; }
 .cprofile__cinline { justify-content: center; flex-wrap: wrap; }
 
-/* Forces the line of text under the figure, however short it is. */
-.ec__hero--stack { flex-wrap: wrap; }
-.ec__hero--stack > span { flex-basis: 100%; }
+/* Every dashboard card puts its line of text under the figure, however wide
+   the window is, so the cards line up with each other. */
+.ec__hero { flex-wrap: wrap; }
+.ec__hero > span { flex-basis: 100%; }
 
 /* ============================================================================
    DAYS STEPPER and per-compliance timing
