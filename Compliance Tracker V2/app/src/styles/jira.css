@@ -2279,3 +2279,22 @@ button.cd-tr__head:hover { box-shadow: var(--shadow-3); transform: translateY(-1
 }
 /* A step's description wraps to a second line when the column is narrow, rather than being cut off. */
 .rsteps__desc { white-space: normal; overflow: visible; text-overflow: clip; }
+
+/* The "Assign to…" picker inside the bulk action bar sits on a dark blue
+   pill. It inherited the dark page ink, so its label was close to invisible.
+   Give it the bar's own light ink and a visible chip. */
+.bulkbar .osel {
+  color: var(--ink-invert);
+  background: rgba(255, 255, 255, 0.13);
+  border: 1px solid transparent;
+  height: 28px;
+  padding: 0 10px 0 6px;
+}
+.bulkbar .osel:hover:not(:disabled),
+.bulkbar .osel.is-open {
+  background: rgba(255, 255, 255, 0.22);
+  color: var(--ink-invert);
+}
+.bulkbar .osel__name { color: var(--ink-invert); }
+.bulkbar .osel__caret { color: var(--ink-invert); opacity: 0.8; }
+.bulkbar .osel__all { color: var(--ink); }
